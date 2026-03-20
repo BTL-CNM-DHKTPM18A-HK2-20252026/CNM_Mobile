@@ -1,0 +1,30 @@
+{
+  "welcome": {
+    "greeting": "Welcome to Fruvia Chat",
+    "slide2_title": "Stable video calls",
+    "slide2_desc": "Enjoy conversations with stable video quality anytime, anywhere",
+    "slide3_title": "Useful group chats",
+    "slide3_desc": "A place to exchange information and keep in touch with family, friends, colleagues...",
+    "slide4_title": "Fast photo sharing",
+    "slide4_desc": "Quickly and easily share high-quality images with friends and relatives",
+    "slide5_title": "Friends Activity",
+    "slide5_desc": "A place to update the latest activities of people you care about",
+    "login": "Login",
+    "register": "Create new account",
+    "choose_lang": "Select Language"
+  },
+  "login": {
+    "header_title": "Enter phone number",
+    "country_code": "+84",
+    "phone_placeholder": "Enter phone number",
+    "continue": "Continue",
+    "no_account": "Don't have an account?",
+    "create_account": "Create account"
+  },
+  "tabs": {
+    "chat": "Chats",
+    "contacts": "Contacts",
+    "timeline": "Timeline",
+    "more": "More"
+  }
+}

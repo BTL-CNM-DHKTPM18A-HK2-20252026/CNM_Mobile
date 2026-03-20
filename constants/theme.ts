@@ -1,53 +1,88 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Theme configuration for the project (Colors, Typography, Spacing).
+ * Centralized file for maintaining consistency across screens.
  */
 
-import { Platform } from 'react-native';
+import { Dimensions } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const { width, height } = Dimensions.get('window');
 
-export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
+export const COLORS = {
+  // Brand Colors (Zalo style)
+  primary: '#0068ff', // Main Zalo blue
+  secondary: '#2b68e8', // Light blue
+  background: '#ffffff',
+  surface: '#f1f2f6', // Light grey for backgrounds/buttons
+  
+  // Text Colors
+  text: '#000000',
+  textSecondary: '#666666',
+  textPlaceholder: '#999999',
+  textWhite: '#ffffff',
+  
+  // UI Colors
+  border: '#e0e0e0',
+  error: '#ff3b30',
+  success: '#34c759',
+  warning: '#ff9500',
+  inactive: '#8e8e93',
+  
+  // Shorthands for dark mode if needed
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+    background: '#1c1c1e',
+    text: '#ffffff',
+    surface: '#2c2c2e',
+  }
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+export const SIZES = {
+  // Font sizes
+  h1: 32,
+  h2: 24,
+  h3: 20,
+  h4: 14,
+  h5: 12,
+  h6: 11,
+  h7: 10,
+  body1: 18,
+  body2: 16,
+  body3: 14,
+  body4: 12,
+  caption: 12,
+  micro: 10,
+  
+  // Spacing
+  padding: 20,
+  margin: 20,
+  radius: 12,
+  radiusFull: 99,
+  
+  // Screen dimensions
+  width,
+  height,
+};
+
+export const TYPOGRAPHY = {
+  h1: {
+    fontSize: SIZES.h1,
+    fontWeight: '700' as const,
   },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
+  h2: {
+    fontSize: SIZES.h2,
+    fontWeight: '700' as const,
   },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  body: {
+    fontSize: SIZES.body2,
+    fontWeight: '400' as const,
   },
-});
+  bodyBold: {
+    fontSize: SIZES.body2,
+    fontWeight: '600' as const,
+  },
+  button: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+  }
+};
+
+export default { COLORS, SIZES, TYPOGRAPHY };
