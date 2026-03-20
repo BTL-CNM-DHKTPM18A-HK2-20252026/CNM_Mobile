@@ -1,0 +1,30 @@
+{
+  "welcome": {
+    "greeting": "Chào mừng bạn tới với Fruvia Chat",
+    "slide2_title": "Gọi video ổn định",
+    "slide2_desc": "Trò chuyện thật đã với chất lượng video ổn định mọi lúc, mọi nơi",
+    "slide3_title": "Chat nhóm tiện ích",
+    "slide3_desc": "Nơi cùng nhau trao đổi, giữ liên lạc với gia đình, bạn bè, đồng nghiệp...",
+    "slide4_title": "Gửi ảnh nhanh chóng",
+    "slide4_desc": "Trao đổi hình ảnh chất lượng cao với bạn bè và người thân thật nhanh và dễ dàng",
+    "slide5_title": "Nhật ký bạn bè",
+    "slide5_desc": "Nơi cập nhật hoạt động mới nhất của những người bạn quan tâm",
+    "login": "Đăng nhập",
+    "register": "Tạo tài khoản mới",
+    "choose_lang": "Chọn ngôn ngữ"
+  },
+  "login": {
+    "header_title": "Nhập số điện thoại",
+    "country_code": "+84",
+    "phone_placeholder": "Nhập số điện thoại",
+    "continue": "Tiếp tục",
+    "no_account": "Bạn chưa có tài khoản?",
+    "create_account": "Tạo tài khoản"
+  },
+  "tabs": {
+    "chat": "Tin nhắn",
+    "contacts": "Danh bạ",
+    "timeline": "Nhật ký",
+    "more": "Cá nhân"
+  }
+}
