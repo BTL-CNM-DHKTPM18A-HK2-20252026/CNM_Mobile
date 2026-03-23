@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, StatusBar, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, StatusBar, Dimensions, Alert, Modal, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { authService } from '@/services/authService';
 
 const { width, height } = Dimensions.get('window');
 const SCAN_AREA_SIZE = width * 0.7;
@@ -10,6 +11,9 @@ const SCAN_AREA_SIZE = width * 0.7;
 export default function QRScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingUuid, setPendingUuid] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!permission) {
@@ -17,12 +21,63 @@ export default function QRScannerScreen() {
     }
   }, [permission]);
 
-  const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
     if (scanned) return;
     setScanned(true);
-    alert(`Bar code with type ${type} and data ${data} has been scanned!`);
-    // Here you can navigate back or handle the data
-    setTimeout(() => setScanned(false), 2000); // Allow re-scanning after 2 seconds
+
+    try {
+      // 1. Check if it's a Fruvia login QR (we expect something like 'frv:auth:UUID')
+      let uuid = data;
+      if (data.startsWith('frv:auth:')) {
+        uuid = data.split(':')[2];
+      }
+
+      // 2. We need to verify the user is logged in first
+      const loggedIn = await authService.isAuthenticated();
+      if (!loggedIn) {
+        Alert.alert('Chưa đăng nhập', 'Bạn cần đăng nhập trên điện thoại trước khi xác nhận quét mã QR.');
+        setScanned(false);
+        return;
+      }
+
+      // Notify backend that QR was scanned (to show user info on Web)
+      authService.notifyQrScanned(uuid);
+
+      // 3. Show custom confirmation dialog
+      setPendingUuid(uuid);
+      setShowConfirm(true);
+    } catch (error: any) {
+      console.error('QR Scan error:', error);
+      Alert.alert('Lỗi', error.toString());
+      setScanned(false);
+    }
+  };
+
+  const handleConfirmLogin = async () => {
+    if (!pendingUuid) return;
+    setConfirming(true);
+    try {
+      const success = await authService.confirmQrLogin(pendingUuid);
+      if (success) {
+        setShowConfirm(false);
+        setScanned(false);
+        setPendingUuid(null);
+        Alert.alert('Thành công', 'Web của bạn đã được đăng nhập!');
+        router.back();
+      }
+    } catch (err: any) {
+      Alert.alert('Lỗi', err.toString());
+      setShowConfirm(false);
+      setScanned(false);
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const handleCancelLogin = () => {
+    setShowConfirm(false);
+    setScanned(false);
+    setPendingUuid(null);
   };
 
   if (!permission) {
@@ -96,6 +151,50 @@ export default function QRScannerScreen() {
             </View>
         </View>
       </View>
+
+      {/* Custom Confirmation Modal */}
+      <Modal
+        visible={showConfirm}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleCancelLogin}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="desktop-outline" size={24} color="#0068ff" />
+              </View>
+              <Text style={styles.modalTitle}>Đăng nhập trên Web</Text>
+              <Text style={styles.modalSubtitle}>
+                Bạn có muốn cho phép đăng nhập trên trình duyệt Web không?
+              </Text>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.cancelBtn]} 
+                onPress={handleCancelLogin}
+                disabled={confirming}
+              >
+                <Text style={styles.cancelBtnText}>Từ chối</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalBtn, styles.confirmBtn]} 
+                onPress={handleConfirmLogin}
+                disabled={confirming}
+              >
+                {confirming ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.confirmBtnText}>Cho phép</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -230,5 +329,72 @@ const styles = StyleSheet.create({
   permissionBtnText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  iconCircle: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      backgroundColor: '#f0f7ff',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 16,
+    paddingHorizontal: 50,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#f0f0f0',
+  },
+  confirmBtn: {
+    backgroundColor: '#0068ff',
+  },
+  cancelBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#666',
+  },
+  confirmBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: 'white',
   }
 });

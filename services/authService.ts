@@ -61,5 +61,78 @@ export const authService = {
       console.error('Check phone error:', error);
       return false;
     }
+  },
+
+  confirmQrLogin: async (uuid: string) => {
+    try {
+      const token = await SecureStore.getItemAsync('user_token');
+      if (!token) throw new Error('You must be logged in to confirm QR');
+
+      // Simple JWT decode to get userId (sub)
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
+      const userId = payload.sub;
+
+      if (!userId) throw new Error('Invalid token: sub missing');
+
+      const response = await api.post<any, ApiResponse<void>>('/auth/qr-confirm', {
+        uuid: uuid,
+        userId: userId
+      });
+
+      return response.success;
+    } catch (error: any) {
+      console.error('QR Confirm error:', error);
+      throw error.response?.data?.message || error.message || 'QR confirmation failed';
+    }
+  },
+
+  notifyQrScanned: async (uuid: string) => {
+    try {
+      const token = await SecureStore.getItemAsync('user_token');
+      if (!token) return false;
+
+      // Extract userId (sub)
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      ));
+      const userId = payload.sub;
+
+      await api.post('/auth/qr-scan', {
+        uuid: uuid,
+        userId: userId
+      });
+      return true;
+    } catch (error: any) {
+      console.error('QR Scan Notify error:', error);
+      return false;
+    }
   }
+};
+
+// Simple atob polyfill for React Native if not available
+const atob = (input: string) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let str = input.replace(/=+$/, '');
+  let output = '';
+
+  if (str.length % 4 === 1) throw new Error("'atob' failed: The string to be decoded is not correctly encoded.");
+
+  for (let bc = 0, bs = 0, buffer, i = 0; (buffer = str.charAt(i++)); ~buffer && ((bs = bc % 4 ? bs * 64 + buffer : buffer), bc++ % 4) ? (output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6)))) : 0) {
+    buffer = chars.indexOf(buffer);
+  }
+
+  return output;
 };
