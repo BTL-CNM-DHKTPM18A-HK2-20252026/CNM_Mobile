@@ -2,15 +2,14 @@ import api from './api';
 import * as SecureStore from 'expo-secure-store';
 
 export interface AuthenticationResponse {
-  accessToken: string;
-  expiresIn: number;
-  tokenType: string;
+  access_token: string;
+  expires_in: number;
+  token_type: string;
 }
 
 export interface ApiResponse<T> {
-  code: number;
   message: string;
-  result: T;
+  data: T;
   success: boolean;
 }
 
@@ -23,11 +22,11 @@ export const authService = {
         password: password
       });
 
-      if (response.success && response.result.accessToken) {
-        await SecureStore.setItemAsync('user_token', response.result.accessToken);
-        return response.result;
+      if (response.success && response.data.access_token) {
+        await SecureStore.setItemAsync('user_token', response.data.access_token);
+        return response.data;
       }
-      
+
       throw new Error(response.message || 'Login failed');
     } catch (error: any) {
       console.error('Login error:', error);
@@ -53,10 +52,11 @@ export const authService = {
 
   checkPhoneNumber: async (phoneNumber: string) => {
     try {
+      console.log(phoneNumber)
       const response = await api.post<any, ApiResponse<boolean>>('/auth/check-phone-number', {
         phoneNumber: phoneNumber
       });
-      return response.success && response.result; // Trả về true nếu sđt tồn tại
+      return response.success && response.data; // Trả về true nếu sđt tồn tại
     } catch (error: any) {
       console.error('Check phone error:', error);
       return false;

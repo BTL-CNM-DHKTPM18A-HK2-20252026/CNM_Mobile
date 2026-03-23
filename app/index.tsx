@@ -5,6 +5,8 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { COLORS, SIZES } from '@/constants/theme';
+import { authService } from '@/services/authService';
+import { useEffect } from 'react';
 
 const { width } = Dimensions.get('window');
 
@@ -46,6 +48,25 @@ export default function WelcomeScreen() {
   const { t, i18n } = useTranslation();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const authenticated = await authService.isAuthenticated();
+        if (authenticated) {
+          router.replace('/(tabs)/chat');
+        }
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  if (isCheckingAuth) {
+    return <View style={{ flex: 1, backgroundColor: COLORS.background }} />;
+  }
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const scrollOffset = event.nativeEvent.contentOffset.x;

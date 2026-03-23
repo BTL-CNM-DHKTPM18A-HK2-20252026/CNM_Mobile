@@ -8,7 +8,7 @@ import { authService } from '@/services/authService';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('0399614016');
   const [isLoading, setIsLoading] = useState(false);
   const [errorPhone, setErrorPhone] = useState<string | null>(null);
 
@@ -30,10 +30,11 @@ export default function LoginScreen() {
       }
 
       setErrorPhone(null);
-
-      // 2. Nếu tồn tại, tiến hành đăng nhập (hiện tại dùng password mặc định)
-      await authService.login(phoneNumber, 'password123');
-      router.replace('/(tabs)/chat');
+      // Chuyển sang màn hình nhập mật khẩu
+      router.push({
+        pathname: '/password',
+        params: { phoneNumber }
+      });
     } catch (error: any) {
       Alert.alert(
         t('login.error_title', 'Lỗi'),
