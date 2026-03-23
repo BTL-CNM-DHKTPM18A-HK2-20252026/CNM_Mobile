@@ -6,11 +6,13 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function MoreScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const MenuItem = ({ icon, title, subtitle, color, iconType = 'ionicons' }: any) => (
     <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -33,18 +35,23 @@ export default function MoreScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "light-content"} />
+      <StatusBar barStyle="light-content" translucent />
 
-      {/* Header with Search and Settings */}
-      <SafeAreaView edges={['top']} style={[styles.header, { backgroundColor: isDark ? colors.header : COLORS.primary }]}>
+      <View style={{ 
+        backgroundColor: isDark ? colors.header : COLORS.primary,
+        paddingTop: insets.top
+      }}>
         <View style={styles.headerContent}>
-          <Ionicons name="search" size={24} color="#fff" />
+          <TouchableOpacity style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#fff" />
+            <Text style={styles.headerSearchText}>{t('chat.search')}</Text>
+          </TouchableOpacity>
           <View style={styles.flexOne} />
-          <TouchableOpacity onPress={() => router.push('/settings')}>
+          <TouchableOpacity onPress={() => router.push('/settings')} style={styles.headerIconRight}>
             <Ionicons name="settings-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
 
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.chatBackground }]} bounces={false}>
         {/* Profile Card */}
@@ -129,13 +136,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    backgroundColor: COLORS.primary,
+    // Background removed here as it's in the outer View
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    height: 50,
+    height: 54,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    height: 36,
+  },
+  headerSearchText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    marginLeft: 18,
+  },
+  headerIconRight: {
+    paddingLeft: 12,
   },
   flexOne: {
     flex: 1,

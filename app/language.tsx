@@ -5,7 +5,8 @@ import { COLORS } from '@/constants/theme';
 
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/context/ThemeContext';
 
 const LANGUAGES = [
   {
@@ -14,7 +15,7 @@ const LANGUAGES = [
     flag: 'https://flagcdn.com/w40/vn.png',
   },
   {
-    id: 'EN',
+    id: 'EN',    // Should be 'en' but we match what's currently in i18n
     name: 'English',
     flag: 'https://flagcdn.com/w40/us.png',
   }
@@ -23,41 +24,47 @@ const LANGUAGES = [
 export default function LanguageScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const [currentLang, setCurrentLang] = useState(i18n.language.toUpperCase());
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  
+  // Normalize current lang comparison
+  const normalizedLang = i18n.language.toUpperCase() === 'VI' ? 'VI' : 'EN';
+  const [currentLang, setCurrentLang] = useState(normalizedLang);
 
   const handleLanguageChange = (langId: string) => {
+    const languageCode = langId.toLowerCase();
     setCurrentLang(langId);
-    i18n.changeLanguage(langId);
-    // In a real app, you might want to save this to storage
+    i18n.changeLanguage(languageCode);
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <SafeAreaView edges={['top']}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#fff" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>{t('language.header')}</Text>
-          </View>
-        </SafeAreaView>
+      <View style={[styles.headerContainer, { 
+        backgroundColor: isDark ? colors.header : COLORS.primary,
+        paddingTop: insets.top
+      }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('language.header')}</Text>
+        </View>
       </View>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.languageList}>
+      <ScrollView style={[styles.content, { backgroundColor: colors.chatBackground }]}>
+        <View style={[styles.languageList, { backgroundColor: colors.card }]}>
           {LANGUAGES.map((lang) => (
             <TouchableOpacity 
               key={lang.id}
-              style={styles.languageItem}
+              style={[styles.languageItem, { borderBottomColor: colors.border }]}
               onPress={() => handleLanguageChange(lang.id)}
               activeOpacity={0.7}
             >
               <Image source={{ uri: lang.flag }} style={styles.flagIcon} />
-              <Text style={styles.languageName}>{lang.name}</Text>
+              <Text style={[styles.languageName, { color: colors.text }]}>{lang.name}</Text>
               {currentLang === lang.id && (
                 <Ionicons name="checkmark" size={24} color={COLORS.primary} />
               )}
@@ -72,7 +79,6 @@ export default function LanguageScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
   },
   headerContainer: {
     backgroundColor: COLORS.primary,
@@ -95,16 +101,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   languageList: {
-    backgroundColor: '#fff',
     marginTop: 1,
   },
   languageItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
     paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#f0f0f0',
   },
   flagIcon: {
     width: 24,
@@ -114,6 +118,5 @@ const styles = StyleSheet.create({
   languageName: {
     flex: 1,
     fontSize: 14,
-    color: '#000',
   },
 });
