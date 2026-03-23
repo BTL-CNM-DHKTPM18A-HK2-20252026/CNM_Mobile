@@ -7,12 +7,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { authService } from '@/services/authService';
+import { useEffect, useState } from 'react';
 
 export default function MoreScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const data = await authService.getProfile();
+      if (data) setProfile(data);
+    };
+    fetchProfile();
+  }, []);
 
   const MenuItem = ({ icon, title, subtitle, color, iconType = 'ionicons' }: any) => (
     <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
@@ -55,10 +66,10 @@ export default function MoreScreen() {
 
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.chatBackground }]} bounces={false}>
         {/* Profile Card */}
-        <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]}>
+        <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]} onPress={() => console.log('View Profile')}>
           <View style={styles.avatarContainer}>
             <Image 
-              source={{ uri: 'https://i.pravatar.cc/150?u=huy' }} 
+              source={{ uri: profile?.avatar_url || 'https://randomuser.me/api/portraits/men/1.jpg' }} 
               style={styles.avatar} 
             />
             <View style={[styles.moodIcon, { borderColor: colors.tabBar, backgroundColor: isDark ? colors.surface : '#f0f0f0' }]}>
@@ -66,7 +77,9 @@ export default function MoreScreen() {
             </View>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={[styles.profileName, { color: colors.text }]}>Nguyễn Quang Huy</Text>
+            <Text style={[styles.profileName, { color: colors.text }]}>
+              {profile ? `${profile.firstName} ${profile.lastName}` : 'Guest User'}
+            </Text>
             <Text style={[styles.profileStatus, { color: colors.textSecondary }]}>{t('more.view_profile')}</Text>
           </View>
           <Ionicons name="person-circle-outline" size={26} color={COLORS.primary} />
@@ -152,7 +165,7 @@ const styles = StyleSheet.create({
   },
   headerSearchText: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 14,
+    fontSize: 13,
     marginLeft: 18,
   },
   headerIconRight: {
@@ -193,7 +206,7 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   profileName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   profileStatus: {

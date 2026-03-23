@@ -54,7 +54,7 @@ export default function LoginScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.text} />
+            <Ionicons name="arrow-back" size={22} color="#000000" />
           </TouchableOpacity>
         </View>
 
@@ -74,7 +74,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder={t('login.phone_placeholder')}
-              placeholderTextColor={COLORS.textPlaceholder}
+              placeholderTextColor="#999999"
               keyboardType="phone-pad"
               value={phoneNumber}
               onChangeText={(text) => {
@@ -132,7 +132,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffffff',
   },
   flex: {
     flex: 1,
@@ -155,7 +155,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: SIZES.h4, // Reduced from h3
     fontWeight: '700',
-    color: COLORS.text,
+    color: '#000000',
     textAlign: 'center',
     marginBottom: 25,
   },
@@ -182,19 +182,19 @@ const styles = StyleSheet.create({
   },
   countryText: {
     fontSize: SIZES.body3, // Reduced from body2
-    color: COLORS.text,
+    color: '#000000',
     marginRight: 3,
   },
   divider: {
     width: 1,
     height: '50%',
-    backgroundColor: COLORS.border,
+    backgroundColor: '#e0e0e0',
     marginRight: 12,
   },
   input: {
     flex: 1,
     fontSize: SIZES.body3, // Reduced from body2
-    color: COLORS.text,
+    color: '#000000',
     height: '100%',
   },
   clearButton: {
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   disabledButton: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#f1f2f6',
   },
   continueText: {
     color: COLORS.textWhite,
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: SIZES.body4, // Reduced from body3
-    color: COLORS.textSecondary,
+    color: '#666666',
   },
   footerLink: {
     fontSize: SIZES.body4, // Reduced from body3

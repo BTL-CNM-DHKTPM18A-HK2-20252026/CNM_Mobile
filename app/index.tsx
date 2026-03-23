@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, FlatList, Dimensions, NativeScrollEvent, NativeSyntheticEvent, Modal } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, FlatList, Dimensions, NativeScrollEvent, NativeSyntheticEvent, Modal, StatusBar } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -65,7 +65,7 @@ export default function WelcomeScreen() {
   }, []);
 
   if (isCheckingAuth) {
-    return <View style={{ flex: 1, backgroundColor: COLORS.background }} />;
+    return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
   }
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -108,7 +108,7 @@ export default function WelcomeScreen() {
                 contentFit="contain"
               />
               <View style={[styles.textContainer, { marginTop: 0 }]}>
-                <Text style={[styles.description, { color: COLORS.text, fontSize: SIZES.h4, fontWeight: '800' }]}>
+                <Text style={[styles.description, { color: COLORS.light.text, fontSize: SIZES.h4, fontWeight: '800' }]}>
                   {translated.description}
                 </Text>
               </View>
@@ -121,8 +121,8 @@ export default function WelcomeScreen() {
                 contentFit="contain"
               />
               <View style={styles.textContainer}>
-                <Text style={styles.title}>{translated.title}</Text>
-                <Text style={styles.description}>{translated.description}</Text>
+                <Text style={[styles.title, { color: COLORS.light.text }]}>{translated.title}</Text>
+                <Text style={[styles.description, { color: COLORS.light.textSecondary }]}>{translated.description}</Text>
               </View>
             </>
           )}
@@ -132,7 +132,8 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#ffffff' }]}>
+      <StatusBar barStyle="dark-content" />
       {/* Top Bar with Segmented Language Toggle */}
       <View style={styles.topBar}>
         <View style={styles.languageToggle}>
@@ -175,7 +176,10 @@ export default function WelcomeScreen() {
         {SLIDES.map((_, index) => (
           <View
             key={`dot-${index}`}
-            style={[styles.dot, index === activeIndex && styles.activeDot]}
+            style={[
+              styles.dot, 
+              { backgroundColor: index === activeIndex ? COLORS.primary : '#e0e0e0' }
+            ]}
           />
         ))}
       </View>
@@ -191,11 +195,11 @@ export default function WelcomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.registerButton}
+          style={[styles.registerButton, { backgroundColor: COLORS.light.surface }]}
           activeOpacity={0.8}
           onPress={() => console.log('Register pressed')}
         >
-          <Text style={styles.registerText}>{t('welcome.register')}</Text>
+          <Text style={[styles.registerText, { color: COLORS.light.text }]}>{t('welcome.register')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -205,7 +209,6 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   topBar: {
     width: '100%',
@@ -299,13 +302,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: SIZES.body1,
     fontWeight: '700',
-    color: COLORS.text,
     textAlign: 'center',
     marginBottom: 10,
   },
   description: {
     fontSize: SIZES.body3,
-    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -319,7 +320,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.border,
     marginHorizontal: 5,
   },
   activeDot: {
@@ -350,7 +350,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   registerText: {
-    color: COLORS.text,
     fontSize: SIZES.body4,
     fontWeight: '600',
   },
