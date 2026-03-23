@@ -10,6 +10,7 @@ export default function LoginScreen() {
   const { t } = useTranslation();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorPhone, setErrorPhone] = useState<string | null>(null);
 
   const handleBack = () => {
     router.back();
@@ -20,10 +21,18 @@ export default function LoginScreen() {
     
     setIsLoading(true);
     try {
-      // For now, we use a fixed password as the UI only has phone number
-      // In a real app, this would lead to an OTP or Password screen
-      await authService.login(phoneNumber, 'password123');
+      // 1. Kiểm tra số điện thoại có tồn tại không
+      const exists = await authService.checkPhoneNumber(phoneNumber);
       
+      if (!exists) {
+        setErrorPhone(t('login.phone_not_found', 'Số điện thoại chưa được đăng ký trong hệ thống'));
+        return;
+      }
+
+      setErrorPhone(null);
+
+      // 2. Nếu tồn tại, tiến hành đăng nhập (hiện tại dùng password mặc định)
+      await authService.login(phoneNumber, 'password123');
       router.replace('/(tabs)/chat');
     } catch (error: any) {
       Alert.alert(
@@ -53,7 +62,7 @@ export default function LoginScreen() {
           <Text style={styles.title}>{t('login.header_title')}</Text>
 
           {/* Input Group */}
-          <View style={styles.inputWrapper}>
+          <View style={[styles.inputWrapper, errorPhone && { borderColor: COLORS.error }]}>
             <TouchableOpacity style={styles.countryCode}>
               <Text style={styles.countryText}>{t('login.country_code')}</Text>
               <Ionicons name="chevron-down" size={14} color={COLORS.inactive} />
@@ -67,7 +76,10 @@ export default function LoginScreen() {
               placeholderTextColor={COLORS.textPlaceholder}
               keyboardType="phone-pad"
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
+              onChangeText={(text) => {
+                setPhoneNumber(text);
+                if (errorPhone) setErrorPhone(null);
+              }}
               autoFocus={true}
             />
 
@@ -80,6 +92,11 @@ export default function LoginScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Error message */}
+          {errorPhone && (
+            <Text style={styles.errorText}>{errorPhone}</Text>
+          )}
 
           {/* Continue Button */}
           <TouchableOpacity
@@ -149,7 +166,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     height: 50, // Slightly shorter
     paddingHorizontal: 15,
-    marginBottom: 20,
+    marginBottom: 10,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: SIZES.body4,
+    marginBottom: 15,
+    marginLeft: 5,
   },
   countryCode: {
     flexDirection: 'row',
