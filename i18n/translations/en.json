@@ -11,7 +11,7 @@
     "slide5_desc": "A place to update the latest activities of people you care about",
     "login": "Login",
     "register": "Create new account",
-    "choose_lang": "Select Language"
+    "choose_lang": "Language"
   },
   "login": {
     "header_title": "Enter phone number",
@@ -26,5 +26,62 @@
     "contacts": "Contacts",
     "timeline": "Timeline",
     "more": "More"
+  },
+  "chat": {
+    "search": "Search",
+    "time_now": "Now",
+    "time_min": "min",
+    "time_hour": "hr",
+    "time_sat": "Sat",
+    "pin": "Pin"
+  },
+  "settings": {
+    "header": "Settings",
+    "account_security": "Account and security",
+    "privacy": "Privacy",
+    "data_storage": "Data on device",
+    "backup_restore": "Backup and restore",
+    "notifications": "Notifications",
+    "messages": "Messages",
+    "calls": "Calls",
+    "timeline": "Timeline",
+    "contacts": "Contacts",
+    "appearance": "Interface and language",
+    "about": "About Zalo",
+    "support": "Contact support",
+    "switch_account": "Switch account",
+    "logout": "Logout",
+    "logout_confirm_title": "Logout",
+    "logout_confirm_desc": "Are you sure you want to logout?",
+    "cancel": "Cancel"
+  },
+  "appearance": {
+    "header": "Interface and language",
+    "section_ui": "Interface",
+    "theme_light": "Light",
+    "theme_dark": "Dark",
+    "theme_system": "System",
+    "change_font": "Change font",
+    "change_font_size": "Change font size",
+    "default_font": "Zalo font",
+    "section_lang": "Language",
+    "change_lang": "Change language",
+    "current_lang": "English"
+  },
+  "language": {
+    "header": "Change language"
+  },
+  "more": {
+    "view_profile": "View profile",
+    "zcloud_title": "zCloud",
+    "zcloud_desc": "Cloud storage for your data",
+    "zstyle_title": "zStyle - Stand out on Zalo",
+    "zstyle_desc": "Wallpapers and call music",
+    "wallet_title": "QR Wallet",
+    "wallet_desc": "Store and present important QR codes",
+    "my_documents": "My Documents",
+    "my_documents_desc": "Store important messages",
+    "data_on_device": "Device data",
+    "data_on_device_desc": "Manage your data on this device"
   }
 }

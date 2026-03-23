@@ -1,15 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Pressable } from 'react-native';
-import { Ionicons, MaterialCommunityIcons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
-import { COLORS, SIZES } from '@/constants/theme';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Pressable, StatusBar } from 'react-native';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { COLORS } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function MoreScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
 
   const MenuItem = ({ icon, title, subtitle, color, iconType = 'ionicons' }: any) => (
-    <TouchableOpacity style={styles.menuItem}>
+    <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
       <View style={styles.menuIconContainer}>
         {iconType === 'ionicons' ? (
           <Ionicons name={icon} size={16} color={color || COLORS.primary} />
@@ -20,17 +24,19 @@ export default function MoreScreen() {
         )}
       </View>
       <View style={styles.menuTextContainer}>
-        <Text style={styles.menuTitle}>{title}</Text>
-        {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
+        <Text style={[styles.menuTitle, { color: colors.text }]}>{title}</Text>
+        {subtitle && <Text style={[styles.menuSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+      <Ionicons name="chevron-forward" size={18} color={isDark ? colors.textSecondary : "#C7C7CC"} />
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "light-content"} />
+
       {/* Header with Search and Settings */}
-      <SafeAreaView edges={['top']} style={styles.header}>
+      <SafeAreaView edges={['top']} style={[styles.header, { backgroundColor: isDark ? colors.header : COLORS.primary }]}>
         <View style={styles.headerContent}>
           <Ionicons name="search" size={24} color="#fff" />
           <View style={styles.flexOne} />
@@ -40,75 +46,75 @@ export default function MoreScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView style={styles.scrollView} bounces={false}>
+      <ScrollView style={[styles.scrollView, { backgroundColor: colors.chatBackground }]} bounces={false}>
         {/* Profile Card */}
-        <Pressable style={styles.profileCard}>
+        <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]}>
           <View style={styles.avatarContainer}>
             <Image 
               source={{ uri: 'https://i.pravatar.cc/150?u=huy' }} 
               style={styles.avatar} 
             />
-            <View style={styles.moodIcon}>
-              <Ionicons name="happy-outline" size={16} color="#666" />
+            <View style={[styles.moodIcon, { borderColor: colors.tabBar, backgroundColor: isDark ? colors.surface : '#f0f0f0' }]}>
+              <Ionicons name="happy-outline" size={16} color={colors.textSecondary} />
             </View>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Nguyễn Quang Huy</Text>
-            <Text style={styles.profileStatus}>Xem trang cá nhân</Text>
+            <Text style={[styles.profileName, { color: colors.text }]}>Nguyễn Quang Huy</Text>
+            <Text style={[styles.profileStatus, { color: colors.textSecondary }]}>{t('more.view_profile')}</Text>
           </View>
           <Ionicons name="person-circle-outline" size={26} color={COLORS.primary} />
         </Pressable>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
         {/* Cloud & Style Section */}
         <MenuItem 
           icon="cloud-outline" 
-          title="zCloud" 
-          subtitle="Không gian lưu trữ dữ liệu trên đám mây" 
+          title={t('more.zcloud_title')} 
+          subtitle={t('more.zcloud_desc')} 
           color="#0068ff" 
         />
         <MenuItem 
           icon="magic-staff" 
           iconType="mci"
-          title="zStyle - Nổi bật trên Zalo" 
-          subtitle="Hình nền và nhạc cho cuộc gọi Zalo" 
+          title={t('more.zstyle_title')} 
+          subtitle={t('more.zstyle_desc')} 
           color="#aa44ff" 
         />
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.chatBackground }]} />
 
         {/* Basic Tools Section */}
         <MenuItem 
           icon="folder-outline" 
-          title="My Documents" 
-          subtitle="Lưu trữ các tin nhắn quan trọng" 
+          title={t('more.my_documents')} 
+          subtitle={t('more.my_documents_desc')} 
           color="#0068ff" 
         />
         <MenuItem 
           icon="time-outline" 
-          title="Dữ liệu trên máy" 
-          subtitle="Quản lý dữ liệu Zalo của bạn" 
+          title={t('more.data_on_device')} 
+          subtitle={t('more.data_on_device_desc')} 
           color="#0068ff" 
         />
         <MenuItem 
           icon="wallet-outline" 
-          title="Ví QR" 
-          subtitle="Lưu trữ và xuất trình các mã QR quan trọng" 
+          title={t('more.wallet_title')} 
+          subtitle={t('more.wallet_desc')} 
           color="#0068ff" 
         />
 
-        <View style={styles.sectionDivider} />
+        <View style={[styles.sectionDivider, { backgroundColor: colors.chatBackground }]} />
 
         {/* Security Section */}
         <MenuItem 
           icon="shield-checkmark-outline" 
-          title="Tài khoản và bảo mật" 
+          title={t('settings.account_security')} 
           color="#0068ff" 
         />
         <MenuItem 
           icon="lock-closed-outline" 
-          title="Quyền riêng tư" 
+          title={t('settings.privacy')} 
           color="#0068ff" 
         />
         
@@ -121,7 +127,6 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   header: {
     backgroundColor: COLORS.primary,
@@ -137,12 +142,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
   },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     padding: 16,
   },
   avatarContainer: {
@@ -157,14 +160,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -2,
     bottom: -2,
-    backgroundColor: '#f0f0f0',
     borderRadius: 10,
     width: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#fff',
   },
   profileInfo: {
     flex: 1,
@@ -173,29 +174,23 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000',
   },
   profileStatus: {
     fontSize: 10,
-    color: '#666',
     marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: '#F2F2F7',
   },
   sectionDivider: {
     height: 8,
-    backgroundColor: '#F2F2F7',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#f0f0f0',
   },
   menuIconContainer: {
     width: 32,
@@ -207,12 +202,10 @@ const styles = StyleSheet.create({
   },
   menuTitle: {
     fontSize: 12,
-    color: '#000',
     fontWeight: '400',
   },
   menuSubtitle: {
     fontSize: 9,
-    color: '#8e8e93',
     marginTop: 2,
   },
 });
