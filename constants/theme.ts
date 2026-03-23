@@ -26,14 +26,14 @@ export const COLORS = {
   
   dark: {
     background: '#000000',
-    surface: '#242424',
+    surface: '#2c2c2e',
     text: '#ffffff',
     textSecondary: '#aeb0b5',
     textPlaceholder: '#888888',
-    border: '#333333',
-    card: '#242424',
-    header: '#242424',
-    tabBar: '#242424',
+    border: '#3c3c3e',
+    card: '#2c2c2e',
+    header: '#3a3a3c',
+    tabBar: '#3a3a3c',
     chatBackground: '#000000',
   }
 };

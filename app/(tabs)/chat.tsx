@@ -187,7 +187,7 @@ export default function ChatScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" translucent />
-      <View style={{ 
+      <View style={{
         backgroundColor: isDark ? colors.header : COLORS.primary,
         paddingTop: insets.top
       }}>
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   },
   headerSearchText: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 14,
+    fontSize: 13,
   },
   headerIcons: {
     flexDirection: 'row',
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   },
   chatName: {
     fontSize: 11,
-    fontWeight: '500', 
+    fontWeight: '500',
     flex: 1,
   },
   timeSection: {

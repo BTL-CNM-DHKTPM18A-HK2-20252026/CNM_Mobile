@@ -27,10 +27,10 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await authService.logout();
-              router.replace('/login');
+              router.replace('/');
             } catch (error) {
               console.error('Logout error:', error);
-              router.replace('/login'); // Still redirect even if API fails
+              router.replace('/'); // Still redirect even if API fails
             }
           }
         },
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   flexOne: {

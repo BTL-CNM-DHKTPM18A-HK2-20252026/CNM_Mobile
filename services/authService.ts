@@ -119,6 +119,19 @@ export const authService = {
       console.error('QR Scan Notify error:', error);
       return false;
     }
+  },
+
+  getProfile: async () => {
+    try {
+      const response = await api.get<any, ApiResponse<any>>('/users/me');
+      if (response.success && response.data) {
+        return response.data;
+      }
+      return null;
+    } catch (error: any) {
+      console.error('Get Profile error:', error);
+      return null;
+    }
   }
 };
 

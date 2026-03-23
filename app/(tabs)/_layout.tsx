@@ -4,8 +4,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HapticTab } from '@/components/common/HapticTab';
 import { COLORS } from '@/constants/theme';
 import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
+import { authService } from '@/services/authService';
+import { useEffect } from 'react';
+import { useRouter } from 'expo-router';
 
 const TabBadge = ({ count, type = 'number' }: { count?: string | number, type?: 'number' | 'dot' | 'n' }) => {
   const { colors } = useTheme();
@@ -63,6 +67,20 @@ const CustomTabIcon = ({
 export default function TabLayout() {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  
+  const TAB_BAR_HEIGHT = 60 + (insets.bottom > 0 ? insets.bottom - 10 : 0);
+  
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await authService.isAuthenticated();
+      if (!authenticated) {
+        router.replace('/');
+      }
+    };
+    checkAuth();
+  }, []);
 
   return (
     <Tabs
@@ -73,13 +91,13 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
         tabBarShowLabel: false,
         tabBarStyle: {
-          height: 75,
+          height: Math.max(65, TAB_BAR_HEIGHT),
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
           backgroundColor: colors.tabBar,
-          paddingTop: 12,
-          paddingBottom: 15,
+          paddingTop: 8,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
         },
       }}>
       <Tabs.Screen
