@@ -49,5 +49,17 @@ export const authService = {
   isAuthenticated: async () => {
     const token = await SecureStore.getItemAsync('user_token');
     return !!token;
+  },
+
+  checkPhoneNumber: async (phoneNumber: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<boolean>>('/auth/check-phone-number', {
+        phoneNumber: phoneNumber
+      });
+      return response.success && response.result; // Trả về true nếu sđt tồn tại
+    } catch (error: any) {
+      console.error('Check phone error:', error);
+      return false;
+    }
   }
 };
