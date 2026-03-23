@@ -6,13 +6,14 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  TextInput,
   SafeAreaView,
   StatusBar
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/theme';
 import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/context/ThemeContext';
 
 interface ChatItem {
   id: string;
@@ -112,14 +113,15 @@ const MOCK_CHATS: ChatItem[] = [
   }
 ];
 
-const GroupAvatar = ({ avatars }: { avatars: string[] }) => (
-  <View style={styles.groupAvatarContainer}>
+const GroupAvatar = ({ avatars, themeColors }: { avatars: string[], themeColors: any }) => (
+  <View style={[styles.groupAvatarContainer, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
     {avatars.slice(0, 4).map((uri, index) => (
       <Image
         key={index}
         source={{ uri }}
         style={[
           styles.smallAvatar,
+          { borderColor: themeColors.card },
           index === 0 && styles.avatarPos0,
           index === 1 && styles.avatarPos1,
           index === 2 && styles.avatarPos2,
@@ -128,25 +130,28 @@ const GroupAvatar = ({ avatars }: { avatars: string[] }) => (
       />
     ))}
     {avatars.length > 4 && (
-      <View style={[styles.smallAvatar, styles.avatarPos3, styles.moreGroup]}>
-        <Text style={styles.moreText}>{avatars.length}</Text>
+      <View style={[styles.smallAvatar, styles.avatarPos3, styles.moreGroup, { backgroundColor: themeColors.border }]}>
+        <Text style={[styles.moreText, { color: themeColors.textSecondary }]}>{avatars.length}</Text>
       </View>
     )}
   </View>
 );
 
 export default function ChatScreen() {
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
+
   const renderItem = ({ item }: { item: ChatItem }) => (
-    <TouchableOpacity style={styles.chatItem}>
+    <TouchableOpacity style={[styles.chatItem, { backgroundColor: colors.card }]}>
       {/* Avatar Section */}
       <View style={styles.avatarSection}>
         {item.isGroup && item.groupAvatars ? (
-          <GroupAvatar avatars={item.groupAvatars} />
+          <GroupAvatar avatars={item.groupAvatars} themeColors={colors} />
         ) : (
           <View>
-            <Image source={{ uri: item.avatar || 'https://randomuser.me/api/portraits/men/1.jpg' }} style={styles.avatar} />
+            <Image source={{ uri: item.avatar || 'https://randomuser.me/api/portraits/men/1.jpg' }} style={[styles.avatar, { borderColor: colors.border }]} />
             {item.name === 'Thời Tiết' || item.name === 'My Documents' ? (
-              <View style={styles.verifiedBadge}>
+              <View style={[styles.verifiedBadge, { backgroundColor: colors.card }]}>
                 <Ionicons name="checkmark-circle" size={12} color="#0068ff" />
               </View>
             ) : null}
@@ -157,15 +162,15 @@ export default function ChatScreen() {
       {/* Info Section */}
       <View style={styles.infoSection}>
         <View style={styles.nameHeader}>
-          <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
+          <Text style={[styles.chatName, { color: colors.text }]} numberOfLines={1}>{item.name}</Text>
           <View style={styles.timeSection}>
-            {item.isPinned && <Ionicons name="pin" size={12} color="#999" style={{ marginRight: 5 }} />}
-            <Text style={styles.timeText}>{item.time}</Text>
+            {item.isPinned && <Ionicons name="pin" size={12} color={colors.textSecondary} style={{ marginRight: 5 }} />}
+            <Text style={[styles.timeText, { color: colors.textSecondary }]}>{item.time}</Text>
           </View>
         </View>
 
         <View style={styles.messageFooter}>
-          <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage}</Text>
+          <Text style={[styles.lastMessage, { color: colors.textSecondary }]} numberOfLines={1}>{item.lastMessage}</Text>
           {item.unreadCount ? (
             <View style={styles.unreadBadge}>
               <View style={styles.redDot} />
@@ -177,14 +182,14 @@ export default function ChatScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" />
       {/* Top Search Bar */}
-      <SafeAreaView style={styles.headerContainer}>
+      <SafeAreaView style={[styles.headerContainer, { backgroundColor: isDark ? colors.header : COLORS.primary }]}>
         <View style={styles.searchBarRow}>
           <Ionicons name="search" size={22} color="#fff" />
           <TouchableOpacity style={styles.searchPrompt}>
-            <Text style={styles.searchText}>Tìm kiếm</Text>
+            <Text style={styles.searchText}>{t('chat.search')}</Text>
           </TouchableOpacity>
           <View style={styles.headerIcons}>
             <TouchableOpacity onPress={() => router.push('/qr-scan')}>
@@ -200,7 +205,7 @@ export default function ChatScreen() {
         data={MOCK_CHATS}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.border }]} />}
         contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
       />
@@ -211,7 +216,6 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   headerContainer: {
     backgroundColor: '#0068ff',
@@ -230,7 +234,7 @@ const styles = StyleSheet.create({
   },
   searchText: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 12, // Hạ tiếp từ 14
+    fontSize: 11,
   },
   headerIcons: {
     flexDirection: 'row',
@@ -252,8 +256,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    borderWidth: 0.1, // Thêm viền mỏng
-    borderColor: '#000',
+    borderWidth: 0.1,
   },
   groupAvatarContainer: {
     width: 54,
@@ -262,17 +265,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 27,
     overflow: 'hidden',
-    backgroundColor: '#f1f1f1',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0.5, // Thêm viền mỏng cho nhóm
-    borderColor: '#eee',
+    borderWidth: 0.5,
   },
   smallAvatar: {
     width: '50%',
     height: '50%',
     borderWidth: 0.5,
-    borderColor: '#fff',
   },
   avatarPos0: {},
   avatarPos1: {},
@@ -289,9 +289,8 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   chatName: {
-    fontSize: 12,
-    fontWeight: '500', // Đã giảm mức in đậm từ 600 xuống 500
-    color: '#000',
+    fontSize: 11,
+    fontWeight: '500', 
     flex: 1,
   },
   timeSection: {
@@ -299,8 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timeText: {
-    fontSize: 10, // Hạ tiếp từ 11
-    color: '#999',
+    fontSize: 9,
   },
   messageFooter: {
     flexDirection: 'row',
@@ -308,8 +306,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lastMessage: {
-    fontSize: 11, // Hạ tiếp từ 12
-    color: '#888',
+    fontSize: 10,
     flex: 1,
     marginRight: 10,
   },
@@ -325,23 +322,19 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: '#f1f1f1',
     marginLeft: 84, // Align with text
   },
   verifiedBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#fff',
     borderRadius: 6,
   },
   moreGroup: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ddd',
   },
   moreText: {
-    fontSize: 10,
-    color: '#555',
+    fontSize: 9,
   }
 });

@@ -4,12 +4,19 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HapticTab } from '@/components/common/HapticTab';
 import { COLORS } from '@/constants/theme';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/context/ThemeContext';
 
 const TabBadge = ({ count, type = 'number' }: { count?: string | number, type?: 'number' | 'dot' | 'n' }) => {
+  const { colors } = useTheme();
   if (!count && type !== 'dot') return null;
   
   return (
-    <View style={[styles.badge, type === 'dot' && styles.dotBadge]}>
+      <View style={[
+        styles.badge, 
+        type === 'dot' && styles.dotBadge,
+        { borderColor: colors.tabBar }
+      ]}>
       <Text style={styles.badgeText}>{count}</Text>
     </View>
   );
@@ -54,20 +61,23 @@ const CustomTabIcon = ({
 };
 
 export default function TabLayout() {
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary, 
-        tabBarInactiveTintColor: COLORS.inactive,
+        tabBarInactiveTintColor: isDark ? colors.textSecondary : COLORS.inactive,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarShowLabel: false,
         tabBarStyle: {
           height: 75,
           borderTopWidth: 1,
-          borderTopColor: '#f2f2f2',
+          borderTopColor: colors.border,
           elevation: 0,
-          backgroundColor: '#fff',
+          backgroundColor: colors.tabBar,
           paddingTop: 12,
           paddingBottom: 15,
         },
@@ -80,7 +90,7 @@ export default function TabLayout() {
               focused={focused} 
               color={color} 
               iconName="chatbubble-ellipses" 
-              label="Tin nhắn" 
+              label={t('tabs.chat')} 
               badge={<TabBadge count={3} />}
             />
           ),
@@ -94,7 +104,7 @@ export default function TabLayout() {
               focused={focused} 
               color={color} 
               iconName="people" 
-              label="Danh bạ" 
+              label={t('tabs.contacts')} 
             />
           ),
         }}
@@ -122,7 +132,7 @@ export default function TabLayout() {
               color={color} 
               iconName="clock-time-four" 
               iconType="mci"
-              label="Nhật ký" 
+              label={t('tabs.timeline')} 
               badge={<TabBadge count="N" type="n" />}
             />
           ),
@@ -136,7 +146,7 @@ export default function TabLayout() {
               focused={focused} 
               color={color} 
               iconName="person" 
-              label="Cá nhân" 
+              label={t('tabs.more')} 
             />
           ),
         }}
@@ -157,7 +167,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 9, // Hạ tiếp từ 10
     fontWeight: '500',
     marginTop: 4,
   },
@@ -183,7 +193,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: '#fff',
-    fontSize: 9,
+    fontSize: 8, // Hạ tiếp từ 9
     fontWeight: 'bold',
   }
 });

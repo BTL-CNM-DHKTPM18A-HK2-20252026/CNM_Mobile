@@ -26,5 +26,62 @@
     "contacts": "Danh bạ",
     "timeline": "Nhật ký",
     "more": "Cá nhân"
+  },
+  "chat": {
+    "search": "Tìm kiếm",
+    "time_now": "Bây giờ",
+    "time_min": "phút",
+    "time_hour": "giờ",
+    "time_sat": "T7",
+    "pin": "Ghim"
+  },
+  "settings": {
+    "header": "Cài đặt",
+    "account_security": "Tài khoản và bảo mật",
+    "privacy": "Quyền riêng tư",
+    "data_storage": "Dữ liệu trên máy",
+    "backup_restore": "Sao lưu và khôi phục",
+    "notifications": "Thông báo",
+    "messages": "Tin nhắn",
+    "calls": "Cuộc gọi",
+    "timeline": "Nhật ký",
+    "contacts": "Danh bạ",
+    "appearance": "Giao diện và ngôn ngữ",
+    "about": "Thông tin về Zalo",
+    "support": "Liên hệ hỗ trợ",
+    "switch_account": "Chuyển tài khoản",
+    "logout": "Đăng xuất",
+    "logout_confirm_title": "Đăng xuất",
+    "logout_confirm_desc": "Bạn có chắc chắn muốn đăng xuất?",
+    "cancel": "Hủy"
+  },
+  "appearance": {
+    "header": "Giao diện và ngôn ngữ",
+    "section_ui": "Giao diện",
+    "theme_light": "Sáng",
+    "theme_dark": "Tối",
+    "theme_system": "Hệ thống",
+    "change_font": "Đổi phông chữ",
+    "change_font_size": "Đổi cỡ chữ",
+    "default_font": "Phông chữ Zalo",
+    "section_lang": "Ngôn ngữ",
+    "change_lang": "Đổi ngôn ngữ",
+    "current_lang": "Tiếng Việt"
+  },
+  "language": {
+    "header": "Thay đổi ngôn ngữ"
+  },
+  "more": {
+    "view_profile": "Xem trang cá nhân",
+    "zcloud_title": "zCloud",
+    "zcloud_desc": "Không gian lưu trữ dữ liệu trên đám mây",
+    "zstyle_title": "zStyle - Nổi bật trên Zalo",
+    "zstyle_desc": "Hình nền và nhạc cho cuộc gọi Zalo",
+    "wallet_title": "Ví QR",
+    "wallet_desc": "Lưu trữ và xuất trình các mã QR quan trọng",
+    "my_documents": "My Documents",
+    "my_documents_desc": "Lưu trữ các tin nhắn quan trọng",
+    "data_on_device": "Dữ liệu trên máy",
+    "data_on_device_desc": "Quản lý dữ liệu Zalo của bạn"
   }
 }
