@@ -17,6 +17,9 @@ export default function RootLayout() {
         
         {/* Main App (With Tabs) */}
         <Stack.Screen name="(tabs)" />
+
+        {/* QR Scanner */}
+        <Stack.Screen name="qr-scan" />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

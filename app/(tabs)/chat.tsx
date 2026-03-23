@@ -1,10 +1,209 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  TextInput,
+  SafeAreaView,
+  StatusBar
+} from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { COLORS } from '@/constants/theme';
+import { router } from 'expo-router';
+
+interface ChatItem {
+  id: string;
+  name: string;
+  lastMessage: string;
+  time: string;
+  isGroup: boolean;
+  isPinned: boolean;
+  unreadCount?: number;
+  avatar?: string;
+  groupAvatars?: string[];
+}
+
+const MOCK_CHATS: ChatItem[] = [
+  {
+    id: '1',
+    name: 'KTTKPM_DHKTPM18C_HK2_202...',
+    lastMessage: 'Nguyễn Thị Thái Hòa: Dạ thưa cô em tên là...',
+    time: 'T7',
+    isGroup: true,
+    isPinned: true,
+    groupAvatars: ['https://randomuser.me/api/portraits/women/1.jpg', 'https://randomuser.me/api/portraits/men/1.jpg', 'https://randomuser.me/api/portraits/men/2.jpg']
+  },
+  {
+    id: '2',
+    name: 'TTDN_HK2_2025_2026_T.HUNG',
+    lastMessage: 'Thanh Trúc: [File] TTDN_NguyenThanhTruc...',
+    time: 'T7',
+    isGroup: true,
+    isPinned: true,
+    groupAvatars: ['https://randomuser.me/api/portraits/men/3.jpg', 'https://randomuser.me/api/portraits/women/2.jpg']
+  },
+  {
+    id: '3',
+    name: 'SE_TTDN_HK2_2025_2026',
+    lastMessage: 'Nguyen Thi Hanh: Bạn nào có đề cương...',
+    time: 'T7',
+    isGroup: true,
+    isPinned: true,
+    avatar: 'https://via.placeholder.com/150/0068ff/ffffff?text=SE'
+  },
+  {
+    id: '4',
+    name: 'CNMOI_HK2_25-26_DHKTPM1...',
+    lastMessage: 'Nguyễn Ngọc Hồng Min...: [Link] https...',
+    time: '16/03',
+    isGroup: true,
+    isPinned: true,
+    groupAvatars: ['https://randomuser.me/api/portraits/men/4.jpg', 'https://randomuser.me/api/portraits/women/3.jpg']
+  },
+  {
+    id: '5',
+    name: 'My Documents',
+    lastMessage: 'Bạn: [Hình ảnh]',
+    time: '10 phút',
+    isGroup: false,
+    isPinned: true,
+    avatar: 'https://cdn-icons-png.flaticon.com/512/3767/3767084.png' // Cloud/Document icon
+  },
+  {
+    id: '6',
+    name: 'Thời Tiết',
+    lastMessage: 'Chào ngày mới, thời tiết TP. Hồ Chí Minh...',
+    time: '52 phút',
+    isGroup: false,
+    isPinned: false,
+    unreadCount: 1,
+    avatar: 'https://cdn-icons-png.flaticon.com/512/1163/1163624.png' // Weather icon
+  },
+  {
+    id: '7',
+    name: 'Media Box',
+    lastMessage: 'Báo Mới: [APP] Xuất hiện mưa đá dữ dội ở...',
+    time: 'Bây giờ',
+    isGroup: false,
+    isPinned: false,
+    unreadCount: 1,
+    avatar: 'https://cdn-icons-png.flaticon.com/512/3671/3671927.png' // News/Box icon
+  },
+  {
+    id: '8',
+    name: 'Mẹ',
+    lastMessage: '[Cuộc gọi video đi]',
+    time: '12 giờ',
+    isGroup: false,
+    isPinned: false,
+    avatar: 'https://randomuser.me/api/portraits/women/4.jpg'
+  },
+  {
+    id: '9',
+    name: 'Trâm',
+    lastMessage: '[Cuộc gọi video đến]',
+    time: '13 giờ',
+    isGroup: false,
+    isPinned: false,
+    avatar: 'https://randomuser.me/api/portraits/women/5.jpg'
+  }
+];
+
+const GroupAvatar = ({ avatars }: { avatars: string[] }) => (
+  <View style={styles.groupAvatarContainer}>
+    {avatars.slice(0, 4).map((uri, index) => (
+      <Image
+        key={index}
+        source={{ uri }}
+        style={[
+          styles.smallAvatar,
+          index === 0 && styles.avatarPos0,
+          index === 1 && styles.avatarPos1,
+          index === 2 && styles.avatarPos2,
+          index === 3 && styles.avatarPos3,
+        ]}
+      />
+    ))}
+    {avatars.length > 4 && (
+      <View style={[styles.smallAvatar, styles.avatarPos3, styles.moreGroup]}>
+        <Text style={styles.moreText}>{avatars.length}</Text>
+      </View>
+    )}
+  </View>
+);
 
 export default function ChatScreen() {
+  const renderItem = ({ item }: { item: ChatItem }) => (
+    <TouchableOpacity style={styles.chatItem}>
+      {/* Avatar Section */}
+      <View style={styles.avatarSection}>
+        {item.isGroup && item.groupAvatars ? (
+          <GroupAvatar avatars={item.groupAvatars} />
+        ) : (
+          <View>
+            <Image source={{ uri: item.avatar || 'https://randomuser.me/api/portraits/men/1.jpg' }} style={styles.avatar} />
+            {item.name === 'Thời Tiết' || item.name === 'My Documents' ? (
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={12} color="#0068ff" />
+              </View>
+            ) : null}
+          </View>
+        )}
+      </View>
+
+      {/* Info Section */}
+      <View style={styles.infoSection}>
+        <View style={styles.nameHeader}>
+          <Text style={styles.chatName} numberOfLines={1}>{item.name}</Text>
+          <View style={styles.timeSection}>
+            {item.isPinned && <Ionicons name="pin" size={12} color="#999" style={{ marginRight: 5 }} />}
+            <Text style={styles.timeText}>{item.time}</Text>
+          </View>
+        </View>
+
+        <View style={styles.messageFooter}>
+          <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage}</Text>
+          {item.unreadCount ? (
+            <View style={styles.unreadBadge}>
+              <View style={styles.redDot} />
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Messages/Chat Placeholder</Text>
+      <StatusBar barStyle="light-content" />
+      {/* Top Search Bar */}
+      <SafeAreaView style={styles.headerContainer}>
+        <View style={styles.searchBarRow}>
+          <Ionicons name="search" size={22} color="#fff" />
+          <TouchableOpacity style={styles.searchPrompt}>
+            <Text style={styles.searchText}>Tìm kiếm</Text>
+          </TouchableOpacity>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity onPress={() => router.push('/qr-scan')}>
+              <MaterialCommunityIcons name="qrcode-scan" size={22} color="#fff" style={styles.icon} />
+            </TouchableOpacity>
+            <Ionicons name="add" size={28} color="#fff" />
+          </View>
+        </View>
+      </SafeAreaView>
+
+      {/* Chat List */}
+      <FlatList
+        data={MOCK_CHATS}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        contentContainerStyle={{ paddingBottom: 20 }}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
@@ -12,12 +211,137 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#fff',
   },
-  text: {
-    fontSize: 18,
-    color: '#333',
+  headerContainer: {
+    backgroundColor: '#0068ff',
+    paddingBottom: 10,
   },
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingTop: 45, // Padding for notch
+    height: 90,
+  },
+  searchPrompt: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  searchText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 12, // Hạ tiếp từ 14
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  icon: {
+    marginRight: 15,
+  },
+  chatItem: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  avatarSection: {
+    marginRight: 15,
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 0.1, // Thêm viền mỏng
+    borderColor: '#000',
+  },
+  groupAvatarContainer: {
+    width: 54,
+    height: 54,
+    flexWrap: 'wrap',
+    flexDirection: 'row',
+    borderRadius: 27,
+    overflow: 'hidden',
+    backgroundColor: '#f1f1f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 0.5, // Thêm viền mỏng cho nhóm
+    borderColor: '#eee',
+  },
+  smallAvatar: {
+    width: '50%',
+    height: '50%',
+    borderWidth: 0.5,
+    borderColor: '#fff',
+  },
+  avatarPos0: {},
+  avatarPos1: {},
+  avatarPos2: {},
+  avatarPos3: {},
+
+  infoSection: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  nameHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 5,
+  },
+  chatName: {
+    fontSize: 12,
+    fontWeight: '500', // Đã giảm mức in đậm từ 600 xuống 500
+    color: '#000',
+    flex: 1,
+  },
+  timeSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeText: {
+    fontSize: 10, // Hạ tiếp từ 11
+    color: '#999',
+  },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lastMessage: {
+    fontSize: 11, // Hạ tiếp từ 12
+    color: '#888',
+    flex: 1,
+    marginRight: 10,
+  },
+  unreadBadge: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  redDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ff3b30',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#f1f1f1',
+    marginLeft: 84, // Align with text
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+  },
+  moreGroup: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ddd',
+  },
+  moreText: {
+    fontSize: 10,
+    color: '#555',
+  }
 });
