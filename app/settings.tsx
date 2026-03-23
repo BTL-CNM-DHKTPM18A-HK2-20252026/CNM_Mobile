@@ -7,11 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { authService } from '@/services/authService';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const handleLogout = async () => {
     Alert.alert(
@@ -53,7 +55,10 @@ export default function SettingsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "light-content"} />
-      <SafeAreaView edges={['top']} style={[styles.header, { backgroundColor: isDark ? colors.header : COLORS.primary }]}>
+      <View style={{ 
+        backgroundColor: isDark ? colors.header : COLORS.primary,
+        paddingTop: insets.top
+      }}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -62,7 +67,7 @@ export default function SettingsScreen() {
           <View style={styles.flexOne} />
           <Ionicons name="search" size={24} color="#fff" />
         </View>
-      </SafeAreaView>
+      </View>
 
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.chatBackground }]}>
         <View style={styles.sectionHeader} />
@@ -129,7 +134,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    backgroundColor: COLORS.primary,
+    // Background removed here as it's in the outer View
   },
   headerContent: {
     flexDirection: 'row',

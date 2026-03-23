@@ -68,7 +68,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: COLORS.primary, 
-        tabBarInactiveTintColor: isDark ? colors.textSecondary : COLORS.inactive,
+        tabBarInactiveTintColor: isDark ? '#ffffff' : COLORS.inactive,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarShowLabel: false,

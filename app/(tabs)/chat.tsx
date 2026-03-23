@@ -14,6 +14,7 @@ import { COLORS } from '@/constants/theme';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ChatItem {
   id: string;
@@ -141,6 +142,8 @@ export default function ChatScreen() {
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
 
+  const insets = useSafeAreaInsets();
+
   const renderItem = ({ item }: { item: ChatItem }) => (
     <TouchableOpacity style={[styles.chatItem, { backgroundColor: colors.card }]}>
       {/* Avatar Section */}
@@ -183,13 +186,15 @@ export default function ChatScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle="light-content" />
-      {/* Top Search Bar */}
-      <SafeAreaView style={[styles.headerContainer, { backgroundColor: isDark ? colors.header : COLORS.primary }]}>
+      <StatusBar barStyle="light-content" translucent />
+      <View style={{ 
+        backgroundColor: isDark ? colors.header : COLORS.primary,
+        paddingTop: insets.top
+      }}>
         <View style={styles.searchBarRow}>
-          <Ionicons name="search" size={22} color="#fff" />
-          <TouchableOpacity style={styles.searchPrompt}>
-            <Text style={styles.searchText}>{t('chat.search')}</Text>
+          <TouchableOpacity style={styles.searchBarBox}>
+            <Ionicons name="search" size={18} color="#fff" style={styles.searchIcon} />
+            <Text style={styles.headerSearchText}>{t('chat.search')}</Text>
           </TouchableOpacity>
           <View style={styles.headerIcons}>
             <TouchableOpacity onPress={() => router.push('/qr-scan')}>
@@ -198,7 +203,7 @@ export default function ChatScreen() {
             <Ionicons name="add" size={28} color="#fff" />
           </View>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* Chat List */}
       <FlatList
@@ -218,23 +223,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    backgroundColor: '#0068ff',
-    paddingBottom: 10,
+    paddingBottom: 4,
   },
   searchBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    paddingTop: 45, // Padding for notch
-    height: 90,
+    height: 56,
   },
-  searchPrompt: {
+  searchBarBox: {
     flex: 1,
-    marginLeft: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 4,
   },
-  searchText: {
+  searchIcon: {
+    marginRight: 10,
+  },
+  headerSearchText: {
     color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 11,
+    fontSize: 14,
   },
   headerIcons: {
     flexDirection: 'row',
