@@ -121,6 +121,25 @@ export const authService = {
     }
   },
 
+  register: async (data: {
+    phoneNumber: string;
+    email: string;
+    password: string;
+    displayName: string;
+    firstName?: string;
+    lastName?: string;
+    dob?: Date;
+    gender?: string;
+  }) => {
+    try {
+      const response = await api.post<any, ApiResponse<any>>('/users', data);
+      return response;
+    } catch (error: any) {
+      console.error('Register error:', error);
+      throw error.response?.data?.message || error.message || 'Network error';
+    }
+  },
+
   getProfile: async () => {
     try {
       const response = await api.get<any, ApiResponse<any>>('/users/me');

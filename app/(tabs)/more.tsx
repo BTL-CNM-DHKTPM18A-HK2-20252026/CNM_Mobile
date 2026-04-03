@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authService } from '@/services/authService';
+import { resolveAvatarUri } from '@/services/mediaUtils';
 import { useEffect, useState } from 'react';
 
 export default function MoreScreen() {
@@ -69,7 +70,7 @@ export default function MoreScreen() {
         <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]} onPress={() => console.log('View Profile')}>
           <View style={styles.avatarContainer}>
             <Image 
-              source={{ uri: profile?.avatar_url || 'https://randomuser.me/api/portraits/men/1.jpg' }} 
+              source={{ uri: resolveAvatarUri(profile?.avatar_url) }} 
               style={styles.avatar} 
             />
             <View style={[styles.moodIcon, { borderColor: colors.tabBar, backgroundColor: isDark ? colors.surface : '#f0f0f0' }]}>
@@ -78,7 +79,7 @@ export default function MoreScreen() {
           </View>
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, { color: colors.text }]}>
-              {profile ? `${profile.firstName} ${profile.lastName}` : 'Guest User'}
+              {profile ? profile.full_name : 'Guest User'}
             </Text>
             <Text style={[styles.profileStatus, { color: colors.textSecondary }]}>{t('more.view_profile')}</Text>
           </View>

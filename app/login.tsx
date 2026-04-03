@@ -119,7 +119,7 @@ export default function LoginScreen() {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>{t('login.no_account')} </Text>
-            <TouchableOpacity onPress={() => console.log('Go to Register')}>
+            <TouchableOpacity onPress={() => router.push('/register')}>
               <Text style={styles.footerLink}>{t('login.create_account')}</Text>
             </TouchableOpacity>
           </View>
