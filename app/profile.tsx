@@ -3,6 +3,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { authService } from '@/services/authService';
 import { resolveAvatarUri } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -78,6 +79,54 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleChangeAvatar = async () => {
+    // 1. Xin quyền và chọn ảnh
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert("Quyền truy cập", "Bạn cần cho phép truy cập thư viện ảnh");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      const asset = result.assets[0];
+      const fileName = asset.fileName || `avatar_${Date.now()}.jpg`;
+      const fileType = asset.mimeType || 'image/jpeg';
+
+      try {
+        setLoading(true);
+        
+        // 2. Lấy Presigned URL
+        const presignedUrl = await authService.getAvatarPresignedUrl(fileName, fileType);
+        
+        // 3. Upload lên S3
+        await authService.uploadToS3(presignedUrl, asset.uri, fileType);
+        
+        // 4. Lấy link sạch (bỏ các query params của S3 nếu có)
+        const cleanUrl = presignedUrl.split('?')[0];
+        
+        // 5. Cập nhật vào Database
+        const success = await authService.updateAvatar(cleanUrl);
+        
+        if (success) {
+          setProfile({ ...profile, avatar_url: cleanUrl });
+          Alert.alert("Thành công", "Đã cập nhật ảnh đại diện");
+        }
+      } catch (error) {
+        console.error(error);
+        Alert.alert("Lỗi", "Không thể upload ảnh");
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
   const handleSave = async () => {
     try {
       // Construct DOB string
@@ -139,12 +188,17 @@ export default function ProfileScreen() {
 
         {/* Avatar Section */}
         <View style={[styles.avatarSection, { backgroundColor: colors.background }]}>
-          <View style={[styles.avatarBorder, { borderColor: colors.card }]}> 
-            <Image
-              source={{ uri: resolveAvatarUri(profile?.avatar_url) }}
-              style={styles.avatar}
-            />
-          </View>
+          <TouchableOpacity onPress={handleChangeAvatar}>
+            <View style={[styles.avatarBorder, { borderColor: colors.card }]}> 
+              <Image
+                source={{ uri: resolveAvatarUri(profile?.avatar_url) }}
+                style={styles.avatar}
+              />
+              <View style={styles.cameraIconBadge}>
+                <Ionicons name="camera" size={20} color="#fff" />
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.body, { backgroundColor: colors.background }]}> 
@@ -548,5 +602,28 @@ const styles = StyleSheet.create({
   dobSeparator: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  avatarBorder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    padding: 2,
+    position: 'relative', // Quan trọng để đặt badge theo vị trí tuyệt đối
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    backgroundColor: COLORS.primary, // Hoặc màu xanh bạn thích
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff', // Tạo viền trắng xung quanh icon cho nổi bật
   },
 });

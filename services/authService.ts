@@ -1,5 +1,5 @@
-import api from './api';
 import * as SecureStore from 'expo-secure-store';
+import api from './api';
 
 export interface AuthenticationResponse {
   access_token: string;
@@ -151,7 +151,35 @@ export const authService = {
       console.error('Get Profile error:', error);
       return null;
     }
-  }
+  },
+
+  // 1. Lấy Presigned URL từ Backend
+  getAvatarPresignedUrl: async (fileName: string, fileType: string) => {
+    const response = await api.get<any, ApiResponse<string>>(
+      `/users/me/presigned-url?fileName=${fileName}&fileType=${fileType}`
+    );
+    return response.data; // Trả về link presigned
+  },
+
+  // 2. Upload trực tiếp lên S3 (không qua API Gateway của mình)
+  uploadToS3: async (presignedUrl: string, fileUri: string, fileType: string) => {
+    const response = await fetch(fileUri);
+    const blob = await response.blob();
+    
+    return await fetch(presignedUrl, {
+      method: 'PUT',
+      body: blob,
+      headers: { 'Content-Type': fileType },
+    });
+  },
+
+  // 3. Cập nhật link avatar vào Database
+  updateAvatar: async (avatarUrl: string) => {
+    const response = await api.patch<any, ApiResponse<any>>('/users/me/avatar', {
+      avatar_url: avatarUrl
+    });
+    return response.success;
+  },
 };
 
 // Simple atob polyfill for React Native if not available
