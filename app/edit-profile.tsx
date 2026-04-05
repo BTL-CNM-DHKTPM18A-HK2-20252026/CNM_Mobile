@@ -149,7 +149,7 @@ export default function EditProfileScreen() {
       Alert.alert(t('profile.success_title'), t('profile.profile_updated'), [
         {
           text: t('profile.ok'),
-          onPress: () => router.replace('/profile'),
+          onPress: () => router.back(),
         },
       ]);
     } catch (error) {
