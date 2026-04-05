@@ -16,6 +16,7 @@ function RootLayoutContent() {
         <Stack.Screen name="password" />
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="profile" />
         <Stack.Screen name="qr-scan" />
       </Stack>
       <StatusBar style={isDark ? "light" : "dark"} />

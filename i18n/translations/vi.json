@@ -110,5 +110,34 @@
     "my_documents_desc": "Lưu trữ các tin nhắn quan trọng",
     "data_on_device": "Dữ liệu trên máy",
     "data_on_device_desc": "Quản lý dữ liệu Zalo của bạn"
+  },
+  "profile": {
+    "current_status": "Trạng thái hiện tại",
+    "update_intro": "Cập nhật giới thiệu bản thân",
+    "bio_default": "Chưa có giới thiệu",
+    "bio_placeholder": "Nhập giới thiệu của bạn",
+    "email": "Email",
+    "phone": "Số điện thoại",
+    "guest_user": "Người dùng",
+    "full_name_placeholder": "Nhập tên đầy đủ",
+    "save": "Lưu thay đổi",
+    "basic_info": "Thông tin cơ bản",
+    "gender": "Giới tính",
+    "dob": "Ngày sinh",
+    "contact_info": "Thông tin liên hệ",
+    "address": "Địa chỉ",
+    "address_placeholder": "Nhập địa chỉ",
+    "city": "Thành phố",
+    "city_placeholder": "Nhập thành phố",
+    "professional_info": "Thông tin công việc",
+    "education": "Học vấn",
+    "education_placeholder": "Nhập trường học/đại học",
+    "workplace": "Nơi làm việc",
+    "workplace_placeholder": "Nhập công ty/tổ chức",
+    "error_title": "Lỗi",
+    "error_loading": "Không thể tải thông tin hồ sơ",
+    "error_saving": "Không thể lưu thay đổi",
+    "success_title": "Thành công",
+    "profile_updated": "Hồ sơ đã được cập nhật"
   }
-}
+} 

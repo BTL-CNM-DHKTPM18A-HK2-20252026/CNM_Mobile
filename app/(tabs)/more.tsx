@@ -1,15 +1,13 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Pressable, StatusBar } from 'react-native';
-import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/theme';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authService } from '@/services/authService';
 import { resolveAvatarUri } from '@/services/mediaUtils';
-import { useEffect, useState } from 'react';
+import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function MoreScreen() {
   const router = useRouter();
@@ -67,7 +65,7 @@ export default function MoreScreen() {
 
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.chatBackground }]} bounces={false}>
         {/* Profile Card */}
-        <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]} onPress={() => console.log('View Profile')}>
+        <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]} onPress={() => router.push('/profile')}>
           <View style={styles.avatarContainer}>
             <Image 
               source={{ uri: resolveAvatarUri(profile?.avatar_url) }} 
