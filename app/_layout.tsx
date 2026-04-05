@@ -1,9 +1,9 @@
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
+import '@/i18n';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import '@/i18n';
-import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 
 function RootLayoutContent() {
   const { isDark } = useTheme();
@@ -17,6 +17,7 @@ function RootLayoutContent() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="edit-profile" />
         <Stack.Screen name="qr-scan" />
       </Stack>
       <StatusBar style={isDark ? "light" : "dark"} />

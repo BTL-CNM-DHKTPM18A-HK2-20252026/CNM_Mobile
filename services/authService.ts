@@ -180,6 +180,43 @@ export const authService = {
     });
     return response.success;
   },
+
+  updateProfile: async (data: {
+    displayName: string;
+    full_name: string;
+    gender: string;
+    dob: string;
+    bio: string;
+    address: string;
+    city: string;
+    education: string;
+    workplace: string;
+    lastUpdateProfile: string;
+  }) => {
+    try {
+      const response = await api.patch<any, ApiResponse<any>>('/users/me', data);
+      if (response.success && response.data) {
+        return response.data;
+      }
+      return null;
+    } catch (error: any) {
+      if (error.response?.status === 405 || error.response?.status === 500) {
+        try {
+          const fallback = await api.post<any, ApiResponse<any>>('/users/me', data);
+          if (fallback.success && fallback.data) {
+            return fallback.data;
+          }
+          return null;
+        } catch (fallbackError: any) {
+          console.error('Update Profile fallback error:', fallbackError);
+          throw fallbackError.response?.data?.message || fallbackError.message || 'Network error';
+        }
+      }
+
+      console.error('Update Profile error:', error);
+      throw error.response?.data?.message || error.message || 'Network error';
+    }
+  }
 };
 
 // Simple atob polyfill for React Native if not available

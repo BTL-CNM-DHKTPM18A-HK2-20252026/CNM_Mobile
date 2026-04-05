@@ -3,8 +3,8 @@ import { useTheme } from '@/context/ThemeContext';
 import { authService } from '@/services/authService';
 import { resolveAvatarUri } from '@/services/mediaUtils';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,13 +16,15 @@ export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<any>(null);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const data = await authService.getProfile();
-      if (data) setProfile(data);
-    };
-    fetchProfile();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const fetchProfile = async () => {
+        const data = await authService.getProfile();
+        if (data) setProfile(data);
+      };
+      fetchProfile();
+    }, [])
+  );
 
   const MenuItem = ({ icon, title, subtitle, color, iconType = 'ionicons' }: any) => (
     <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
