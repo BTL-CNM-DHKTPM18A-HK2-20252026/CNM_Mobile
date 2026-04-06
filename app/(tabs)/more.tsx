@@ -1,7 +1,7 @@
 import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { authService } from '@/services/authService';
-import { resolveAvatarUri } from '@/services/mediaUtils';
+import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
@@ -70,7 +70,7 @@ export default function MoreScreen() {
         <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]} onPress={() => router.push('/profile')}>
           <View style={styles.avatarContainer}>
             <Image 
-              source={{ uri: resolveAvatarUri(profile?.avatar_url) }} 
+              source={getAvatarSource(profile?.avatar_url)} 
               style={styles.avatar} 
             />
             <View style={[styles.moodIcon, { borderColor: colors.tabBar, backgroundColor: isDark ? colors.surface : '#f0f0f0' }]}>

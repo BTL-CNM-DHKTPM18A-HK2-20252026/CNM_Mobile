@@ -1,19 +1,20 @@
 import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { authService } from '@/services/authService';
-import { resolveAvatarUri } from '@/services/mediaUtils';
+import { getAvatarSource, getCoverSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   // Profile data state
   const [loading, setLoading] = useState(true);
@@ -106,17 +107,17 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}> 
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'bottom']}> 
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
         {/* Cover Photo */}
         <View style={styles.coverPhotoContainer}>
           <Image
-            source={{ uri: profile?.cover_photo_url ? resolveAvatarUri(profile.cover_photo_url) : 'https://via.placeholder.com/400x200' }}
+            source={getCoverSource(profile?.cover_photo_url)}
             style={styles.coverPhoto}
             defaultSource={require('@/assets/images/icon.png')}
           />
-          <View style={styles.headerOverlay}>
+          <View style={[styles.headerOverlay, { paddingTop: insets.top + 12, height: 60 + insets.top }]}>
             <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
@@ -129,7 +130,7 @@ export default function ProfileScreen() {
           <TouchableOpacity onPress={handleChangeAvatar}>
             <View style={[styles.avatarBorder, { borderColor: colors.card }]}> 
               <Image
-                source={{ uri: resolveAvatarUri(profile?.avatar_url) }}
+                source={getAvatarSource(profile?.avatar_url)}
                 style={styles.avatar}
               />
               <View style={styles.cameraIconBadge}>
@@ -214,7 +215,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: Math.max(40, insets.bottom + 24) }} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -289,6 +290,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 4,
     padding: 2,
+    position: 'relative',
   },
   avatar: {
     width: 112,
@@ -408,16 +410,6 @@ const styles = StyleSheet.create({
   dobSeparator: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  avatarBorder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    padding: 2,
-    position: 'relative', // Quan trọng để đặt badge theo vị trí tuyệt đối
   },
   cameraIconBadge: {
     position: 'absolute',
