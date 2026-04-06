@@ -16,11 +16,16 @@ export interface ApiResponse<T> {
 export const authService = {
   login: async (phoneNumber: string, password = 'password123') => {
     try {
+      console.log('[LOGIN] URL:', api.defaults.baseURL + '/auth/login');
+      console.log('[LOGIN] Body:', { username: phoneNumber, password });
       // The backend expects 'username' and 'password'
       const response = await api.post<any, ApiResponse<AuthenticationResponse>>('/auth/login', {
         username: phoneNumber,
         password: password
       });
+      console.log('[LOGIN] Response:', response);
+
+
 
       if (response.success && response.data.access_token) {
         await SecureStore.setItemAsync('user_token', response.data.access_token);
@@ -52,10 +57,12 @@ export const authService = {
 
   checkPhoneNumber: async (phoneNumber: string) => {
     try {
-      console.log(phoneNumber)
+      console.log(api);
       const response = await api.post<any, ApiResponse<boolean>>('/auth/check-phone-number', {
         phoneNumber: phoneNumber
       });
+
+      console.log(response)
       return response.success && response.data; // Trả về true nếu sđt tồn tại
     } catch (error: any) {
       console.error('Check phone error:', error);
@@ -137,6 +144,57 @@ export const authService = {
     } catch (error: any) {
       console.error('Register error:', error);
       throw error.response?.data?.message || error.message || 'Network error';
+    }
+  },
+
+  verifyEmailOtp: async (email: string, otp: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<void>>('/auth/verify-otp', {
+        email,
+        otp,
+      });
+      return response.success;
+    } catch (error: any) {
+      console.error('Verify OTP error:', error);
+      throw error.response?.data?.message || error.message || 'OTP verification failed';
+    }
+  },
+
+  resendEmailOtp: async (email: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<void>>('/auth/resend-otp', {
+        email,
+      });
+      return response.success;
+    } catch (error: any) {
+      console.error('Resend OTP error:', error);
+      throw error.response?.data?.message || error.message || 'Resend OTP failed';
+    }
+  },
+
+  sendPasswordResetOtp: async (email: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<void>>('/auth/forgot-password/send-otp', {
+        email,
+      });
+      return response.success;
+    } catch (error: any) {
+      console.error('Send password reset OTP error:', error);
+      throw error.response?.data?.message || error.message || 'Send password reset OTP failed';
+    }
+  },
+
+  resetPassword: async (email: string, otp: string, newPassword: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<void>>('/auth/forgot-password/reset', {
+        email,
+        otp,
+        newPassword,
+      });
+      return response.success;
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      throw error.response?.data?.message || error.message || 'Reset password failed';
     }
   },
 

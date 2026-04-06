@@ -14,6 +14,7 @@ function RootLayoutContent() {
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="password" />
+        <Stack.Screen name="forgot-password" />
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="profile" />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Keyboard } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { COLORS, SIZES } from '@/constants/theme';
@@ -8,12 +8,18 @@ import { authService } from '@/services/authService';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState('0399614016');
   const [isLoading, setIsLoading] = useState(false);
   const [errorPhone, setErrorPhone] = useState<string | null>(null);
 
   const handleBack = () => {
     router.back();
+  };
+
+  const handleGoToRegister = () => {
+    Keyboard.dismiss();
+    router.navigate('/register');
   };
 
   const handleContinue = async () => {
@@ -81,7 +87,7 @@ export default function LoginScreen() {
                 setPhoneNumber(text);
                 if (errorPhone) setErrorPhone(null);
               }}
-              autoFocus={true}
+              autoFocus={false}
             />
 
             {phoneNumber.length > 0 && (
@@ -119,7 +125,7 @@ export default function LoginScreen() {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>{t('login.no_account')} </Text>
-            <TouchableOpacity onPress={() => router.push('/register')}>
+            <TouchableOpacity onPress={handleGoToRegister} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={styles.footerLink}>{t('login.create_account')}</Text>
             </TouchableOpacity>
           </View>

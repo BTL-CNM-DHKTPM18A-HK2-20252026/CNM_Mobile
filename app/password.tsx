@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, TextInput, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SIZES } from '@/constants/theme';
+import { COLORS } from '@/constants/theme';
 import { authService } from '@/services/authService';
+import { useTranslation } from 'react-i18next';
 
 export default function PasswordScreen() {
+  const { t } = useTranslation();
   const { phoneNumber } = useLocalSearchParams<{ phoneNumber: string }>();
   
   const [password, setPassword] = useState('TestUser123@');
@@ -34,10 +36,10 @@ export default function PasswordScreen() {
     try {
       await authService.login(phoneNumber as string, password);
       router.replace('/(tabs)/chat');
-    } catch (error: any) {
+    } catch {
       Alert.alert(
-        'Lỗi',
-        'Mật khẩu không chính xác, vui lòng thử lại'
+        t('register.error_title', 'Lỗi'),
+        t('login.password_invalid', 'Mật khẩu không chính xác, vui lòng thử lại')
       );
     } finally {
       setIsLoading(false);
@@ -58,14 +60,14 @@ export default function PasswordScreen() {
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={28} color={COLORS.text} />
+              <Ionicons name="arrow-back" size={28} color={COLORS.light.text} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.content}>
             {/* Title */}
             <Text style={styles.title}>
-              Nhập mật khẩu của tài khoản gắn với số điện thoại
+              {t('login.password_title', 'Nhập mật khẩu của tài khoản gắn với số điện thoại')}
             </Text>
             
             {/* Formatted Phone Number */}
@@ -77,7 +79,7 @@ export default function PasswordScreen() {
             <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
-                placeholder="Nhập mật khẩu"
+                placeholder={t('login.password_placeholder', 'Nhập mật khẩu')}
                 placeholderTextColor="#999"
                 secureTextEntry={!showPassword}
                 value={password}
@@ -123,8 +125,8 @@ export default function PasswordScreen() {
 
         {/* Bottom Link - Separate from ScrollView to avoid "shaking" */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.forgotBtn}>
-            <Text style={styles.forgotText}>Quên mật khẩu?</Text>
+          <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push('/forgot-password')}>
+            <Text style={styles.forgotText}>{t('login.forgot_password', 'Quên mật khẩu?')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

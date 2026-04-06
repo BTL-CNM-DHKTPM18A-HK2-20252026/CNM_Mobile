@@ -197,7 +197,7 @@ export default function WelcomeScreen() {
         <TouchableOpacity
           style={[styles.registerButton, { backgroundColor: COLORS.light.surface }]}
           activeOpacity={0.8}
-          onPress={() => console.log('Register pressed')}
+          onPress={() => router.push('/register')}
         >
           <Text style={[styles.registerText, { color: COLORS.light.text }]}>{t('welcome.register')}</Text>
         </TouchableOpacity>

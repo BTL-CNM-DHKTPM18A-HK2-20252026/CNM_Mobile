@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +30,11 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState<string | null>(null);
   const [generatedHint, setGeneratedHint] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string | null>>({});
@@ -93,19 +99,13 @@ export default function RegisterScreen() {
         displayName,
       });
 
+      setOtp('');
+      setOtpError(null);
+      setShowOtpModal(true);
+
       Alert.alert(
-        t('register.success_title'),
-        t('register.success_message'),
-        [
-          {
-            text: 'OK',
-            onPress: () =>
-              router.replace({
-                pathname: '/password',
-                params: { phoneNumber },
-              }),
-          },
-        ]
+        t('register.otp_sent_title', 'Đã gửi mã OTP'),
+        t('register.otp_sent_message', 'Vui lòng kiểm tra email để lấy mã xác thực 6 số.')
       );
     } catch (error: any) {
       Alert.alert(
@@ -123,6 +123,62 @@ export default function RegisterScreen() {
     displayName.trim().length > 0 &&
     password.length >= 8 &&
     confirmPassword.length >= 8;
+
+  const handleVerifyOtp = async () => {
+    if (isVerifyingOtp) return;
+
+    const normalizedOtp = otp.trim();
+    if (!/^\d{6}$/.test(normalizedOtp)) {
+      setOtpError(t('register.otp_invalid', 'Mã OTP phải gồm đúng 6 chữ số'));
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    try {
+      await authService.verifyEmailOtp(email, normalizedOtp);
+      setShowOtpModal(false);
+
+      Alert.alert(
+        t('register.success_title'),
+        t('register.success_message', 'Xác thực email thành công. Vui lòng đăng nhập.'),
+        [
+          {
+            text: 'OK',
+            onPress: () =>
+              router.replace({
+                pathname: '/password',
+                params: { phoneNumber },
+              }),
+          },
+        ]
+      );
+    } catch (error: any) {
+      setOtpError(error?.toString?.() || t('register.otp_verify_failed', 'Xác thực OTP thất bại'));
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (isResendingOtp) return;
+
+    setIsResendingOtp(true);
+    try {
+      await authService.resendEmailOtp(email);
+      Alert.alert(
+        t('register.otp_resent_title', 'Đã gửi lại OTP'),
+        t('register.otp_resent_message', 'Vui lòng kiểm tra email để nhận mã OTP mới.')
+      );
+    } catch (error: any) {
+      Alert.alert(
+        t('register.error_title', 'Lỗi'),
+        error?.toString?.() || t('register.otp_resend_failed', 'Gửi lại OTP thất bại')
+      );
+    } finally {
+      setIsResendingOtp(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -302,6 +358,69 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        transparent
+        visible={showOtpModal}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isVerifyingOtp && !isResendingOtp) {
+            setShowOtpModal(false);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t('register.otp_modal_title', 'Xác thực email')}</Text>
+            <Text style={styles.modalDesc}>
+              {t('register.otp_modal_desc', 'Nhập mã OTP 6 số đã gửi đến email')}
+            </Text>
+            <Text style={styles.modalEmail}>{email}</Text>
+
+            <View style={[styles.inputWrapper, styles.otpInputWrapper, otpError ? styles.inputError : null]}>
+              <TextInput
+                style={[styles.input, styles.otpInput]}
+                placeholder={t('register.otp_placeholder', 'Nhập OTP')}
+                placeholderTextColor="#999"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otp}
+                onChangeText={(v) => {
+                  setOtp(v.replace(/\D/g, ''));
+                  if (otpError) setOtpError(null);
+                }}
+              />
+            </View>
+            {otpError && <Text style={styles.errorText}>{otpError}</Text>}
+
+            <TouchableOpacity
+              style={[styles.button, (otp.length !== 6 || isVerifyingOtp) && styles.buttonDisabled]}
+              onPress={handleVerifyOtp}
+              disabled={otp.length !== 6 || isVerifyingOtp}
+              activeOpacity={0.85}
+            >
+              {isVerifyingOtp ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>{t('register.verify_otp', 'Xác thực OTP')}</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.resendOtpBtn}
+              onPress={handleResendOtp}
+              disabled={isResendingOtp || isVerifyingOtp}
+              activeOpacity={0.8}
+            >
+              {isResendingOtp ? (
+                <ActivityIndicator color={COLORS.primary} />
+              ) : (
+                <Text style={styles.resendOtpText}>{t('register.resend_otp', 'Gửi lại OTP')}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -428,6 +547,56 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   footerLink: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 8,
+  },
+  modalDesc: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  modalEmail: {
+    fontSize: 14,
+    color: '#000',
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  otpInputWrapper: {
+    marginBottom: 6,
+  },
+  otpInput: {
+    textAlign: 'center',
+    letterSpacing: 4,
+    fontWeight: '700',
+  },
+  resendOtpBtn: {
+    marginTop: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 24,
+  },
+  resendOtpText: {
     color: COLORS.primary,
     fontSize: 14,
     fontWeight: '600',
