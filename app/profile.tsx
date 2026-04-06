@@ -204,12 +204,12 @@ export default function ProfileScreen() {
           <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 
             <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('profile.professional_info')}</Text>
             
-            <View style={styles.infoRow}>
+            <View style={styles.infoRow1}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('profile.education')}</Text>
               <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.education || '-'}</Text>
             </View>
 
-            <View style={styles.infoRow}>
+            <View style={styles.infoRow1}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('profile.workplace')}</Text>
               <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.workplace || '-'}</Text>
             </View>
@@ -278,9 +278,13 @@ const styles = StyleSheet.create({
   },
   avatarSection: {
     alignItems: 'center',
-    marginTop: -60,
+   
     marginBottom: 20,
     zIndex: 10,
+    position: 'absolute',
+    top: 160,
+    alignSelf: "center",
+    borderRadius: 60
   },
   avatarBorder: {
     width: 120,
@@ -305,11 +309,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 60,
     marginBottom: 8,
   },
   subtitle: {
-    marginTop: 8,
     marginBottom: 16,
     fontSize: 14,
     lineHeight: 20,
@@ -331,7 +334,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   infoCard: {
-    marginTop: 16,
+    marginTop: 5,
     marginBottom: 0,
     borderRadius: 12,
     borderWidth: 1,
@@ -347,6 +350,17 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    flex: 1, 
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  infoRow1: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    flex: 1, 
+    flexDirection: 'column',
   },
   infoLabel: {
     fontSize: 12,
@@ -356,9 +370,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'right',
-    flex: 1,
     marginLeft: 12,
   },
+
   infoInput: {
     fontSize: 13,
     fontWeight: '600',
@@ -377,7 +391,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   genderButton: {
-    paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
@@ -394,7 +407,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 8,
     textAlign: 'center',
   },
   dobYearInput: {
@@ -404,7 +416,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 8,
     textAlign: 'center',
   },
   dobSeparator: {
