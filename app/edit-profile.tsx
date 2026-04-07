@@ -187,7 +187,7 @@ export default function EditProfileScreen() {
         <View style={[styles.body, { backgroundColor: colors.background }]}>
           {/* Name Section */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Nhập họ và tên</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.display_name_label')}</Text>
             <TextInput
               style={[styles.input, { color: colors.text, borderColor: colors.border }]}
               placeholder={t('profile.display_name_placeholder')}
@@ -195,10 +195,12 @@ export default function EditProfileScreen() {
               value={fullName}
               onChangeText={setFullName}
             />
+            <Text style={[styles.previewText, { color: colors.textSecondary }]}> 
+              {t('profile.display_name_preview', { name: fullName || t('profile.display_name_preview_empty') })}            </Text>
           </View>
           {/* Bio Section */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.bio')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('profile.bio')}</Text>
             <TextInput
               style={[styles.bioInput, { color: colors.text, borderColor: colors.border }]}
               placeholder={t('profile.bio_placeholder')}
@@ -211,10 +213,9 @@ export default function EditProfileScreen() {
 
           {/* Basic Info Section */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('profile.basic_info')}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('profile.gender')}</Text>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.gender')}</Text>
               <View style={styles.radioGroup}>
                 {['Nam', 'Nữ', 'Khác'].map((g) => (
                   <TouchableOpacity key={g} style={styles.radioOption} onPress={() => setGender(g)}>
@@ -342,7 +343,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingTop: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -350,58 +350,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   body: {
-    paddingHorizontal: 16,
+    padding: 10,
   },
   section: {
-    marginBottom: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 5,
   },
   formGroup: {
-    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 14,
+    paddingBottom: 5
   },
   sectionLabel: {
-    fontSize: 13,
+    paddingVertical: 5,
+    fontSize: 11,
     fontWeight: '500',
-    marginBottom: 6,
   },
   input: {
-    fontSize: 14,
+    fontSize: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
+    marginBottom: 2,
     borderWidth: 1,
-    borderRadius: 8,
   },
   bioInput: {
-    fontSize: 14,
+    fontSize: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderRadius: 8,
     minHeight: 80,
     textAlignVertical: 'top',
   },
   previewText: {
-    marginTop: 10,
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 18,
   },
   dobFieldFull: {
     width: '100%',
   },
   dobValue: {
-    fontSize: 16,
-    marginTop: 8,
+    fontSize: 14,
   },
   dobInputContainer: {
     borderWidth: 1,
-    borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 12,
     justifyContent: 'center',
@@ -414,33 +407,36 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
   },
   radioGroup: {
+    flex: 1,
+    flexDirection: 'row', // Chuyển hướng các phần tử sang nằm ngang
     gap: 12,
+    alignItems: 'center',
   },
   radioOption: {
     flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: 10,
     gap: 10,
   },
   radioButton: {
     width: 22,
     height: 22,
-    borderRadius: 11,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 10,
   },
   radioButtonInner: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: 10,
   },
   radioLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
   },
   dobContainer: {
@@ -451,7 +447,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
   },
   calendarButton: {
     padding: 8,
@@ -460,16 +455,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dobLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
-    marginBottom: 4,
   },
   dobInput: {
-    fontSize: 14,
+    fontSize: 12,
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderRadius: 8,
     textAlign: 'center',
   },
   datePickerOverlay: {
@@ -491,14 +484,14 @@ const styles = StyleSheet.create({
   },
   datePickerHeaderButton: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   datePickerHeaderTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   datePickerContent: {
@@ -515,7 +508,6 @@ const styles = StyleSheet.create({
   pickerLabel: {
     fontSize: 12,
     fontWeight: '600',
-    marginBottom: 8,
   },
   pickerScroll: {
     flex: 1,
@@ -525,24 +517,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
-    marginBottom: 4,
   },
   pickerItemText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
   },
   saveButton: {
-    marginTop: 20,
-    marginBottom: 16,
     paddingVertical: 14,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
 });
