@@ -163,14 +163,9 @@ export default function ProfileScreen() {
             <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('profile.basic_info')}</Text>
             
             <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('profile.phone')}</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.phone_number || '-'}</Text>
-            </View>
-
-            {/* <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('profile.email')}</Text>
               <Text style={[styles.infoValue, { color: colors.text }]}>{profile?.email || '-'}</Text>
-            </View> */}
+            </View>
 
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>{t('profile.gender')}</Text>

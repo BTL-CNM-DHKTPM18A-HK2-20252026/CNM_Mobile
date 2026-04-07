@@ -8,22 +8,11 @@ import { useTranslation } from 'react-i18next';
 
 export default function PasswordScreen() {
   const { t } = useTranslation();
-  const { phoneNumber } = useLocalSearchParams<{ phoneNumber: string }>();
+  const { email } = useLocalSearchParams<{ email: string }>();
   
   const [password, setPassword] = useState('TestUser123@');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Format phone number with spaces for display: 0xxx xxx xxx
-  const formatPhoneNumber = (num: string) => {
-    if (!num) return '';
-    const cleaned = num.replace(/\D/g, '');
-    const match = cleaned.match(/^(\d{4})(\d{3})(\d{3})$/);
-    if (match) {
-      return `${match[1]} ${match[2]} ${match[3]}`;
-    }
-    return num;
-  };
 
   const handleBack = () => {
     router.back();
@@ -34,7 +23,7 @@ export default function PasswordScreen() {
     
     setIsLoading(true);
     try {
-      await authService.login(phoneNumber as string, password);
+      await authService.login(email as string, password);
       router.replace('/(tabs)/chat');
     } catch {
       Alert.alert(
@@ -67,12 +56,12 @@ export default function PasswordScreen() {
           <View style={styles.content}>
             {/* Title */}
             <Text style={styles.title}>
-              {t('login.password_title', 'Nhập mật khẩu của tài khoản gắn với số điện thoại')}
+              {t('login.password_title', 'Nhập mật khẩu của tài khoản gắn với email')}
             </Text>
             
-            {/* Formatted Phone Number */}
-            <Text style={styles.phoneNumberDisplay}>
-              {formatPhoneNumber(phoneNumber as string)}
+            {/* Email Display */}
+            <Text style={styles.emailDisplay}>
+              {email}
             </Text>
 
             {/* Password Input Box */}
@@ -167,7 +156,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  phoneNumberDisplay: {
+  emailDisplay: {
     fontSize: 17, // Giảm thêm 1px về 17
     fontWeight: 'bold',
     color: '#111',

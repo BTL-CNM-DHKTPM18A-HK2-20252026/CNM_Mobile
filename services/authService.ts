@@ -14,13 +14,13 @@ export interface ApiResponse<T> {
 }
 
 export const authService = {
-  login: async (phoneNumber: string, password = 'password123') => {
+  login: async (email: string, password = 'password123') => {
     try {
       console.log('[LOGIN] URL:', api.defaults.baseURL + '/auth/login');
-      console.log('[LOGIN] Body:', { username: phoneNumber, password });
+      console.log('[LOGIN] Body:', { username: email, password });
       // The backend expects 'username' and 'password'
       const response = await api.post<any, ApiResponse<AuthenticationResponse>>('/auth/login', {
-        username: phoneNumber,
+        username: email,
         password: password
       });
       console.log('[LOGIN] Response:', response);
@@ -55,17 +55,17 @@ export const authService = {
     return !!token;
   },
 
-  checkPhoneNumber: async (phoneNumber: string) => {
+  checkEmail: async (email: string) => {
     try {
       console.log(api);
-      const response = await api.post<any, ApiResponse<boolean>>('/auth/check-phone-number', {
-        phoneNumber: phoneNumber
+      const response = await api.post<any, ApiResponse<boolean>>('/auth/check-email', {
+        email: email
       });
 
       console.log(response)
-      return response.success && response.data; // Trả về true nếu sđt tồn tại
+      return response.success && response.data;
     } catch (error: any) {
-      console.error('Check phone error:', error);
+      console.error('Check email error:', error);
       return false;
     }
   },
@@ -129,7 +129,6 @@ export const authService = {
   },
 
   register: async (data: {
-    phoneNumber: string;
     email: string;
     password: string;
     displayName: string;

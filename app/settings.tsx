@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar, Switch } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/theme';
 import { useRouter } from 'expo-router';
@@ -8,12 +8,42 @@ import { authService } from '@/services/authService';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import api from '@/services/api';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+
+  const [accountLocked, setAccountLocked] = useState(false);
+  const [lockLoading, setLockLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/users/me/settings')
+      .then((res: any) => {
+        const data = res?.data?.data ?? res?.data ?? res;
+        setAccountLocked(Boolean(data?.accountLocked));
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleToggleLock = useCallback(async (newValue: boolean) => {
+    setLockLoading(true);
+    try {
+      await api.patch('/users/me/settings/lock', { accountLocked: newValue });
+      setAccountLocked(newValue);
+      Alert.alert(
+        t(newValue ? 'settings.lock_success_title' : 'settings.unlock_success_title', newValue ? 'Đã khóa' : 'Đã mở khóa'),
+        t(newValue ? 'settings.lock_success_desc' : 'settings.unlock_success_desc',
+          newValue ? 'Tài khoản đã được khóa thành công.' : 'Tài khoản đã được mở khóa.')
+      );
+    } catch {
+      Alert.alert(t('settings.error', 'Lỗi'), t('settings.lock_failed', 'Thao tác thất bại'));
+    } finally {
+      setLockLoading(false);
+    }
+  }, [t]);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -83,6 +113,28 @@ export default function SettingsScreen() {
           title={t('settings.privacy')} 
           color={COLORS.primary} 
         />
+
+        {/* Account Lock Toggle */}
+        <View style={[styles.settingItem, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <View style={styles.iconBox}>
+            <Ionicons name="shield-outline" size={22} color="#ef4444" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={[styles.settingTitle, { color: colors.text, flex: undefined }]}>
+              {t('settings.lock_account', 'Khóa tài khoản')}
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+              {t('settings.lock_account_desc', 'Chặn nhắn tin, kết bạn, xem trang cá nhân')}
+            </Text>
+          </View>
+          <Switch
+            value={accountLocked}
+            onValueChange={handleToggleLock}
+            disabled={lockLoading}
+            trackColor={{ false: '#D1D5DB', true: '#ef4444' }}
+            thumbColor="#fff"
+          />
+        </View>
         
         <View style={[styles.sectionDivider, { backgroundColor: colors.chatBackground }]} />
 

@@ -9,9 +9,9 @@ import { authService } from '@/services/authService';
 export default function LoginScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const [phoneNumber, setPhoneNumber] = useState('0399614016');
+  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errorPhone, setErrorPhone] = useState<string | null>(null);
+  const [errorEmail, setErrorEmail] = useState<string | null>(null);
 
   const handleBack = () => {
     router.back();
@@ -22,24 +22,25 @@ export default function LoginScreen() {
     router.navigate('/register');
   };
 
+  const isValidEmail = (e: string) => /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(e.trim());
+
   const handleContinue = async () => {
-    if (phoneNumber.length < 10) return;
+    const trimmed = email.trim();
+    if (!isValidEmail(trimmed)) return;
     
     setIsLoading(true);
     try {
-      // 1. Kiểm tra số điện thoại có tồn tại không
-      const exists = await authService.checkPhoneNumber(phoneNumber);
+      const exists = await authService.checkEmail(trimmed);
       
       if (!exists) {
-        setErrorPhone(t('login.phone_not_found', 'Số điện thoại chưa được đăng ký trong hệ thống'));
+        setErrorEmail(t('login.email_not_found', 'Email chưa được đăng ký trong hệ thống'));
         return;
       }
 
-      setErrorPhone(null);
-      // Chuyển sang màn hình nhập mật khẩu
+      setErrorEmail(null);
       router.push({
         pathname: '/password',
-        params: { phoneNumber }
+        params: { email: trimmed }
       });
     } catch (error: any) {
       Alert.alert(
@@ -69,30 +70,26 @@ export default function LoginScreen() {
           <Text style={styles.title}>{t('login.header_title')}</Text>
 
           {/* Input Group */}
-          <View style={[styles.inputWrapper, errorPhone && { borderColor: COLORS.error }]}>
-            <TouchableOpacity style={styles.countryCode}>
-              <Text style={styles.countryText}>{t('login.country_code')}</Text>
-              <Ionicons name="chevron-down" size={14} color={COLORS.inactive} />
-            </TouchableOpacity>
-            
-            <View style={styles.divider} />
+          <View style={[styles.inputWrapper, errorEmail && { borderColor: COLORS.error }]}>
+            <Ionicons name="mail-outline" size={20} color={COLORS.inactive} style={{ marginLeft: 12 }} />
 
             <TextInput
-              style={styles.input}
-              placeholder={t('login.phone_placeholder')}
+              style={[styles.input, { flex: 1 }]}
+              placeholder={t('login.email_placeholder', 'Nhập email')}
               placeholderTextColor="#999999"
-              keyboardType="phone-pad"
-              value={phoneNumber}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
               onChangeText={(text) => {
-                setPhoneNumber(text);
-                if (errorPhone) setErrorPhone(null);
+                setEmail(text);
+                if (errorEmail) setErrorEmail(null);
               }}
               autoFocus={false}
             />
 
-            {phoneNumber.length > 0 && (
+            {email.length > 0 && (
               <TouchableOpacity 
-                onPress={() => setPhoneNumber('')}
+                onPress={() => setEmail('')}
                 style={styles.clearButton}
               >
                 <Ionicons name="close-circle" size={18} color={COLORS.inactive} />
@@ -101,18 +98,18 @@ export default function LoginScreen() {
           </View>
 
           {/* Error message */}
-          {errorPhone && (
-            <Text style={styles.errorText}>{errorPhone}</Text>
+          {errorEmail && (
+            <Text style={styles.errorText}>{errorEmail}</Text>
           )}
 
           {/* Continue Button */}
           <TouchableOpacity
             style={[
               styles.continueButton, 
-              (phoneNumber.length < 10 || isLoading) && styles.disabledButton
+              (!isValidEmail(email) || isLoading) && styles.disabledButton
             ]}
             onPress={handleContinue}
-            disabled={phoneNumber.length < 10 || isLoading}
+            disabled={!isValidEmail(email) || isLoading}
             activeOpacity={0.8}
           >
             {isLoading ? (

@@ -14,17 +14,17 @@
     "choose_lang": "Chọn ngôn ngữ"
   },
   "login": {
-    "header_title": "Nhập số điện thoại",
+    "header_title": "Nhập email",
     "country_code": "+84",
-    "phone_placeholder": "Nhập số điện thoại",
-    "password_title": "Nhập mật khẩu của tài khoản gắn với số điện thoại",
+    "email_placeholder": "Nhập email",
+    "password_title": "Nhập mật khẩu của tài khoản gắn với email",
     "password_placeholder": "Nhập mật khẩu",
     "password_invalid": "Mật khẩu không chính xác, vui lòng thử lại",
     "forgot_password": "Quên mật khẩu?",
     "continue": "Tiếp tục",
     "no_account": "Bạn chưa có tài khoản?",
     "create_account": "Tạo tài khoản",
-    "phone_not_found": "Số điện thoại chưa được đăng ký trong hệ thống",
+    "email_not_found": "Email chưa được đăng ký trong hệ thống",
     "forgot": {
       "title": "Quên mật khẩu",
       "subtitle_request": "Nhập email để nhận OTP đặt lại mật khẩu",
@@ -63,8 +63,6 @@
   },
   "register": {
     "header_title": "Tạo tài khoản",
-    "phone_label": "Số điện thoại",
-    "phone_placeholder": "Nhập số điện thoại",
     "email_label": "Email",
     "email_placeholder": "Nhập email",
     "display_name_label": "Tên hiển thị",
@@ -89,7 +87,7 @@
     "otp_resent_message": "Vui lòng kiểm tra email để nhận mã OTP mới.",
     "otp_resend_failed": "Gửi lại OTP thất bại",
     "error_title": "Lỗi",
-    "phone_invalid": "Số điện thoại không hợp lệ (VD: 0901234567)",
+    "phone_invalid": "Email không hợp lệ",
     "email_invalid": "Email không hợp lệ",
     "display_name_required": "Vui lòng nhập tên hiển thị",
     "password_invalid": "Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt",
@@ -131,7 +129,15 @@
     "logout": "Đăng xuất",
     "logout_confirm_title": "Đăng xuất",
     "logout_confirm_desc": "Bạn có chắc chắn muốn đăng xuất?",
-    "cancel": "Hủy"
+    "cancel": "Hủy",
+    "lock_account": "Khóa tài khoản",
+    "lock_account_desc": "Chặn nhắn tin, kết bạn, xem trang cá nhân",
+    "lock_success_title": "Đã khóa",
+    "lock_success_desc": "Tài khoản đã được khóa thành công.",
+    "unlock_success_title": "Đã mở khóa",
+    "unlock_success_desc": "Tài khoản đã được mở khóa.",
+    "lock_failed": "Thao tác thất bại",
+    "error": "Lỗi"
   },
   "appearance": {
     "header": "Giao diện và ngôn ngữ",
@@ -200,4 +206,4 @@
     "success_title": "Thành công",
     "profile_updated": "Hồ sơ đã được cập nhật"
   }
-} 
+}

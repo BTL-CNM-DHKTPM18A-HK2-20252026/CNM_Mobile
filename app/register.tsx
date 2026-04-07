@@ -22,7 +22,6 @@ import { authService } from '@/services/authService';
 export default function RegisterScreen() {
   const { t } = useTranslation();
 
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('TestUser123@');
@@ -63,13 +62,9 @@ export default function RegisterScreen() {
 
   const validate = () => {
     const newErrors: Record<string, string | null> = {};
-    const phoneRegex = /^0[35789]\d{8}$/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
 
-    if (!phoneRegex.test(phoneNumber)) {
-      newErrors.phoneNumber = t('register.phone_invalid');
-    }
     if (!emailRegex.test(email)) {
       newErrors.email = t('register.email_invalid');
     }
@@ -93,7 +88,6 @@ export default function RegisterScreen() {
     setIsLoading(true);
     try {
       await authService.register({
-        phoneNumber,
         email,
         password,
         displayName,
@@ -118,7 +112,6 @@ export default function RegisterScreen() {
   };
 
   const isFormValid =
-    phoneNumber.length >= 10 &&
     email.length > 0 &&
     displayName.trim().length > 0 &&
     password.length >= 8 &&
@@ -148,7 +141,7 @@ export default function RegisterScreen() {
             onPress: () =>
               router.replace({
                 pathname: '/password',
-                params: { phoneNumber },
+                params: { email },
               }),
           },
         ]
@@ -200,27 +193,6 @@ export default function RegisterScreen() {
 
           <View style={styles.content}>
             <Text style={styles.title}>{t('register.header_title')}</Text>
-
-            {/* Phone */}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.label}>{t('register.phone_label')}</Text>
-              <View style={[styles.inputWrapper, errors.phoneNumber ? styles.inputError : null]}>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t('register.phone_placeholder')}
-                  placeholderTextColor="#999"
-                  keyboardType="phone-pad"
-                  value={phoneNumber}
-                  onChangeText={(v) => {
-                    setPhoneNumber(v);
-                    if (errors.phoneNumber) setErrors((e) => ({ ...e, phoneNumber: null }));
-                  }}
-                />
-              </View>
-              {errors.phoneNumber && (
-                <Text style={styles.errorText}>{errors.phoneNumber}</Text>
-              )}
-            </View>
 
             {/* Email */}
             <View style={styles.fieldContainer}>

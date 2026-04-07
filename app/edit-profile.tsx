@@ -187,7 +187,7 @@ export default function EditProfileScreen() {
         <View style={[styles.body, { backgroundColor: colors.background }]}>
           {/* Name Section */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.display_name_label')}</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Nhập họ và tên</Text>
             <TextInput
               style={[styles.input, { color: colors.text, borderColor: colors.border }]}
               placeholder={t('profile.display_name_placeholder')}
@@ -195,8 +195,6 @@ export default function EditProfileScreen() {
               value={fullName}
               onChangeText={setFullName}
             />
-            <Text style={[styles.previewText, { color: colors.textSecondary }]}> 
-              {t('profile.display_name_preview', { name: fullName || t('profile.display_name_preview_empty') })}            </Text>
           </View>
           {/* Bio Section */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -14,17 +14,17 @@
     "choose_lang": "Language"
   },
   "login": {
-    "header_title": "Enter phone number",
+    "header_title": "Enter email",
     "country_code": "+84",
-    "phone_placeholder": "Enter phone number",
-    "password_title": "Enter the password for this phone number",
+    "email_placeholder": "Enter email",
+    "password_title": "Enter the password for this email",
     "password_placeholder": "Enter password",
     "password_invalid": "Incorrect password, please try again",
     "forgot_password": "Forgot password?",
     "continue": "Continue",
     "no_account": "Don't have an account?",
     "create_account": "Create account",
-    "phone_not_found": "This phone number is not registered",
+    "email_not_found": "This email is not registered",
     "forgot": {
       "title": "Forgot password",
       "subtitle_request": "Enter your email to receive a password-reset OTP",
@@ -63,8 +63,6 @@
   },
   "register": {
     "header_title": "Create account",
-    "phone_label": "Phone number",
-    "phone_placeholder": "Enter phone number",
     "email_label": "Email",
     "email_placeholder": "Enter email",
     "display_name_label": "Display name",
@@ -89,7 +87,7 @@
     "otp_resent_message": "Please check your email for the new OTP.",
     "otp_resend_failed": "Failed to resend OTP",
     "error_title": "Error",
-    "phone_invalid": "Invalid phone number (e.g. 0901234567)",
+    "phone_invalid": "Invalid email address",
     "email_invalid": "Invalid email address",
     "display_name_required": "Display name is required",
     "password_invalid": "Password must be at least 8 characters with uppercase, lowercase, number and special character",
@@ -131,7 +129,15 @@
     "logout": "Logout",
     "logout_confirm_title": "Logout",
     "logout_confirm_desc": "Are you sure you want to logout?",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "lock_account": "Lock account",
+    "lock_account_desc": "Block messages, friend requests, profile viewing",
+    "lock_success_title": "Locked",
+    "lock_success_desc": "Your account has been locked successfully.",
+    "unlock_success_title": "Unlocked",
+    "unlock_success_desc": "Your account has been unlocked.",
+    "lock_failed": "Operation failed",
+    "error": "Error"
   },
   "appearance": {
     "header": "Interface and language",
@@ -200,4 +206,4 @@
     "success_title": "Success",
     "profile_updated": "Profile has been updated"
   }
-} 
+}
