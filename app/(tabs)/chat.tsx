@@ -1,19 +1,18 @@
-import React from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  FlatList,
-  Image,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar
-} from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '@/constants/theme';
-import { router } from 'expo-router';
-import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+    FlatList,
+    Image,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ChatItem {
@@ -145,7 +144,10 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
 
   const renderItem = ({ item }: { item: ChatItem }) => (
-    <TouchableOpacity style={[styles.chatItem, { backgroundColor: colors.card }]}>
+    <TouchableOpacity
+      style={[styles.chatItem, { backgroundColor: colors.card }]}
+      onPress={() => router.push(`/chat-detail?id=${item.id}&name=${encodeURIComponent(item.name)}`)}
+    >
       {/* Avatar Section */}
       <View style={styles.avatarSection}>
         {item.isGroup && item.groupAvatars ? (
