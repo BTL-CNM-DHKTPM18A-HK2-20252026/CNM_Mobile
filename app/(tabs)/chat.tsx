@@ -1,19 +1,18 @@
+import { COLORS } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  StyleSheet,
-  View,
-  Text,
   FlatList,
   Image,
+  StatusBar,
+  StyleSheet,
+  Text,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar
+  View
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { COLORS } from '@/constants/theme';
-import { router } from 'expo-router';
-import { useTranslation } from 'react-i18next';
-import { useTheme } from '@/context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ChatItem {
@@ -192,7 +191,7 @@ export default function ChatScreen() {
         paddingTop: insets.top
       }}>
         <View style={styles.searchBarRow}>
-          <TouchableOpacity style={styles.searchBarBox}>
+          <TouchableOpacity style={styles.searchBarBox} onPress={() => router.push('/search')}>
             <Ionicons name="search" size={18} color="#fff" style={styles.searchIcon} />
             <Text style={styles.headerSearchText}>{t('chat.search')}</Text>
           </TouchableOpacity>
