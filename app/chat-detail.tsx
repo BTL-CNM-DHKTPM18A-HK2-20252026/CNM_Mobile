@@ -9,6 +9,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  AppState,
   FlatList,
   StatusBar,
   StyleSheet,
@@ -64,6 +65,7 @@ export default function ChatDetailScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const appStateRef = useRef(AppState.currentState);
   const sortMessages = (msgs: Message[]): Message[] => {
     return [...msgs].sort((a, b) => {
       const timeA = new Date(a.createdAt).getTime();
@@ -131,23 +133,70 @@ export default function ChatDetailScreen() {
     }
   }, [messages]);
 
-  const loadMessages = async (uid?: string | null) => {
+  const loadMessages = async (uid?: string | null, silent = false) => {
     try {
       const response = (await chatService.getMessages(id, 0, 50)) as any;
       const data = Array.isArray(response)
         ? response
         : response?.content ?? [];
       const normalizedMessages = mapChatPayloadListToUiMessages(data);
-      setMessages(sortMessages(normalizedMessages));  // ← Thêm sortMessages ở đây
+      const sortedMessages = sortMessages(normalizedMessages);
 
-      const lastMessage = normalizedMessages[normalizedMessages.length - 1];
+      if (silent) {
+        setMessages((prev) => {
+          if (prev.length === sortedMessages.length) {
+            const prevLast = prev[prev.length - 1]?.messageId;
+            const nextLast = sortedMessages[sortedMessages.length - 1]?.messageId;
+            if (String(prevLast ?? '') === String(nextLast ?? '')) {
+              return prev;
+            }
+          }
+          return sortedMessages;
+        });
+      } else {
+        setMessages(sortedMessages);
+      }
+
+      const lastMessage = sortedMessages[sortedMessages.length - 1];
       if (uid && lastMessage?.messageId) {
         sendReadReceipt(id, uid, lastMessage.messageId);
       }
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      if (!silent) {
+        console.error('Failed to load messages:', error);
+      }
     }
   };
+
+  useEffect(() => {
+    if (!id || !currentUserId) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      void loadMessages(currentUserId, true);
+    }, 3000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [id, currentUserId]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const wasInBackground = appStateRef.current.match(/inactive|background/);
+
+      if (wasInBackground && nextState === 'active' && currentUserId) {
+        void loadMessages(currentUserId, true);
+      }
+
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [currentUserId]);
 
   const handleSendMessage = async () => {
     if (inputText.trim() === '') return;
