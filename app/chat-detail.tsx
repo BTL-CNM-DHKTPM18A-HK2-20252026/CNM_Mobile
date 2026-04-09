@@ -22,7 +22,6 @@ interface Message {
   messageId: string;
   content: string;
   senderId: string;
-  sender: 'user' | 'other';
   createdAt: string;
   senderName?: string;
 }
@@ -39,12 +38,13 @@ export default function ChatDetailScreen() {
   const { messages, setMessages, sendMessage, isTyping, isConnected } = useChatWebSocket(id);
 
   useEffect(() => {
-    const getUserId = async () => {
+    const initialize = async () => {
       const uid = await SecureStore.getItemAsync('user_id');
+      console.log("uui", uid);
       setCurrentUserId(uid);
+      await loadMessages(uid);
     };
-    getUserId();
-    loadMessages();
+    initialize();
   }, [id]);
 
   useEffect(() => {
@@ -53,25 +53,24 @@ export default function ChatDetailScreen() {
     }
   }, [messages]);
 
-  const loadMessages = async () => {
+  const loadMessages = async (uid?: string | null) => {
     try {
-      const response = await chatService.getMessages(id, 0, 50);
+      const response = (await chatService.getMessages(id, 0, 50)) as any;
       const data = Array.isArray(response)
         ? response
         : response?.content ?? [];
-      const normalizedMessages = normalizeMessages(data);
+      const normalizedMessages = normalizeMessages(data, uid ?? currentUserId);
       setMessages(normalizedMessages);
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
   };
 
-  const normalizeMessages = (data: any[]): Message[] => {
+  const normalizeMessages = (data: any[], uid?: string | null): Message[] => {
     return data.map((msg) => ({
       messageId: msg.messageId,
       content: msg.content,
       senderId: msg.senderId,
-      sender: msg.senderId === currentUserId ? 'user' : 'other',
       createdAt: msg.createdAt,
       senderName: msg.senderName || 'Unknown',
     }));
@@ -84,34 +83,40 @@ export default function ChatDetailScreen() {
     setInputText('');
   };
 
-  const renderMessage = ({ item }: { item: Message }) => (
-    <View style={[
-      styles.messageContainer,
-      item.sender === 'user' ? styles.userMessage : styles.otherMessage
-    ]}>
-      {item.sender === 'other' && (
-        <Text style={[styles.senderName, { color: colors.textSecondary }]}>{item.senderName}</Text>
-      )}
+const renderMessage = ({ item }: { item: Message }) => {
+    const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
+    console.log("Current User:", currentUserId, "Sender ID:", item.senderId);
+    return (
       <View style={[
-        styles.messageBubble,
-        item.sender === 'user'
-          ? { backgroundColor: COLORS.primary }
-          : { backgroundColor: colors.card }
+        styles.messageContainer,
+        isCurrentUserMessage ? styles.userMessage : styles.otherMessage,
       ]}>
-        <Text style={[
-          styles.messageText,
-          item.sender === 'user'
-            ? { color: '#fff' }
-            : { color: colors.text }
-        ]}>
-          {item.content}
-        </Text>
+        <View style={[styles.messageWrapper, isCurrentUserMessage ? styles.userMessageWrapper : styles.otherMessageWrapper]}>
+          {!isCurrentUserMessage && (
+            <Text style={[styles.senderName, { color: colors.textSecondary }]}>{item.senderName}</Text>
+          )}
+          <View style={[
+            styles.messageBubble,
+            isCurrentUserMessage ? styles.userBubble : styles.otherBubble,
+            !isCurrentUserMessage && { backgroundColor: colors.card },
+          ]}>
+            <Text style={[
+              styles.messageText,
+              isCurrentUserMessage ? { color: '#fff' } : { color: colors.text },
+            ]}>
+              {item.content}
+            </Text>
+          </View>
+          <Text style={[
+            styles.timestamp,
+            { color: colors.textSecondary },
+          ]}>
+            {new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+        </View>
       </View>
-      <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-        {new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-      </Text>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['left', 'right', 'top']}>
@@ -180,29 +185,156 @@ export default function ChatDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { 
+    flex: 1 
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  headerInfo: { flex: 1, marginLeft: 12 },
-  headerTitle: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
-  headerSubtitle: { fontSize: 12 },
-  headerActions: { flexDirection: 'row', gap: 12 },
-  headerIcon: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  messagesList: { paddingHorizontal: 12, paddingVertical: 16, flexGrow: 1, justifyContent: 'flex-end' },
-  messageContainer: { marginBottom: 8 },
-  userMessage: { alignItems: 'flex-end' },
-  otherMessage: { alignItems: 'flex-start' },
-  senderName: { fontSize: 11, marginBottom: 4, marginLeft: 8 },
-  messageBubble: { maxWidth: '75%', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
-  messageText: { fontSize: 14 },
-  timestamp: { fontSize: 11, marginTop: 2 },
-  inputArea: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 8, paddingVertical: 8, borderTopWidth: 1, gap: 8 },
-  attachButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  input: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, fontSize: 14 },
-  sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  headerInfo: { 
+    flex: 1, 
+    marginLeft: 16 
+  },
+  headerTitle: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  headerSubtitle: { 
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  headerActions: { 
+    flexDirection: 'row', 
+    gap: 8 
+  },
+  headerIcon: { 
+    width: 40, 
+    height: 40, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+  },
+  messagesList: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 16, 
+    flexGrow: 1, 
+    justifyContent: 'flex-end',
+  },
+  messageContainer: { 
+    marginBottom: 16, // Tăng khoảng cách giữa các tin nhắn
+    flexDirection: 'row',
+    width: '100%',
+  },
+  messageWrapper: {
+    maxWidth: '80%', // Chuyển maxWidth ra wrapper để tên và giờ không bị tràn
+  },
+  userMessage: { 
+    justifyContent: 'flex-end', // Đẩy toàn bộ khối sang phải
+  },
+  otherMessage: { 
+    justifyContent: 'flex-start', // Đẩy toàn bộ khối sang trái
+  },
+  userMessageWrapper: {
+    alignItems: 'flex-end', // Căn lề phải cho text bên trong
+  },
+  otherMessageWrapper: {
+    alignItems: 'flex-start', // Căn lề trái cho text bên trong
+  },
+  senderName: { 
+    fontSize: 12, 
+    marginBottom: 4, 
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  messageBubble: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 10, 
+    borderRadius: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  userBubble: {
+    backgroundColor: COLORS.primary,
+    borderTopRightRadius: 4, // Bo góc nhọn ở đuôi tin nhắn giống Zalo
+    borderTopLeftRadius: 18,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+  },
+  otherBubble: {
+    borderTopLeftRadius: 4, // Bo góc nhọn ở đuôi tin nhắn giống Zalo
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+  },
+  messageText: { 
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
+  },
+  timestamp: { 
+    fontSize: 11, 
+    marginTop: 4,
+    marginHorizontal: 4,
+    fontWeight: '400',
+  },
+  
+  timestampLeft: {
+    marginLeft: 8,
+    alignSelf: 'flex-start',
+  },
+  timestampRight: {
+    marginRight: 8,
+    alignSelf: 'flex-end',
+  },
+  inputArea: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-end', 
+    paddingHorizontal: 12, 
+    paddingVertical: 12, 
+    borderTopWidth: 1, 
+    gap: 8,
+  },
+  attachButton: { 
+    width: 40, 
+    height: 40, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  input: { 
+    flex: 1, 
+    borderWidth: 1.5, 
+    borderRadius: 24, 
+    paddingHorizontal: 16, 
+    paddingVertical: 10,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  sendButton: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
 });
