@@ -64,17 +64,23 @@ export default function ChatDetailScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
-
+  const sortMessages = (msgs: Message[]): Message[] => {
+    return [...msgs].sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      return timeA - timeB; // ascending: cũ → mới
+    });
+  };
   const appendOrUpdateMessage = (message: ChatUiMessage) => {
     setMessages((prev) => {
       const index = prev.findIndex((item) => String(item.messageId) === String(message.messageId));
       if (index >= 0) {
         const next = [...prev];
         next[index] = message;
-        return next;
+        return sortMessages(next);
       }
 
-      return [...prev, message];
+      return sortMessages([...prev, message]);
     });
   };
 
@@ -132,7 +138,7 @@ export default function ChatDetailScreen() {
         ? response
         : response?.content ?? [];
       const normalizedMessages = mapChatPayloadListToUiMessages(data);
-      setMessages(normalizedMessages);
+      setMessages(sortMessages(normalizedMessages));  // ← Thêm sortMessages ở đây
 
       const lastMessage = normalizedMessages[normalizedMessages.length - 1];
       if (uid && lastMessage?.messageId) {
