@@ -1,21 +1,21 @@
-﻿import { COLORS } from '@/constants/theme';
+import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Keyboard,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    Keyboard,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -65,32 +65,24 @@ function formatTimestamp(value: unknown) {
 
 function normalizeToChatItems(data: any[]): ChatItem[] {
   if (!Array.isArray(data) || data.length === 0) {
-    return DEFAULT_CHAT_ITEMS;
+    return [];
   }
 
-  return data.map((item, index) => {
-    const userName = item.displayName ?? item.name ?? item.userName ?? item.fullName ?? 'Người dùng';
-    const id = item.conversationId ?? item.id ?? item.userId ?? `${userName.replace(/\s+/g, '_')}-${index}`;
-    const avatar = item.conversationAvatarUrl ?? item.avatarUrl ?? item.avatar ?? DEFAULT_USER_AVATAR;
-    const lastPreview = item.lastMessageContent ?? item.lastMessage ?? item.preview ?? item.snippet ?? 'Không có tin nhắn nào';
-    const timestamp = item.lastMessageTime ?? item.updatedAt ?? item.lastUpdated ?? item.time;
-    const conversationType = item.conversationType ?? item.type ?? 'PRIVATE';
-
-    return {
-      id: String(id),
-      title: item.conversationName ?? (conversationType === 'Cloud' ? 'Cloud của tôi' : userName),
-      lastMessage: lastPreview,
-      avatar: conversationType === 'Cloud' ? DEFAULT_CLOUD_AVATAR : avatar,
-      time: timestamp ? formatTimestamp(timestamp) : 'Mới',
-      unreadCount: item.unreadCount ?? item.unread ?? 0,
-      type: conversationType === 'PRIVATE' ? 'Default' : conversationType === 'Cloud' ? 'Cloud' : 'AI',
-    };
-  });
+  return data.map((item) => ({
+    id: item.conversationId,
+    title: item.conversationName || (item.members && item.members.length > 0 ? item.members[0].displayName : 'Unknown'),
+    lastMessage: item.lastMessageContent || 'No messages',
+    avatar: item.conversationAvatarUrl || (item.members && item.members.length > 0 ? item.members[0].avatarUrl : DEFAULT_USER_AVATAR),
+    time: item.lastMessageTime ? formatTimestamp(item.lastMessageTime) : 'New',
+    unreadCount: item.unreadCount || 0,
+    type: item.conversationType === 'PRIVATE' ? 'Default' : 'Cloud', // Adjust based on type
+  }));
 }
 
-export default function ChatScreen() {
+export default function ChatUI() {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const [query, setQuery] = useState('');
@@ -196,7 +188,7 @@ export default function ChatScreen() {
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item, index) => item.id ?? String(index)}
+          keyExtractor={(item) => item.id}
           renderItem={renderItem}
           ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.border }]} />}
           contentContainerStyle={styles.listContent}

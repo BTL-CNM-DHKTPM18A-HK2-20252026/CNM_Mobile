@@ -1,7 +1,10 @@
 import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { useChatWebSocket } from '@/hooks/useChatWebSocket';
+import { chatService } from '@/services/chatService';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,30 +19,33 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Message {
-  id: string;
-  text: string;
+  messageId: string;
+  content: string;
+  senderId: string;
   sender: 'user' | 'other';
-  timestamp: string;
+  createdAt: string;
   senderName?: string;
 }
-
-const MOCK_MESSAGES: Message[] = [
-  { id: '1', text: 'Dạ thưa cô em tên là Nguyễn Thị Thái Hòa', sender: 'other', timestamp: '10:30', senderName: 'Nguyễn Thị Thái Hòa' },
-  { id: '2', text: 'Chào em! Rất vui được gặp', sender: 'user', timestamp: '10:31' },
-  { id: '3', text: 'Em mới vào lớp tuần này ạ', sender: 'other', timestamp: '10:32', senderName: 'Nguyễn Thị Thái Hòa' },
-  { id: '4', text: 'Chào mừng em tới lớp 😊', sender: 'user', timestamp: '10:33' },
-  { id: '5', text: 'Cảm ơn chị 😊', sender: 'other', timestamp: '10:34', senderName: 'Nguyễn Thị Thái Hòa' },
-  { id: '6', text: 'Nếu em có thắc mắc gì hãy hỏi chị nhé', sender: 'user', timestamp: '10:35' },
-];
 
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [inputText, setInputText] = useState('');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
+
+  const { messages, setMessages, sendMessage, isTyping, isConnected } = useChatWebSocket(id);
+
+  useEffect(() => {
+    const getUserId = async () => {
+      const uid = await SecureStore.getItemAsync('user_id');
+      setCurrentUserId(uid);
+    };
+    getUserId();
+    loadMessages();
+  }, [id]);
 
   useEffect(() => {
     if (flatListRef.current && messages.length > 0) {
@@ -47,17 +53,34 @@ export default function ChatDetailScreen() {
     }
   }, [messages]);
 
+  const loadMessages = async () => {
+    try {
+      const response = await chatService.getMessages(id, 0, 50);
+      const data = Array.isArray(response)
+        ? response
+        : response?.content ?? [];
+      const normalizedMessages = normalizeMessages(data);
+      setMessages(normalizedMessages);
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+    }
+  };
+
+  const normalizeMessages = (data: any[]): Message[] => {
+    return data.map((msg) => ({
+      messageId: msg.messageId,
+      content: msg.content,
+      senderId: msg.senderId,
+      sender: msg.senderId === currentUserId ? 'user' : 'other',
+      createdAt: msg.createdAt,
+      senderName: msg.senderName || 'Unknown',
+    }));
+  };
+
   const handleSendMessage = () => {
     if (inputText.trim() === '') return;
 
-    const newMessage: Message = {
-      id: (messages.length + 1).toString(),
-      text: inputText,
-      sender: 'user',
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages([...messages, newMessage]);
+    sendMessage(inputText.trim());
     setInputText('');
   };
 
@@ -81,10 +104,12 @@ export default function ChatDetailScreen() {
             ? { color: '#fff' }
             : { color: colors.text }
         ]}>
-          {item.text}
+          {item.content}
         </Text>
       </View>
-      <Text style={[styles.timestamp, { color: colors.textSecondary }]}>{item.timestamp}</Text>
+      <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+        {new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+      </Text>
     </View>
   );
 
@@ -101,7 +126,9 @@ export default function ChatDetailScreen() {
           <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
             {name}
           </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Đang hoạt động</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+            {isConnected ? (isTyping ? 'Đang nhập...' : 'Đang hoạt động') : 'Đang kết nối...'}
+          </Text>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.headerIcon}>
@@ -120,7 +147,7 @@ export default function ChatDetailScreen() {
       <FlatList
         ref={flatListRef}
         data={messages}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.messageId}
         renderItem={renderMessage}
         contentContainerStyle={styles.messagesList}
         scrollEnabled={true}
