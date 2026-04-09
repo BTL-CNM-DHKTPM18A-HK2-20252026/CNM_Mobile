@@ -11,7 +11,6 @@ export const chatService = {
       params.append('search', search.trim());
     }
 
-    // Vì api.ts đã trả về response.data rồi, nên ta return trực tiếp kết quả này
     return await api.get(`/conversations?${params.toString()}`);
   },
 
@@ -24,5 +23,43 @@ export const chatService = {
 
   getMessages: async (conversationId: string, page = 0, size = 50) => {
     return await api.get(`/messages/conversation/${conversationId}?page=${page}&size=${size}`);
+  },
+
+  sendMessage: async (
+    conversationId: string,
+    payload: {
+      content: string;
+      messageType?: string;
+      attachments?: unknown[];
+    }
+  ) => {
+    const timestamp = new Date().toISOString();
+    const endpoint = '/messages';
+    const body = {
+      conversationId,
+      content: payload.content,
+      messageType: payload.messageType ?? 'TEXT',
+    };
+
+    console.log('[SEND_MESSAGE]', {
+      timestamp,
+      endpoint,
+      conversationId,
+      contentLength: payload.content.length,
+      messageType: payload.messageType ?? 'TEXT',
+    });
+
+    try {
+      const response = await api.post(endpoint, body);
+      console.log('[SEND_MESSAGE_SUCCESS]', { timestamp, endpoint, messageId: response?.id });
+      return response;
+    } catch (error) {
+      console.error('[SEND_MESSAGE_ERROR]', {
+        timestamp,
+        endpoint,
+        error: (error as any)?.message,
+      });
+      throw error;
+    }
   },
 };

@@ -1,8 +1,9 @@
 import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
-import { useChatWebSocket } from '@/hooks/useChatWebSocket';
+import { useChatSocket } from '@/hooks/useChatSocket';
 import { chatService } from '@/services/chatService';
 import { Ionicons } from '@expo/vector-icons';
+import type { AxiosError } from 'axios';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useRef, useState } from 'react';
@@ -17,6 +18,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  mapChatPayloadListToUiMessages,
+  mapChatPayloadToUiMessage,
+  type ChatUiMessage,
+} from '../services/chatMessageAdapter';
 
 interface Message {
   messageId: string;
@@ -26,6 +32,28 @@ interface Message {
   senderName?: string;
 }
 
+const buildStompBrokerUrl = () => {
+  const directBroker = process.env.EXPO_PUBLIC_STOMP_BROKER_URL;
+  if (directBroker) {
+    return directBroker;
+  }
+
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (!apiUrl) {
+    return '';
+  }
+
+  try {
+    const parsedUrl = new URL(apiUrl);
+    const wsProtocol = parsedUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProtocol}//${parsedUrl.host}/ws-native`;
+  } catch {
+    return '';
+  }
+};
+
+const BROKER_URL = buildStompBrokerUrl();
+
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
@@ -33,14 +61,58 @@ export default function ChatDetailScreen() {
   const { colors, isDark } = useTheme();
   const [inputText, setInputText] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  const { messages, setMessages, sendMessage, isTyping, isConnected } = useChatWebSocket(id);
+  const appendOrUpdateMessage = (message: ChatUiMessage) => {
+    setMessages((prev) => {
+      const index = prev.findIndex((item) => String(item.messageId) === String(message.messageId));
+      if (index >= 0) {
+        const next = [...prev];
+        next[index] = message;
+        return next;
+      }
+
+      return [...prev, message];
+    });
+  };
+
+  const { isConnected, sendTyping, sendReadReceipt } = useChatSocket({
+    conversationId: id,
+    brokerURL: BROKER_URL,
+    onMessage: (event) => {
+      const mappedMessage = mapChatPayloadToUiMessage(event);
+      if (!mappedMessage) {
+        return;
+      }
+
+      appendOrUpdateMessage(mappedMessage);
+    },
+    onTyping: (event) => {
+      if (!currentUserId) {
+        return;
+      }
+
+      const isOtherUser = String(event.userId) !== String(currentUserId);
+      const typingValue = event.isTyping ?? true;
+      setIsTyping(isOtherUser && typingValue);
+    },
+    onReadReceipt: (event) => {
+      if (!currentUserId) {
+        return;
+      }
+
+      const isFromOtherUser = String(event.userId) !== String(currentUserId);
+      if (isFromOtherUser) {
+        // Placeholder: update read status in UI model when app has read indicator.
+      }
+    },
+  });
 
   useEffect(() => {
     const initialize = async () => {
       const uid = await SecureStore.getItemAsync('user_id');
-      console.log("uui", uid);
       setCurrentUserId(uid);
       await loadMessages(uid);
     };
@@ -59,33 +131,56 @@ export default function ChatDetailScreen() {
       const data = Array.isArray(response)
         ? response
         : response?.content ?? [];
-      const normalizedMessages = normalizeMessages(data, uid ?? currentUserId);
+      const normalizedMessages = mapChatPayloadListToUiMessages(data);
       setMessages(normalizedMessages);
+
+      const lastMessage = normalizedMessages[normalizedMessages.length - 1];
+      if (uid && lastMessage?.messageId) {
+        sendReadReceipt(id, uid, lastMessage.messageId);
+      }
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
   };
 
-  const normalizeMessages = (data: any[], uid?: string | null): Message[] => {
-    return data.map((msg) => ({
-      messageId: msg.messageId,
-      content: msg.content,
-      senderId: msg.senderId,
-      createdAt: msg.createdAt,
-      senderName: msg.senderName || 'Unknown',
-    }));
-  };
-
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (inputText.trim() === '') return;
 
-    sendMessage(inputText.trim());
+    const messageContent = inputText.trim();
     setInputText('');
+
+    try {
+      const response = await chatService.sendMessage(id, {
+        content: messageContent,
+        messageType: 'TEXT',
+        attachments: [],
+      });
+
+      const mappedMessage = mapChatPayloadToUiMessage(response);
+      if (mappedMessage) {
+        appendOrUpdateMessage(mappedMessage);
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<{ message?: string; error?: { message?: string } }>;
+      console.error('Failed to send message via REST:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        message: axiosError.message,
+      });
+      setInputText(messageContent);
+    }
+  };
+
+  const handleInputChange = (value: string) => {
+    setInputText(value);
+
+    if (currentUserId && value.trim().length > 0) {
+      sendTyping(id, currentUserId);
+    }
   };
 
 const renderMessage = ({ item }: { item: Message }) => {
     const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
-    console.log("Current User:", currentUserId, "Sender ID:", item.senderId);
     return (
       <View style={[
         styles.messageContainer,
@@ -169,7 +264,7 @@ const renderMessage = ({ item }: { item: Message }) => {
           placeholder={t('chat.search')}
           placeholderTextColor={colors.textSecondary}
           value={inputText}
-          onChangeText={setInputText}
+          onChangeText={handleInputChange}
           multiline
         />
         <TouchableOpacity
