@@ -6,11 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ActivityIndicator,
   AppState,
   FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   StatusBar,
   StyleSheet,
   Text,
@@ -32,6 +35,17 @@ interface Message {
   createdAt: string;
   senderName?: string;
 }
+
+interface MessagePageResponse {
+  content?: unknown[];
+  last?: boolean;
+  totalPages?: number;
+  number?: number;
+}
+
+const PAGE_SIZE = 10;
+const SCROLL_TOP_THRESHOLD = 48;
+const DEBUG_CHAT_MESSAGES = __DEV__;
 
 const buildStompBrokerUrl = () => {
   const directBroker = process.env.EXPO_PUBLIC_STOMP_BROKER_URL;
@@ -64,27 +78,93 @@ export default function ChatDetailScreen() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const appStateRef = useRef(AppState.currentState);
-  const sortMessages = (msgs: Message[]): Message[] => {
+  const loadingOlderRef = useRef(false);
+  const shouldScrollToLatestRef = useRef(false);
+
+  const logChatDebug = useCallback((label: string, payload: unknown) => {
+    if (!DEBUG_CHAT_MESSAGES) {
+      return;
+    }
+
+    console.log(`[CHAT_DEBUG] ${label}`, payload);
+  }, []);
+
+  const scrollToLatest = useCallback((animated: boolean) => {
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+
+  const requestScrollToLatest = useCallback((animated: boolean) => {
+    shouldScrollToLatestRef.current = true;
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToEnd({ animated });
+    });
+  }, []);
+
+  const sortMessages = useCallback((msgs: Message[]): Message[] => {
     return [...msgs].sort((a, b) => {
       const timeA = new Date(a.createdAt).getTime();
       const timeB = new Date(b.createdAt).getTime();
       return timeA - timeB; // ascending: cũ → mới
     });
-  };
-  const appendOrUpdateMessage = (message: ChatUiMessage) => {
-    setMessages((prev) => {
-      const index = prev.findIndex((item) => String(item.messageId) === String(message.messageId));
-      if (index >= 0) {
-        const next = [...prev];
-        next[index] = message;
-        return sortMessages(next);
-      }
+  }, []);
 
-      return sortMessages([...prev, message]);
+  const mergeUniqueMessages = useCallback((base: Message[], incoming: Message[]) => {
+    const mergedById = new Map<string, Message>();
+
+    base.forEach((message) => {
+      mergedById.set(String(message.messageId), message);
     });
-  };
+
+    incoming.forEach((message) => {
+      mergedById.set(String(message.messageId), message);
+    });
+
+    return sortMessages(Array.from(mergedById.values()));
+  }, [sortMessages]);
+
+  const appendOrUpdateMessage = useCallback((message: ChatUiMessage) => {
+    logChatDebug('appendOrUpdateMessage', message);
+    setMessages((prev) => {
+      return mergeUniqueMessages(prev, [message]);
+    });
+  }, [logChatDebug, mergeUniqueMessages]);
+
+  const parsePageResult = useCallback((raw: unknown, expectedSize: number) => {
+    if (Array.isArray(raw)) {
+      return {
+        payload: raw,
+        hasMore: raw.length === expectedSize,
+      };
+    }
+
+    const response = (raw ?? {}) as MessagePageResponse;
+    const payload = Array.isArray(response.content) ? response.content : [];
+
+    if (typeof response.last === 'boolean') {
+      return {
+        payload,
+        hasMore: !response.last,
+      };
+    }
+
+    if (typeof response.totalPages === 'number' && typeof response.number === 'number') {
+      return {
+        payload,
+        hasMore: response.number + 1 < response.totalPages,
+      };
+    }
+
+    return {
+      payload,
+      hasMore: payload.length === expectedSize,
+    };
+  }, []);
 
   const { isConnected, sendTyping, sendReadReceipt } = useChatSocket({
     conversationId: id,
@@ -118,46 +198,75 @@ export default function ChatDetailScreen() {
     },
   });
 
-  useEffect(() => {
-    const initialize = async () => {
-      const uid = await SecureStore.getItemAsync('user_id');
-      setCurrentUserId(uid);
-      await loadMessages(uid);
-    };
-    initialize();
-  }, [id]);
-
-  useEffect(() => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated: true });
-    }
-  }, [messages]);
-
-  const loadMessages = async (uid?: string | null, silent = false) => {
+  const loadInitialMessages = useCallback(async (uid?: string | null, silent = false) => {
     try {
-      const response = (await chatService.getMessages(id, 0, 50)) as any;
-      const data = Array.isArray(response)
-        ? response
-        : response?.content ?? [];
-      const normalizedMessages = mapChatPayloadListToUiMessages(data);
-      const sortedMessages = sortMessages(normalizedMessages);
-
-      if (silent) {
-        setMessages((prev) => {
-          if (prev.length === sortedMessages.length) {
-            const prevLast = prev[prev.length - 1]?.messageId;
-            const nextLast = sortedMessages[sortedMessages.length - 1]?.messageId;
-            if (String(prevLast ?? '') === String(nextLast ?? '')) {
-              return prev;
-            }
-          }
-          return sortedMessages;
-        });
-      } else {
-        setMessages(sortedMessages);
+      const response = await chatService.getMessages(id, 0, PAGE_SIZE);
+      const { payload, hasMore } = parsePageResult(response, PAGE_SIZE);
+      logChatDebug('loadInitialMessages.response', response);
+      logChatDebug('loadInitialMessages.payload', {
+        silent,
+        hasMore,
+        payloadCount: payload.length,
+        payload,
+      });
+      if (!silent) {
+        setHasMoreOlder(hasMore);
       }
 
-      const lastMessage = sortedMessages[sortedMessages.length - 1];
+      const normalizedMessages = mapChatPayloadListToUiMessages(payload);
+      const sortedMessages = sortMessages(normalizedMessages);
+      logChatDebug('loadInitialMessages.normalized', {
+        normalizedCount: normalizedMessages.length,
+        sortedCount: sortedMessages.length,
+        firstId: sortedMessages[0]?.messageId,
+        lastId: sortedMessages[sortedMessages.length - 1]?.messageId,
+      });
+
+      let nextMessages = sortedMessages;
+      let nextHasMoreOlder = hasMore;
+
+      if (!silent && nextMessages.length > 0 && nextMessages.length < PAGE_SIZE) {
+        let cursorId = nextMessages[0].messageId;
+
+        while (nextMessages.length < PAGE_SIZE && cursorId) {
+          const remainingSlots = PAGE_SIZE - nextMessages.length;
+          const olderResponse = await chatService.getMessagesBefore(id, cursorId, remainingSlots);
+          const { payload: olderPayload, hasMore: olderHasMore } = parsePageResult(olderResponse, remainingSlots);
+          const olderNormalized = mapChatPayloadListToUiMessages(olderPayload);
+          const olderSorted = sortMessages(olderNormalized);
+
+          logChatDebug('loadInitialMessages.prefillOlder', {
+            cursorId,
+            remainingSlots,
+            olderCount: olderSorted.length,
+            olderHasMore,
+            olderPayload,
+          });
+
+          if (olderSorted.length === 0) {
+            nextHasMoreOlder = false;
+            break;
+          }
+
+          nextMessages = mergeUniqueMessages(nextMessages, olderSorted);
+          cursorId = nextMessages[0]?.messageId ?? cursorId;
+          nextHasMoreOlder = olderHasMore;
+
+          if (olderSorted.length < remainingSlots) {
+            break;
+          }
+        }
+      }
+
+      if (silent) {
+        setMessages((prev) => mergeUniqueMessages(prev, nextMessages));
+      } else {
+        setMessages(nextMessages);
+        setHasMoreOlder(nextHasMoreOlder);
+        shouldScrollToLatestRef.current = true;
+      }
+
+      const lastMessage = nextMessages[nextMessages.length - 1];
       if (uid && lastMessage?.messageId) {
         sendReadReceipt(id, uid, lastMessage.messageId);
       }
@@ -166,7 +275,71 @@ export default function ChatDetailScreen() {
         console.error('Failed to load messages:', error);
       }
     }
-  };
+  }, [id, logChatDebug, mergeUniqueMessages, parsePageResult, sendReadReceipt, sortMessages]);
+
+  useEffect(() => {
+    const initialize = async () => {
+      const uid = await SecureStore.getItemAsync('user_id');
+      setCurrentUserId(uid);
+      await loadInitialMessages(uid);
+    };
+    initialize();
+  }, [id, loadInitialMessages]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!id || !hasMoreOlder || isLoadingOlder || loadingOlderRef.current) {
+      return;
+    }
+
+    const oldestLoadedMessageId = messages[0]?.messageId;
+    if (!oldestLoadedMessageId) {
+      return;
+    }
+
+    loadingOlderRef.current = true;
+    setIsLoadingOlder(true);
+
+    try {
+      const response = await chatService.getMessagesBefore(id, oldestLoadedMessageId, PAGE_SIZE);
+      const { payload, hasMore } = parsePageResult(response, PAGE_SIZE);
+      logChatDebug('loadOlderMessages.request', {
+        beforeId: oldestLoadedMessageId,
+        pageSize: PAGE_SIZE,
+      });
+      logChatDebug('loadOlderMessages.response', response);
+      logChatDebug('loadOlderMessages.payload', {
+        hasMore,
+        payloadCount: payload.length,
+        payload,
+      });
+      const normalizedMessages = mapChatPayloadListToUiMessages(payload);
+      const sortedMessages = sortMessages(normalizedMessages);
+      logChatDebug('loadOlderMessages.normalized', {
+        normalizedCount: normalizedMessages.length,
+        sortedCount: sortedMessages.length,
+        firstId: sortedMessages[0]?.messageId,
+        lastId: sortedMessages[sortedMessages.length - 1]?.messageId,
+      });
+
+      if (sortedMessages.length > 0) {
+        setMessages((prev) => mergeUniqueMessages(prev, sortedMessages));
+      }
+
+      setHasMoreOlder(hasMore && sortedMessages.length > 0);
+    } catch (error) {
+      console.error('Failed to load older messages:', error);
+    } finally {
+      loadingOlderRef.current = false;
+      setIsLoadingOlder(false);
+    }
+  }, [hasMoreOlder, id, isLoadingOlder, logChatDebug, mergeUniqueMessages, messages, parsePageResult, sortMessages]);
+
+  useEffect(() => {
+    if (shouldScrollToLatestRef.current && messages.length > 0) {
+      shouldScrollToLatestRef.current = false;
+      scrollToLatest(false);
+    }
+  }, [messages.length, scrollToLatest]);
 
   useEffect(() => {
     if (!id || !currentUserId) {
@@ -174,20 +347,30 @@ export default function ChatDetailScreen() {
     }
 
     const intervalId = setInterval(() => {
-      void loadMessages(currentUserId, true);
+      void loadInitialMessages(currentUserId, true);
     }, 3000);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [id, currentUserId]);
+  }, [id, currentUserId, loadInitialMessages]);
+
+  useEffect(() => {
+    logChatDebug('messages.state', {
+      count: messages.length,
+      firstId: messages[0]?.messageId,
+      lastId: messages[messages.length - 1]?.messageId,
+      hasMoreOlder,
+      isLoadingOlder,
+    });
+  }, [hasMoreOlder, isLoadingOlder, logChatDebug, messages]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const wasInBackground = appStateRef.current.match(/inactive|background/);
 
       if (wasInBackground && nextState === 'active' && currentUserId) {
-        void loadMessages(currentUserId, true);
+        void loadInitialMessages(currentUserId, true);
       }
 
       appStateRef.current = nextState;
@@ -196,7 +379,13 @@ export default function ChatDetailScreen() {
     return () => {
       subscription.remove();
     };
-  }, [currentUserId]);
+  }, [currentUserId, loadInitialMessages]);
+
+  const handleMessageListScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (event.nativeEvent.contentOffset.y <= SCROLL_TOP_THRESHOLD) {
+      void loadOlderMessages();
+    }
+  };
 
   const handleSendMessage = async () => {
     if (inputText.trim() === '') return;
@@ -211,9 +400,13 @@ export default function ChatDetailScreen() {
         attachments: [],
       });
 
+      logChatDebug('sendMessage.response', response);
+
       const mappedMessage = mapChatPayloadToUiMessage(response);
       if (mappedMessage) {
+        logChatDebug('sendMessage.mapped', mappedMessage);
         appendOrUpdateMessage(mappedMessage);
+        requestScrollToLatest(true);
       }
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string; error?: { message?: string } }>;
@@ -232,6 +425,28 @@ export default function ChatDetailScreen() {
     if (currentUserId && value.trim().length > 0) {
       sendTyping(id, currentUserId);
     }
+  };
+
+  const renderOlderMessagesLoading = () => {
+    if (!isLoadingOlder && !hasMoreOlder) {
+      return null;
+    }
+
+    return (
+      <TouchableOpacity
+        style={styles.olderLoadingContainer}
+        onPress={() => { void loadOlderMessages(); }}
+        disabled={isLoadingOlder}
+        activeOpacity={0.8}
+      >
+        {isLoadingOlder ? (
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        ) : (
+          <Ionicons name="refresh" size={16} color={COLORS.primary} />
+        )}
+        <Text style={[styles.olderLoadingText, { color: colors.textSecondary }]}>Đang tải tin cũ...</Text>
+      </TouchableOpacity>
+    );
   };
 
 const renderMessage = ({ item }: { item: Message }) => {
@@ -302,11 +517,14 @@ const renderMessage = ({ item }: { item: Message }) => {
       <FlatList
         ref={flatListRef}
         data={messages}
-        keyExtractor={(item) => item.messageId}
+        keyExtractor={(item) => String(item.messageId)}
         renderItem={renderMessage}
         contentContainerStyle={styles.messagesList}
         scrollEnabled={true}
         keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={renderOlderMessagesLoading}
+        onScroll={handleMessageListScroll}
+        scrollEventThrottle={120}
       />
 
       {/* Input Area */}
@@ -381,6 +599,17 @@ const styles = StyleSheet.create({
     paddingVertical: 16, 
     flexGrow: 1, 
     justifyContent: 'flex-end',
+  },
+  olderLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  olderLoadingText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   messageContainer: { 
     marginBottom: 16, // Tăng khoảng cách giữa các tin nhắn

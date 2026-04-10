@@ -21,8 +21,17 @@ export const chatService = {
     });
   },
 
-  getMessages: async (conversationId: string, page = 0, size = 50) => {
-    return await api.get(`/messages/conversation/${conversationId}?page=${page}&size=${size}`);
+  getMessages: async (conversationId: string, page = 0, size = 10, sort = 'createdAt,desc') => {
+    return await api.get(`/messages/conversation/${conversationId}?page=${page}&size=${size}&sort=${encodeURIComponent(sort)}`);
+  },
+
+  getMessagesBefore: async (conversationId: string, beforeId: string, size = 10) => {
+    const params = new URLSearchParams({
+      beforeId,
+      size: String(size),
+    });
+
+    return await api.get(`/messages/conversation/${conversationId}?${params.toString()}`);
   },
 
   sendMessage: async (
