@@ -5,7 +5,23 @@ export interface FriendRequestRequest {
   message?: string;
 }
 
+export interface UserResponse {
+  user_id: string;
+  email: string;
+  display_name: string;
+  avatar_url?: string;
+  friendship_status?: string;
+  [key: string]: any; // Cho các trường bổ sung khác
+}
+
 export const friendService = {
+  /**
+   * Lấy danh sách bạn bè
+   */
+  getFriendsList: async () => {
+    return await api.get('/friends');
+  },
+
   /**
    * Gửi lời mời kết bạn
    */
@@ -25,6 +41,10 @@ export const friendService = {
    */
   getReceivedRequests: async () => {
     return await api.get('/friends/requests/received');
+  },
+
+  getSentRequests: async () => {
+    return await api.get('/friends/requests/sent');
   },
 
   /**

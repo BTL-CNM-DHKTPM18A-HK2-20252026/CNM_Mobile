@@ -21,6 +21,7 @@ function RootLayoutContent() {
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="qr-scan" />
         <Stack.Screen name="search" />
+        <Stack.Screen name="friend-requests" />
       </Stack>
       <StatusBar style={isDark ? "light" : "dark"} />
     </NavigationProvider>

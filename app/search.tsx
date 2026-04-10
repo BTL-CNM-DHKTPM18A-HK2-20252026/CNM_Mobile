@@ -20,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 
-// Interface cập nhật khớp với Backend thực tế
+// --- Interfaces ---
 interface UserDocument {
   userId: string;
   displayName: string;
@@ -31,7 +31,6 @@ interface UserDocument {
 interface SearchResultUser {
   document: UserDocument;
   friendshipStatus: 'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'NONE' | 'SELF';
-  highlights?: any;
 }
 
 interface MessageDocument {
@@ -56,6 +55,9 @@ const SearchScreen = () => {
   const [history, setHistory] = useState<SearchHistory[]>([]);
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [isEditingHistory, setIsEditingHistory] = useState(false); // Trạng thái Sửa/Xong
+
+  // Modal Kết bạn
   const [friendRequestModalVisible, setFriendRequestModalVisible] = useState(false);
   const [selectedUserForRequest, setSelectedUserForRequest] = useState<SearchResultUser | null>(null);
   const [friendRequestMessage, setFriendRequestMessage] = useState('');
@@ -101,118 +103,46 @@ const SearchScreen = () => {
     }
   };
 
-  // Hàm xử lý khi nhấn vào một người dùng (Lưu lịch sử + Chuyển trang)
-  const handleUserPress = async (item: SearchResultUser) => {
-    const user = item.document;
+  const handleUserPress = async (item: SearchResultUser | SearchHistory) => {
+    const userId = 'document' in item ? item.document.userId : item.targetId;
+    const name = 'document' in item ? item.document.displayName : item.targetName;
+    const avatar = 'document' in item ? item.document.avatarUrl : item.targetAvatar;
+
+    if (!userId) return;
+
     try {
-      // Gọi API lưu tương tác
       await api.post('/search/history/click', {
-        targetId: user.userId,
-        name: user.displayName,
-        avatar: user.avatarUrl,
+        targetId: userId,
+        name: name,
+        avatar: avatar,
         type: 'USER'
       });
-      
-      // Load lại lịch sử để cập nhật danh sách "vừa tìm"
       loadSearchHistory();
-
-      // Chuyển hướng sang trang chat
-      // router.push(`/chat/${user.userId}`);
+      // Chuyển sang profile hoặc chat tùy logic (router.push(`/user/${userId}`))
     } catch (err) {
       console.error("Lỗi lưu tương tác:", err);
     }
   };
 
-  const updateUserFriendshipStatus = (userId: string, status: SearchResultUser['friendshipStatus']) => {
-    setResults((current: any) => {
-      if (!current?.users?.content) return current;
-      return {
-        ...current,
-        users: {
-          ...current.users,
-          content: current.users.content.map((item: SearchResultUser) =>
-            item.document.userId === userId ? { ...item, friendshipStatus: status } : item
-          ),
-        },
-      };
-    });
-  };
-
-  const handleSendFriendRequest = async (item: SearchResultUser) => {
-    setSelectedUserForRequest(item);
-    setFriendRequestMessage('');
-    setFriendRequestModalVisible(true);
-  };
-
-  const handleSubmitFriendRequest = async () => {
-    if (!selectedUserForRequest) return;
-    
-    setIsSubmittingFriendRequest(true);
+  const handleDeleteHistoryItem = async (id: string) => {
     try {
-      const res: any = await friendService.sendRequest(
-        selectedUserForRequest.document.userId,
-        friendRequestMessage || undefined
-      );
+      // Gọi API xóa theo ID vừa viết ở Backend
+      const res: any = await api.delete(`/search/history/${id}`);
       if (res.success) {
-        updateUserFriendshipStatus(selectedUserForRequest.document.userId, 'PENDING_SENT');
-        Alert.alert('Thành công', 'Đã gửi lời mời kết bạn.');
-        setFriendRequestModalVisible(false);
-        setSelectedUserForRequest(null);
-        setFriendRequestMessage('');
+        setHistory(prev => prev.filter(item => item.id !== id));
       }
     } catch (err) {
-      console.error('Lỗi gửi lời mời:', err);
-      Alert.alert('Lỗi', 'Không thể gửi lời mời kết bạn.');
-    } finally {
-      setIsSubmittingFriendRequest(false);
+      console.error("Lỗi xóa mục lịch sử:", err);
+      Alert.alert("Lỗi", "Không thể xóa lịch sử tìm kiếm.");
     }
-  };
-
-  const handleAcceptFriendRequest = async (item: SearchResultUser) => {
-    try {
-      const res: any = await friendService.acceptRequestBySender(item.document.userId);
-      if (res.success) {
-        updateUserFriendshipStatus(item.document.userId, 'FRIEND');
-        Alert.alert('Thành công', 'Đã chấp nhận lời mời kết bạn.');
-      }
-    } catch (err) {
-      console.error('Lỗi chấp nhận lời mời:', err);
-      Alert.alert('Lỗi', 'Không thể chấp nhận lời mời kết bạn.');
-    }
-  };
-
-  // Render nút hành động dựa trên trạng thái quan hệ
-  const renderUserAction = (item: SearchResultUser) => {
-    console.log(item);
-    const status = item.friendshipStatus;
-    if (status === 'FRIEND' || status === 'SELF') return null;
-
-    if (status === 'PENDING_SENT') {
-      return (
-        <View style={[styles.actionButton, { backgroundColor: '#F0F0F0' }]}> 
-          <Text style={{ color: '#888', fontWeight: '600' }}>Đã gửi</Text>
-        </View>
-      );
-    }
-    if (status === 'PENDING_RECEIVED') {
-      return (
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: '#0084FF' }]}
-          onPress={() => handleAcceptFriendRequest(item)}
-        >
-          <Text style={{ color: 'white', fontWeight: '600' }}>Đồng ý</Text>
-        </TouchableOpacity>
-      );
-    }
-    return (
-      <TouchableOpacity style={styles.actionButton} onPress={() => handleSendFriendRequest(item)}>
-        <Text style={styles.actionButtonText}>Kết bạn</Text>
-      </TouchableOpacity>
-    );
   };
 
   const renderHistoryItem = ({ item }: { item: SearchHistory }) => (
-    <TouchableOpacity style={styles.historyItem}>
+    <TouchableOpacity 
+      style={styles.historyItem}
+      onPress={() => !isEditingHistory && handleUserPress(item)}
+      disabled={isEditingHistory}
+    >
       <View style={styles.historyAvatarContainer}>
         {item.targetId ? (
           <Image source={getAvatarSource(item.targetAvatar)} style={styles.historyAvatar} />
@@ -221,12 +151,45 @@ const SearchScreen = () => {
              <Ionicons name="search" size={24} color="#666" />
           </View>
         )}
+        
+        {/* Dấu X xóa khi ở chế độ chỉnh sửa */}
+        {isEditingHistory && (
+          <TouchableOpacity 
+            style={styles.deleteBadge} 
+            onPress={() => handleDeleteHistoryItem(item.id)}
+          >
+            <Ionicons name="close-circle" size={22} color="#666" />
+          </TouchableOpacity>
+        )}
       </View>
       <Text numberOfLines={2} style={styles.historyName}>
         {item.targetName || item.query}
       </Text>
     </TouchableOpacity>
   );
+
+  const renderUserAction = (item: SearchResultUser) => {
+    const status = item.friendshipStatus;
+    if (status === 'FRIEND' || status === 'SELF') return null;
+
+    return (
+      <TouchableOpacity 
+        style={styles.actionButton} 
+        onPress={() => {
+            if(status === 'PENDING_RECEIVED') {
+                // Logic chấp nhận
+            } else {
+                setSelectedUserForRequest(item);
+                setFriendRequestModalVisible(true);
+            }
+        }}
+      >
+        <Text style={styles.actionButtonText}>
+            {status === 'PENDING_SENT' ? 'Đã gửi' : (status === 'PENDING_RECEIVED' ? 'Đồng ý' : 'Kết bạn')}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -246,11 +209,6 @@ const SearchScreen = () => {
             onChangeText={setQuery}
             autoFocus
           />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#666" />
-            </TouchableOpacity>
-          )}
         </View>
         <TouchableOpacity onPress={() => router.push('/qr-scan')}>
             <MaterialCommunityIcons name="qrcode-scan" size={22} color="#fff" style={styles.qrButton} />
@@ -262,7 +220,9 @@ const SearchScreen = () => {
           <View>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Liên hệ đã tìm</Text>
-              <TouchableOpacity><Text style={styles.editLink}>Sửa</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setIsEditingHistory(!isEditingHistory)}>
+                <Text style={styles.editLink}>{isEditingHistory ? "Xong" : "Sửa"}</Text>
+              </TouchableOpacity>
             </View>
             <FlatList
               horizontal
@@ -272,127 +232,28 @@ const SearchScreen = () => {
               renderItem={renderHistoryItem}
               contentContainerStyle={{ paddingLeft: 15 }}
             />
-            <TouchableOpacity style={styles.manageHistory}>
-              <Text style={styles.manageHistoryText}>Quản lý lịch sử tìm kiếm {'>'}</Text>
-            </TouchableOpacity>
           </View>
         ) : (
-          <View>
+          <View style={{ paddingTop: 15 }}>
             {loading && <ActivityIndicator color="#0084FF" style={{ marginTop: 20 }} />}
             
-            {results?.users?.content.length > 0 && (
-              <View style={styles.resultSection}>
-                <Text style={styles.resultSectionTitle}>Liên hệ ({results.users.totalElements})</Text>
-                {results.users.content.map((item: SearchResultUser) => (
-                  <TouchableOpacity 
-                    key={item.document.userId} 
-                    style={styles.userRow}
-                    onPress={() => handleUserPress(item)}
-                  >
-                    <Image source={getAvatarSource(item.document.avatarUrl)} style={styles.userAvatar} />
-                    <View style={styles.userInfo}>
-                      <Text style={styles.userName}>{item.document.displayName}</Text>
-                      <Text style={styles.userSub}>
-                        {item.friendshipStatus === 'FRIEND' ? 'Bạn bè' : 'Người lạ'}
-                      </Text>
-                    </View>
-                    {renderUserAction(item)}
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity style={styles.seeMore}><Text style={styles.seeMoreText}>Xem thêm ∨</Text></TouchableOpacity>
-              </View>
-            )}
-
-            {results?.messages?.content.length > 0 && (
-              <View style={[styles.resultSection, { borderTopWidth: 8, borderColor: '#F2F2F2' }]}>
-                <Text style={styles.resultSectionTitle}>Tin nhắn ({results.messages.totalElements})</Text>
-                {results.messages.content.map((msg: MessageDocument) => (
-                  <TouchableOpacity key={msg.messageId} style={styles.messageRow}>
-                    <Image source={getAvatarSource(msg.senderAvatar)} style={styles.msgAvatar} />
-                    <View style={styles.msgInfo}>
-                      <Text style={styles.msgName}>{msg.senderName}</Text>
-                      <Text numberOfLines={1} style={styles.msgContent}>{msg.content}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            {results?.users?.content.map((item: SearchResultUser) => (
+              <TouchableOpacity key={item.document.userId} style={styles.userRow} onPress={() => handleUserPress(item)}>
+                <Image source={getAvatarSource(item.document.avatarUrl)} style={styles.userAvatar} />
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{item.document.displayName}</Text>
+                  <Text style={styles.userSub}>
+                    {item.friendshipStatus === 'SELF' ? 'Bản thân' : (
+                      item.friendshipStatus === 'FRIEND' ? 'Bạn bè' : 'Người lạ'
+                    )}
+                  </Text>
+                </View>
+                {renderUserAction(item)}
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
-
-      {/* Modal Kết Bạn */}
-      <Modal
-        visible={friendRequestModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          if (!isSubmittingFriendRequest) setFriendRequestModalVisible(false);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedUserForRequest && (
-              <>
-                <Text style={styles.modalTitle}>Gửi lời mời kết bạn</Text>
-                
-                {/* Avatar và tên người nhận lời mời */}
-                <View style={styles.modalUserSection}>
-                  <Image
-                    source={getAvatarSource(selectedUserForRequest.document.avatarUrl)}
-                    style={styles.modalAvatar}
-                  />
-                  <Text style={styles.modalUserName}>
-                    {selectedUserForRequest.document.displayName}
-                  </Text>
-                </View>
-
-                {/* Ô nhập tin nhắn */}
-                <View style={styles.modalInputSection}>
-                  <Text style={styles.modalInputLabel}>Tin nhắn (tùy chọn)</Text>
-                  <TextInput
-                    style={styles.modalMessageInput}
-                    placeholder="Nhập tin nhắn..."
-                    placeholderTextColor="#999"
-                    value={friendRequestMessage}
-                    onChangeText={setFriendRequestMessage}
-                    multiline
-                    maxLength={500}
-                    editable={!isSubmittingFriendRequest}
-                  />
-                  <Text style={styles.charCount}>
-                    {friendRequestMessage.length}/500
-                  </Text>
-                </View>
-
-                {/* Nút hành động */}
-                <View style={styles.modalButtonGroup}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => {
-                      if (!isSubmittingFriendRequest) setFriendRequestModalVisible(false);
-                    }}
-                    disabled={isSubmittingFriendRequest}
-                  >
-                    <Text style={styles.cancelButtonText}>Hủy</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.submitButton]}
-                    onPress={handleSubmitFriendRequest}
-                    disabled={isSubmittingFriendRequest}
-                  >
-                    {isSubmittingFriendRequest ? (
-                      <ActivityIndicator color="white" size="small" />
-                    ) : (
-                      <Text style={styles.submitButtonText}>Kết bạn</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -401,151 +262,27 @@ export default SearchScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'white' },
-  header: {
-    backgroundColor: '#0084FF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
+  header: { backgroundColor: '#0084FF', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8 },
   backButton: { padding: 5 },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    borderRadius: 8,
-    marginHorizontal: 10,
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    height: 38,
-  },
+  searchBar: { flex: 1, flexDirection: 'row', backgroundColor: 'white', borderRadius: 8, marginHorizontal: 10, alignItems: 'center', paddingHorizontal: 10, height: 38 },
   searchIcon: { marginRight: 8 },
   input: { flex: 1, fontSize: 16, color: 'black' },
   qrButton: { padding: 5 },
-  
   content: { flex: 1 },
-
-  sectionHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    padding: 15,
-    alignItems: 'center' 
-  },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 15, alignItems: 'center' },
   sectionTitle: { fontSize: 14, fontWeight: '600', color: '#333' },
-  editLink: { color: '#0084FF' },
+  editLink: { color: '#0084FF', fontWeight: '500' },
   historyItem: { width: 75, alignItems: 'center', marginRight: 10 },
-  historyAvatarContainer: { width: 56, height: 56, marginBottom: 6 },
+  historyAvatarContainer: { width: 56, height: 56, marginBottom: 6, position: 'relative' },
   historyAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#EEE' },
+  deleteBadge: { position: 'absolute', top: -2, right: -2, backgroundColor: 'white', borderRadius: 11 },
   searchIconCircle: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F0' },
   historyName: { textAlign: 'center', fontSize: 12, color: '#333' },
-  manageHistory: { padding: 20, alignItems: 'center' },
-  manageHistoryText: { color: '#888', fontSize: 14 },
-
-  resultSection: { paddingVertical: 10 },
-  resultSectionTitle: { paddingHorizontal: 15, color: '#666', fontSize: 13, marginBottom: 10 },
   userRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, marginBottom: 15 },
   userAvatar: { width: 52, height: 52, borderRadius: 26 },
   userInfo: { flex: 1, marginLeft: 12 },
   userName: { fontSize: 16, fontWeight: '500' },
-  userSub: { color: '#888', fontSize: 13, marginTop: 2 },
-  actionButton: { backgroundColor: '#E7F3FF', paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20, minWidth: 80, alignItems: 'center' },
+  userSub: { color: '#888', fontSize: 13 },
+  actionButton: { backgroundColor: '#E7F3FF', paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20 },
   actionButtonText: { color: '#0084FF', fontWeight: '600', fontSize: 13 },
-  seeMore: { padding: 10, alignItems: 'center' },
-  seeMoreText: { color: '#666', fontSize: 13 },
-
-  messageRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, marginBottom: 15 },
-  msgAvatar: { width: 44, height: 44, borderRadius: 22 },
-  msgInfo: { flex: 1, marginLeft: 12, borderBottomWidth: 0.5, borderColor: '#EEE', paddingBottom: 10 },
-  msgName: { fontSize: 15, fontWeight: 'bold' },
-  msgContent: { color: '#555', marginTop: 2 },
-
-  // Styles cho Modal Kết Bạn
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalUserSection: {
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  modalAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 12,
-  },
-  modalUserName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  modalInputSection: {
-    marginBottom: 20,
-  },
-  modalInputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 8,
-  },
-  modalMessageInput: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#333',
-    minHeight: 100,
-    maxHeight: 150,
-    textAlignVertical: 'top',
-  },
-  charCount: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 6,
-    textAlign: 'right',
-  },
-  modalButtonGroup: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#F0F0F0',
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
-  submitButton: {
-    backgroundColor: '#0084FF',
-  },
-  submitButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'white',
-  },
 });
