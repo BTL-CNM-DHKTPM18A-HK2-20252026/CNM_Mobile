@@ -1,9 +1,11 @@
+import api from '@/services/api';
 import { authService } from '@/services/authService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Story = { id: string; name: string; avatar: string };
@@ -12,6 +14,7 @@ type Post = { id: string; user: string; avatar: string; time: string; text: stri
 const { width } = Dimensions.get('window');
 
 export default function TimelineScreen() {
+  const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => {
@@ -23,6 +26,15 @@ export default function TimelineScreen() {
     fetchProfile();
     return () => { mounted = false; };
   }, []);
+
+  const isOwnStory = (s: any) => {
+    if (!profile) return false;
+    const pid = profile.id || profile.userId || profile.user_id || profile._id;
+    if (!pid) return false;
+    return (
+      s.userId === pid || s.user_id === pid || s.ownerId === pid || (s.user && (s.user.id === pid || s.user.userId === pid))
+    );
+  };
   const [uploading, setUploading] = useState(false);
 
   const handlePickAvatar = async () => {
@@ -54,45 +66,68 @@ export default function TimelineScreen() {
       setUploading(false);
     }
   };
-  const stories: Story[] = useMemo(
-    () => [
-      { id: 'create', name: 'Tạo mới', avatar: 'https://placehold.co/120x120/eee/000?text=+' },
-      { id: '1', name: 'An', avatar: 'https://placekitten.com/100/100' },
-      { id: '2', name: 'Bình', avatar: 'https://placekitten.com/101/101' },
-      { id: '3', name: 'Chi', avatar: 'https://placekitten.com/102/102' },
-      { id: '4', name: 'Dũng', avatar: 'https://placekitten.com/103/103' },
-    ],
-    []
-  );
+  const [stories, setStories] = useState<Story[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loadingStories, setLoadingStories] = useState(false);
+  const [loadingPosts, setLoadingPosts] = useState(false);
 
-  const posts: Post[] = useMemo(
-    () => [
-      {
-        id: 'p1',
-        user: 'Lan Hoàng',
-        avatar: 'https://placekitten.com/64/64',
-        time: '7 giờ',
-        text: 'Hôm nay trời đẹp, mình đi dạo công viên và thấy nhiều hoa.',
-        image: 'https://placekitten.com/800/400',
-      },
-      {
-        id: 'p2',
-        user: 'Minh Tâm',
-        avatar: 'https://placekitten.com/65/65',
-        time: '12 giờ',
-        text: 'Chia sẻ vài khoảnh khắc cuối tuần!',
-        image: 'https://placekitten.com/801/401',
-      },
-      {
-        id: 'p3',
-        user: 'Ngọc',
-        avatar: 'https://placekitten.com/66/66',
-        time: '1 ngày',
-        text: 'Ai đang tìm một quán cà phê chill ở Sài Gòn không?',
-      },
-    ],
-    []
-  );
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchStories = async () => {
+      setLoadingStories(true);
+      try {
+        // Try common endpoints, fallback to empty
+        const tryEndpoints = ['/users/me/stories', '/stories', '/timeline/stories'];
+        for (const ep of tryEndpoints) {
+          try {
+            const res: any = await api.get(ep);
+            if (mounted && res && Array.isArray(res.data || res)) {
+              setStories(res.data || res);
+              break;
+            }
+            if (mounted && res && Array.isArray(res.stories)) {
+              setStories(res.stories);
+              break;
+            }
+          } catch (e) {
+            // continue
+          }
+        }
+      } finally {
+        if (mounted) setLoadingStories(false);
+      }
+    };
+
+    const fetchPosts = async () => {
+      setLoadingPosts(true);
+      try {
+        const tryEndpoints = ['/timeline/posts', '/posts/timeline', '/posts'];
+        for (const ep of tryEndpoints) {
+          try {
+            const res: any = await api.get(ep);
+            if (mounted && res) {
+              // expect array in data or posts
+              const list = res.data || res.posts || res;
+              if (Array.isArray(list)) {
+                setPosts(list);
+                break;
+              }
+            }
+          } catch (e) {
+            // continue
+          }
+        }
+      } finally {
+        if (mounted) setLoadingPosts(false);
+      }
+    };
+
+    fetchStories();
+    fetchPosts();
+
+    return () => { mounted = false; };
+  }, []);
 
   function renderStory(item: Story) {
     if (item.id === 'create') {
@@ -165,7 +200,7 @@ export default function TimelineScreen() {
               <Image source={getAvatarSource(profile?.avatar_url)} style={styles.inputAvatar} />
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={styles.inputBox}>
+          <TouchableOpacity style={styles.inputBox} onPress={() => router.push('/create-post')}>
             <Text style={styles.inputPlaceholder}>Hôm nay bạn thế nào?</Text>
           </TouchableOpacity>
         </View>
@@ -189,8 +224,17 @@ export default function TimelineScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Stories: always show 'Tạo mới'; show user's story if present; hide sample placeholders */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stories} contentContainerStyle={{ paddingHorizontal: 12 }}>
-          {stories.map(renderStory)}
+          {renderStory({ id: 'create', name: 'Tạo mới', avatar: '' })}
+          {!loadingStories && (() => {
+            const own = stories.find(isOwnStory as any);
+            const others = stories.filter((s) => !isOwnStory(s) && s.id !== 'create');
+            const nodes: any[] = [];
+            if (own) nodes.push(renderStory(own));
+            others.forEach((o) => nodes.push(renderStory(o)));
+            return nodes;
+          })()}
         </ScrollView>
 
         <View style={styles.statusBox}>
@@ -200,7 +244,17 @@ export default function TimelineScreen() {
           </View>
         </View>
 
-        <FlatList data={posts} keyExtractor={(i) => i.id} renderItem={renderPost} scrollEnabled={false} />
+        {loadingPosts ? (
+          <ActivityIndicator style={{ marginTop: 20 }} />
+        ) : posts.length > 0 ? (
+          <FlatList data={posts} keyExtractor={(i) => i.id} renderItem={renderPost} scrollEnabled={false} />
+        ) : (
+          <View style={{ padding: 24, alignItems: 'center' }}>
+            <Text style={{ color: '#666', textAlign: 'center' }}>
+              Hãy kết bạn hoặc đăng bài viết đầu tiên của bạn
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
