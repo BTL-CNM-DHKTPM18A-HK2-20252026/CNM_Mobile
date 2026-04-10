@@ -9,7 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Story = { id: string; name: string; avatar: string };
-type Post = { id: string; user: string; avatar: string; time: string; text: string; image?: string };
+type Post = { id: string; user: string; avatar: string; time: string; text: string; image?: string; authorId?: string };
 
 const { width } = Dimensions.get('window');
 
@@ -32,7 +32,7 @@ export default function TimelineScreen() {
     const pid = profile.id || profile.userId || profile.user_id || profile._id;
     if (!pid) return false;
     return (
-      s.userId === pid || s.user_id === pid || s.ownerId === pid || (s.user && (s.user.id === pid || s.user.userId === pid))
+      s.id === pid || s.userId === pid || s.user_id === pid || s.ownerId === pid || (s.user && (s.user.id === pid || s.user.userId === pid))
     );
   };
   const [uploading, setUploading] = useState(false);
@@ -77,17 +77,24 @@ export default function TimelineScreen() {
     const fetchStories = async () => {
       setLoadingStories(true);
       try {
-        // Try common endpoints, fallback to empty
         const tryEndpoints = ['/users/me/stories', '/stories', '/timeline/stories'];
         for (const ep of tryEndpoints) {
           try {
             const res: any = await api.get(ep);
-            if (mounted && res && Array.isArray(res.data || res)) {
-              setStories(res.data || res);
-              break;
-            }
-            if (mounted && res && Array.isArray(res.stories)) {
-              setStories(res.stories);
+            if (!mounted || !res) continue;
+
+            let list: any = Array.isArray(res) ? res : (res.data || res.stories || res.items || res.results || res.content || res);
+            if (!Array.isArray(list) && res && Array.isArray(res.data)) list = res.data;
+
+            if (Array.isArray(list) && list.length > 0) {
+              const mapped = list.map((s: any, idx: number) => {
+                const id = String(s.id || s.userId || s._id || s.ownerId || s.userid || s.user?.id || `story-${idx}-${Date.now()}`);
+                const name = s.name || s.displayName || s.user?.displayName || s.user?.name || s.title || '';
+                const avatar = s.avatar_url || s.avatar || s.user?.avatar || '';
+                return { id, name, avatar } as Story;
+              });
+
+              setStories(mapped);
               break;
             }
           } catch (e) {
@@ -102,20 +109,42 @@ export default function TimelineScreen() {
     const fetchPosts = async () => {
       setLoadingPosts(true);
       try {
-        const tryEndpoints = ['/timeline/posts', '/posts/timeline', '/posts'];
+        // Try common feed endpoints; many backends return a paged response
+        const tryEndpoints = ['/posts/feed', '/timeline/posts', '/posts/timeline', '/posts'];
         for (const ep of tryEndpoints) {
           try {
             const res: any = await api.get(ep);
-            if (mounted && res) {
-              // expect array in data or posts
-              const list = res.data || res.posts || res;
-              if (Array.isArray(list)) {
-                setPosts(list);
-                break;
-              }
+            if (!mounted || !res) continue;
+
+            // Possible shapes:
+            // 1) Array directly
+            // 2) Paged: { content: [...] }
+            // 3) Wrapped: { data: [...] } or { posts: [...] } or { items: [...] }
+            let list: any = Array.isArray(res) ? res : (res.content || res.data || res.posts || res.results || res.items || res);
+
+            // If page wrapper (res has content but list is object), extract content
+            if (!Array.isArray(list) && res && Array.isArray(res.content)) {
+              list = res.content;
+            }
+
+            if (Array.isArray(list) && list.length > 0) {
+              // Normalize backend post shape to the UI Post type used in this screen
+              const mapped = list.map((p: any, idx: number) => {
+                const id = String(p.postId || p.id || p._id || `post-${idx}-${Date.now()}`);
+                const authorId = p.authorId || p.author?.id || p.author?._id || (typeof p.author === 'string' ? p.author : undefined) || p.userId || p.user?.id;
+                const user = p.author?.displayName || p.author?.name || p.displayName || p.username || p.user?.name || p.user || (authorId ? String(authorId) : 'Người dùng');
+                const avatar = p.author?.avatar_url || p.author?.avatar || p.avatar || p.user?.avatar || '';
+                const time = p.createdAt || p.created_at || p.time || p.created || '';
+                const text = p.content || p.text || p.body || '';
+                const image = (p.mediaUrls && p.mediaUrls.length) ? p.mediaUrls[0] : (p.image || p.imageUrl || p.mediaUrl || undefined);
+                return { id, user, avatar, time, text, image, authorId: authorId ? String(authorId) : undefined } as Post;
+              });
+
+              setPosts(mapped);
+              break;
             }
           } catch (e) {
-            // continue
+            // continue to next endpoint
           }
         }
       } finally {
@@ -128,6 +157,49 @@ export default function TimelineScreen() {
 
     return () => { mounted = false; };
   }, []);
+
+  function formatDateTime(value?: string | number) {
+    if (!value) return '';
+    let date: Date;
+    if (typeof value === 'number') {
+      date = new Date(value);
+    } else if (/^\d+$/.test(String(value))) {
+      date = new Date(Number(value));
+    } else {
+      const parsed = Date.parse(String(value));
+      if (!isNaN(parsed)) date = new Date(parsed);
+      else return String(value);
+    }
+
+    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+    const day = pad(date.getDate());
+    const month = pad(date.getMonth() + 1);
+    const year = date.getFullYear();
+    const hour = pad(date.getHours());
+    const minute = pad(date.getMinutes());
+    return `${day}/${month}/${year} ${hour}:${minute}`;
+  }
+
+  // When profile is loaded, prefer profile displayName/avatar for posts authored by current user
+  useEffect(() => {
+    if (!profile || posts.length === 0) return;
+    const pid = profile.id || profile.userId || profile.user_id || profile._id;
+    if (!pid) return;
+
+    const updated = posts.map((p: any) => {
+      if (p.authorId && String(p.authorId) === String(pid)) {
+        const name = profile.displayName || profile.full_name || profile.name || profile.username || p.user;
+        const avatar = profile.avatar_url || profile.avatar || p.avatar;
+        if (name !== p.user || avatar !== p.avatar) {
+          return { ...p, user: name, avatar };
+        }
+      }
+      return p;
+    });
+
+    const changed = updated.some((u: any, i: number) => u.user !== posts[i].user || u.avatar !== posts[i].avatar);
+    if (changed) setPosts(updated);
+  }, [profile, posts]);
 
   function renderStory(item: Story) {
     if (item.id === 'create') {
@@ -143,7 +215,7 @@ export default function TimelineScreen() {
 
     return (
       <View style={styles.storyItem} key={item.id}>
-        <Image source={{ uri: item.avatar }} style={styles.storyAvatar} />
+        <Image source={getAvatarSource(item.avatar)} style={styles.storyAvatar} />
         <View style={styles.storyOverlay} />
         <Text style={styles.storyName}>{item.name}</Text>
       </View>
@@ -154,10 +226,10 @@ export default function TimelineScreen() {
     return (
       <View style={styles.postCard}>
         <View style={styles.postHeader}>
-          <Image source={{ uri: item.avatar }} style={styles.postAvatar} />
+          <Image source={getAvatarSource(item.avatar)} style={styles.postAvatar} />
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={styles.postUser}>{item.user}</Text>
-            <Text style={styles.postTime}>{item.time}</Text>
+            <Text style={styles.postTime}>{formatDateTime(item.time)}</Text>
           </View>
           <TouchableOpacity>
             <Feather name="more-vertical" size={20} color="#666" />

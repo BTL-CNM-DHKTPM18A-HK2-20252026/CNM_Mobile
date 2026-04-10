@@ -3,13 +3,14 @@ import api from './api';
 export interface CreatePostRequest {
   content?: string;
   location?: string;
-  // optionally images, attachments, etc.
+  mediaIds?: string[];        // nếu có upload ảnh/video
   [key: string]: any;
 }
 
 export interface UpdatePostRequest {
   content?: string;
   location?: string;
+  mediaIds?: string[];
   [key: string]: any;
 }
 
@@ -18,67 +19,79 @@ export interface PostResponse {
   authorId: string;
   content?: string;
   location?: string;
-  createdAt?: string;
+  mediaUrls?: string[];       // hoặc images, attachments tùy backend trả về
+  createdAt: string;
   updatedAt?: string | null;
   isDeleted?: boolean;
-  // additional fields from backend mapper
+  likeCount?: number;
+  commentCount?: number;
   [key: string]: any;
 }
 
-export const postService = {
-  /**
-   * Create a new post. Backend should determine author from token.
-   */
-  createPost: async (payload: CreatePostRequest) => {
-    return await api.post('/posts', payload);
-  },
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;           // current page
+  [key: string]: any;
+}
 
+const postService = {
   /**
-   * Get posts of a specific user (paginated).
-   * Tries a few common endpoints used in the app.
+   * Tạo bài viết mới
    */
-  getUserPosts: async (userId: string, page = 0, size = 20) => {
-    const endpoints = [`/users/${userId}/posts`, `/posts/user/${userId}`, `/posts?authorId=${userId}`];
-    for (const ep of endpoints) {
-      try {
-        const res: any = await api.get(ep, { params: { page, size } });
-        return res;
-      } catch (err) {
-        // try next
-      }
-    }
-    // final fallback: try posts with query
-    return await api.get('/posts', { params: { page, size, authorId: userId } });
+  createPost: async (userId: string, payload: CreatePostRequest) => {
+    return await api.post<PostResponse>('/posts', payload, {
+      headers: { 'X-User-Id': userId },
+    });
   },
 
   /**
-   * Get news feed / timeline posts (paginated).
-   * Tries multiple endpoints and returns the first successful response.
+   * Lấy chi tiết một bài viết
    */
-  getNewsFeed: async (page = 0, size = 20) => {
-    const endpoints = ['/timeline/posts', '/posts/timeline', '/posts'];
-    for (const ep of endpoints) {
-      try {
-        const res: any = await api.get(ep, { params: { page, size } });
-        return res;
-      } catch (err) {
-        // continue to next
-      }
-    }
-    // If all fail throw
-    throw new Error('Không thể tải news feed');
+  getPostById: async (postId: string, userId: string) => {
+    return await api.get<PostResponse>(`/posts/${postId}`, {
+      headers: { 'X-User-Id': userId },
+    });
   },
 
-  getPostById: async (postId: string) => {
-    return await api.get(`/posts/${postId}`);
+  /**
+   * Lấy danh sách bài viết của một user (Profile)
+   */
+  getUserPosts: async (userId: string, page: number = 0, size: number = 20) => {
+    return await api.get<PageResponse<PostResponse>>(`/posts/user/${userId}`, {
+      params: { page, size },
+    });
   },
 
-  updatePost: async (postId: string, payload: UpdatePostRequest) => {
-    return await api.put(`/posts/${postId}`, payload);
+  /**
+   * Lấy News Feed / Timeline
+   * Lưu ý: Nên truyền userId để backend trả về feed cá nhân hóa
+   */
+  getNewsFeed: async (userId: string, page: number = 0, size: number = 20) => {
+    return await api.get<PageResponse<PostResponse>>('/posts/feed', {
+      params: { page, size },
+      headers: { 'X-User-Id': userId },   // Rất quan trọng
+    });
   },
 
-  deletePost: async (postId: string) => {
-    return await api.delete(`/posts/${postId}`);
+  /**
+   * Cập nhật bài viết
+   */
+  updatePost: async (postId: string, userId: string, payload: UpdatePostRequest) => {
+    return await api.put<PostResponse>(`/posts/${postId}`, payload, {
+      headers: { 'X-User-Id': userId },
+    });
+  },
+
+  /**
+   * Xóa bài viết
+   */
+  deletePost: async (postId: string, userId: string) => {
+    return await api.delete(`/posts/${postId}`, {
+      headers: { 'X-User-Id': userId },
+    });
   },
 };
 
