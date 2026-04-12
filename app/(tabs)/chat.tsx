@@ -1,4 +1,5 @@
-﻿import { COLORS } from '@/constants/theme';
+
+import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+ 
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -162,7 +164,6 @@ export default function ChatScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}> 
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}> 
         <Text style={[styles.pageTitle, { color: colors.text }]}>Chat của tôi</Text>
         <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
@@ -183,7 +184,6 @@ export default function ChatScreen() {
           ) : null}
         </View>
       </View>
-
       {loading ? (
         <View style={styles.emptyState}>
           <ActivityIndicator size="large" color={COLORS.primary} />

@@ -54,7 +54,7 @@ export default function MoreScreen() {
         paddingTop: insets.top
       }}>
         <View style={styles.headerContent}>
-          <TouchableOpacity style={styles.searchContainer}>
+          <TouchableOpacity style={styles.searchContainer} onPress={() => router.push('/search')}>
             <Ionicons name="search" size={20} color="#fff" />
             <Text style={styles.headerSearchText}>{t('chat.search')}</Text>
           </TouchableOpacity>
