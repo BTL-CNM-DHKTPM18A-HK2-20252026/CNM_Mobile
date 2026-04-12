@@ -1,35 +1,217 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { HapticTab } from '@/components/common/HapticTab';
+import { COLORS } from '@/constants/theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@/context/ThemeContext';
+import { authService } from '@/services/authService';
+import { useEffect } from 'react';
+import { useRouter } from 'expo-router';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+const TabBadge = ({ count, type = 'number' }: { count?: string | number, type?: 'number' | 'dot' | 'n' }) => {
+  const { colors } = useTheme();
+  if (!count && type !== 'dot') return null;
+  
+  return (
+      <View style={[
+        styles.badge, 
+        type === 'dot' && styles.dotBadge,
+        { borderColor: colors.tabBar }
+      ]}>
+      <Text style={styles.badgeText}>{count}</Text>
+    </View>
+  );
+};
+
+const CustomTabIcon = ({
+  focused,
+  color,
+  iconName,
+  iconType = 'ionicons',
+  label,
+  badge = null
+}: {
+  focused: boolean,
+  color: string,
+  iconName: string,
+  iconType?: 'ionicons' | 'mci',
+  label: string,
+  badge?: React.ReactNode
+}) => {
+  return (
+    <View style={styles.tabIconGroup}>
+      <View style={styles.iconContainer}>
+        {iconType === 'ionicons' ? (
+          <Ionicons
+            name={focused ? (iconName as any) : (`${iconName}-outline` as any)}
+            size={24}
+            color={color}
+          />
+        ) : (
+          <MaterialCommunityIcons
+            name={focused ? (iconName as any) : (`${iconName}-outline` as any)}
+            size={24}
+            color={color}
+          />
+        )}
+        {badge}
+      </View>
+      {focused && <Text style={[styles.tabLabel, { color }]}>{label}</Text>}
+    </View>
+  );
+};
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { t } = useTranslation();
+  const { colors, isDark } = useTheme();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  
+  const TAB_BAR_HEIGHT = 60 + (insets.bottom > 0 ? insets.bottom - 10 : 0);
+  
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await authService.isAuthenticated();
+      if (!authenticated) {
+        router.replace('/');
+      }
+    };
+    checkAuth();
+  }, []);
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: COLORS.primary, 
+        tabBarInactiveTintColor: isDark ? '#ffffff' : COLORS.inactive,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarShowLabel: false,
+        tabBarStyle: {
+          height: Math.max(65, TAB_BAR_HEIGHT),
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          elevation: 0,
+          backgroundColor: colors.tabBar,
+          paddingTop: 8,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+        },
       }}>
       <Tabs.Screen
-        name="index"
+        name="chat"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <CustomTabIcon 
+              focused={focused} 
+              color={color} 
+              iconName="chatbubble-ellipses" 
+              label={t('tabs.chat')} 
+              badge={<TabBadge count={3} />}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="contacts"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <CustomTabIcon 
+              focused={focused} 
+              color={color} 
+              iconName="people" 
+              label={t('tabs.contacts')} 
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <CustomTabIcon 
+              focused={focused} 
+              color={color} 
+              iconName="grid" 
+              label="Khám phá" 
+              badge={<TabBadge type="dot" />}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="timeline"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <CustomTabIcon 
+              focused={focused} 
+              color={color} 
+              iconName="clock-time-four" 
+              iconType="mci"
+              label={t('tabs.timeline')} 
+              badge={<TabBadge count="N" type="n" />}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          tabBarIcon: ({ color, focused }) => (
+            <CustomTabIcon 
+              focused={focused} 
+              color={color} 
+              iconName="person" 
+              label={t('tabs.more')} 
+            />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabIconGroup: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+  },
+  iconContainer: {
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabLabel: {
+    fontSize: 9, // Hạ tiếp từ 10
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  badge: {
+    position: 'absolute',
+    right: -8,
+    top: -4,
+    backgroundColor: '#ff3b30',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+  },
+  dotBadge: {
+    width: 10,
+    height: 10,
+    right: -4,
+    top: 0,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 8, // Hạ tiếp từ 9
+    fontWeight: 'bold',
+  }
+});

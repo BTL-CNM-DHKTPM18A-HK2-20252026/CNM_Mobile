@@ -1,10 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-export default function ExploreScreen() {
+import { useTheme } from '@/context/ThemeContext';
+
+export default function ContactsScreen() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Explore Screen Placeholder</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.text, { color: colors.text }]}>Contacts Placeholder</Text>
     </View>
   );
 }
