@@ -18,17 +18,43 @@ export const authService = {
     try {
       console.log('[LOGIN] URL:', api.defaults.baseURL + '/auth/login');
       console.log('[LOGIN] Body:', { username: email, password });
-      // The backend expects 'username' and 'password'
+      
       const response = await api.post<any, ApiResponse<AuthenticationResponse>>('/auth/login', {
         username: email,
         password: password
       });
       console.log('[LOGIN] Response:', response);
 
-
-
       if (response.success && response.data.access_token) {
-        await SecureStore.setItemAsync('user_token', response.data.access_token);
+        const token = response.data.access_token;
+        
+        // 1. Lưu token như cũ
+        await SecureStore.setItemAsync('user_token', token);
+        
+        // 2. GIẢI MÃ TOKEN ĐỂ LẤY USER_ID (Giống hệt cách bạn đang làm ở hàm confirmQrLogin)
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const payload = JSON.parse(jsonPayload);
+          
+          // ID người dùng thường nằm trong trường 'sub' của JWT
+          const userId = payload.sub; 
+          
+          // 3. LƯU USER_ID VÀO MÁY
+          if (userId) {
+            await SecureStore.setItemAsync('user_id', String(userId));
+            console.log('[LOGIN] Đã lưu user_id thành công:', userId);
+          }
+        } catch (decodeError) {
+          console.error('[LOGIN] Lỗi khi giải mã token để lấy user_id:', decodeError);
+        }
+        
         return response.data;
       }
 

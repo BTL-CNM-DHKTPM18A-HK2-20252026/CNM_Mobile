@@ -109,7 +109,10 @@
     "time_min": "phút",
     "time_hour": "giờ",
     "time_sat": "T7",
-    "pin": "Ghim"
+    "pin": "Ghim",
+    "send_message": "Gửi",
+    "active": "Đang hoạt động",
+    "typing": "Đang nhập..."
   },
   "settings": {
     "header": "Cài đặt",
