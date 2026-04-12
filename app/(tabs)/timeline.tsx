@@ -1,11 +1,13 @@
 import api from '@/services/api';
 import { authService } from '@/services/authService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import postService from '@/services/postService';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Story = { id: string; name: string; avatar: string };
@@ -16,15 +18,16 @@ const { width } = Dimensions.get('window');
 export default function TimelineScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
+  const isFocused = useIsFocused();
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let mounted = true;
     const fetchProfile = async () => {
       const data = await authService.getProfile();
-      if (mounted && data) setProfile(data);
+      if (mountedRef.current && data) setProfile(data);
     };
     fetchProfile();
-    return () => { mounted = false; };
+    return () => { mountedRef.current = false; };
   }, []);
 
   const isOwnStory = (s: any) => {
@@ -72,8 +75,6 @@ export default function TimelineScreen() {
   const [loadingPosts, setLoadingPosts] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-
     const fetchStories = async () => {
       setLoadingStories(true);
       try {
@@ -81,7 +82,7 @@ export default function TimelineScreen() {
         for (const ep of tryEndpoints) {
           try {
             const res: any = await api.get(ep);
-            if (!mounted || !res) continue;
+            if (!mountedRef.current || !res) continue;
 
             let list: any = Array.isArray(res) ? res : (res.data || res.stories || res.items || res.results || res.content || res);
             if (!Array.isArray(list) && res && Array.isArray(res.data)) list = res.data;
@@ -102,61 +103,57 @@ export default function TimelineScreen() {
           }
         }
       } finally {
-        if (mounted) setLoadingStories(false);
-      }
-    };
-
-    const fetchPosts = async () => {
-      setLoadingPosts(true);
-      try {
-        // Try common feed endpoints; many backends return a paged response
-        const tryEndpoints = ['/posts/feed', '/timeline/posts', '/posts/timeline', '/posts'];
-        for (const ep of tryEndpoints) {
-          try {
-            const res: any = await api.get(ep);
-            if (!mounted || !res) continue;
-
-            // Possible shapes:
-            // 1) Array directly
-            // 2) Paged: { content: [...] }
-            // 3) Wrapped: { data: [...] } or { posts: [...] } or { items: [...] }
-            let list: any = Array.isArray(res) ? res : (res.content || res.data || res.posts || res.results || res.items || res);
-
-            // If page wrapper (res has content but list is object), extract content
-            if (!Array.isArray(list) && res && Array.isArray(res.content)) {
-              list = res.content;
-            }
-
-            if (Array.isArray(list) && list.length > 0) {
-              // Normalize backend post shape to the UI Post type used in this screen
-              const mapped = list.map((p: any, idx: number) => {
-                const id = String(p.postId || p.id || p._id || `post-${idx}-${Date.now()}`);
-                const authorId = p.authorId || p.author?.id || p.author?._id || (typeof p.author === 'string' ? p.author : undefined) || p.userId || p.user?.id;
-                const user = p.author?.displayName || p.author?.name || p.displayName || p.username || p.user?.name || p.user || (authorId ? String(authorId) : 'Người dùng');
-                const avatar = p.author?.avatar_url || p.author?.avatar || p.avatar || p.user?.avatar || '';
-                const time = p.createdAt || p.created_at || p.time || p.created || '';
-                const text = p.content || p.text || p.body || '';
-                const image = (p.mediaUrls && p.mediaUrls.length) ? p.mediaUrls[0] : (p.image || p.imageUrl || p.mediaUrl || undefined);
-                return { id, user, avatar, time, text, image, authorId: authorId ? String(authorId) : undefined } as Post;
-              });
-
-              setPosts(mapped);
-              break;
-            }
-          } catch (e) {
-            // continue to next endpoint
-          }
-        }
-      } finally {
-        if (mounted) setLoadingPosts(false);
+        if (mountedRef.current) setLoadingStories(false);
       }
     };
 
     fetchStories();
-    fetchPosts();
-
-    return () => { mounted = false; };
   }, []);
+
+  const fetchPosts = useCallback(async () => {
+    setLoadingPosts(true);
+    try {
+      const tryEndpoints = ['/posts/feed', '/timeline/posts', '/posts/timeline', '/posts'];
+      for (const ep of tryEndpoints) {
+        try {
+          const res: any = await api.get(ep);
+          if (!mountedRef.current || !res) continue;
+
+          let list: any = Array.isArray(res) ? res : (res.content || res.data || res.posts || res.results || res.items || res);
+          if (!Array.isArray(list) && res && Array.isArray(res.content)) {
+            list = res.content;
+          }
+
+          if (Array.isArray(list)) {
+            const mapped = list.map((p: any, idx: number) => {
+              const id = String(p.postId || p.id || p._id || `post-${idx}-${Date.now()}`);
+              const authorId = p.authorId || p.author?.id || p.author?._id || (typeof p.author === 'string' ? p.author : undefined) || p.userId || p.user?.id;
+              const user = p.author?.displayName || p.author?.name || p.displayName || p.username || p.user?.name || p.user || (authorId ? String(authorId) : 'Người dùng');
+              const avatar = p.author?.avatar_url || p.author?.avatar || p.avatar || p.user?.avatar || '';
+              const time = p.createdAt || p.created_at || p.time || p.created || '';
+              const text = p.content || p.text || p.body || '';
+              const image = (p.mediaUrls && p.mediaUrls.length) ? p.mediaUrls[0] : (p.image || p.imageUrl || p.mediaUrl || undefined);
+              return { id, user, avatar, time, text, image, authorId: authorId ? String(authorId) : undefined } as Post;
+            });
+
+            if (mountedRef.current) setPosts(mapped);
+            break;
+          }
+        } catch (e) {
+          // continue
+        }
+      }
+    } finally {
+      if (mountedRef.current) setLoadingPosts(false);
+    }
+  }, []);
+
+  // Refetch posts when screen becomes focused (e.g., after returning from create-post)
+  useEffect(() => {
+    if (isFocused) {
+      fetchPosts();
+    }
+  }, [isFocused, fetchPosts]);
 
   function formatDateTime(value?: string | number) {
     if (!value) return '';
@@ -231,7 +228,7 @@ export default function TimelineScreen() {
             <Text style={styles.postUser}>{item.user}</Text>
             <Text style={styles.postTime}>{formatDateTime(item.time)}</Text>
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => handlePostOptions(item)}>
             <Feather name="more-vertical" size={20} color="#666" />
           </TouchableOpacity>
         </View>
@@ -239,9 +236,54 @@ export default function TimelineScreen() {
         {item.text ? <Text style={styles.postText}>{item.text}</Text> : null}
 
         {item.image ? <Image source={{ uri: item.image }} style={styles.postImage} /> : null}
+
+        <View style={styles.postActions}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity style={styles.postActionBtn} onPress={() => Alert.alert('Tính năng chưa có', 'Chức năng Thích chưa được gán')}>
+              <Feather name="heart" size={18} color="#333" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.postActionBtn, { marginLeft: 12 }]} onPress={() => Alert.alert('Tính năng chưa có', 'Chức năng Bình luận chưa được gán')}>
+              <Feather name="message-circle" size={18} color="#333" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
+
+  const handlePostOptions = (post: Post) => {
+    Alert.alert('Tùy chọn bài viết', undefined, [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Xóa bài đăng', style: 'destructive', onPress: () => confirmDeletePost(post) },
+    ]);
+  };
+
+  const confirmDeletePost = (post: Post) => {
+    Alert.alert('Xác nhận', 'Bạn có chắc muốn xóa bài đăng này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const pid = profile?.id || profile?.userId || (await authService.getProfile())?.id;
+            if (!pid) {
+              Alert.alert('Lỗi', 'Không tìm thấy userId');
+              return;
+            }
+
+            await postService.deletePost(post.id, String(pid));
+            Alert.alert('Đã xóa', 'Bài viết đã được xóa.');
+            fetchPosts();
+          } catch (err: any) {
+            console.error('Delete post error', err);
+            Alert.alert('Lỗi', err?.message || 'Không thể xóa bài viết');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={styles.container}>
@@ -379,4 +421,6 @@ const styles = StyleSheet.create({
   postTime: { color: '#888', fontSize: 12 },
   postText: { marginTop: 8, color: '#222' },
   postImage: { width: width - 36, height: 200, marginTop: 10, borderRadius: 12, alignSelf: 'center' },
+  postActions: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 10 },
+  postActionBtn: { padding: 8, borderRadius: 8 },
 });
