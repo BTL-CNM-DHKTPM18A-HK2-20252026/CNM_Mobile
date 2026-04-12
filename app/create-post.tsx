@@ -1,5 +1,4 @@
 import { AntDesign, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -21,7 +20,6 @@ import {
     View,
 } from 'react-native';
 import { authService } from '../services/authService';
-import { getAvatarSource } from '../services/mediaUtils';
 import postService from '../services/postService';
 
 const { width } = Dimensions.get('window');
@@ -233,9 +231,6 @@ export default function CreatePostScreen() {
                     {/* INPUT */}
                     <View style={styles.inputWrap}>
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 12 }}>
-                            <TouchableOpacity>
-                                <Image source={getAvatarSource(profile?.avatar_url)} style={styles.inputAvatar} />
-                            </TouchableOpacity>
                             <View style={[styles.inputBox, { minHeight: inputHeight, flex: 1, marginLeft: 10 }]}>
                                 <TextInput
                                     ref={textRef}
@@ -266,6 +261,10 @@ export default function CreatePostScreen() {
                         )}
                     </View>
 
+                </ScrollView>
+
+                {/* FOOTER - DOCKED */}
+                <View style={styles.footer}>
                     {/* OPTIONS */}
                     <View style={styles.row}>
                         <TouchableOpacity style={styles.option}>
@@ -283,10 +282,7 @@ export default function CreatePostScreen() {
                             <Text>Bạn bè</Text>
                         </TouchableOpacity>
                     </View>
-                </ScrollView>
 
-                {/* FOOTER - DOCKED */}
-                <View style={styles.footer}>
                     <View style={styles.toolbar}>
                         <TouchableOpacity style={styles.toolbarBtn}>
                             <MaterialIcons name="insert-emoticon" size={24} color="#8e8e93" />
