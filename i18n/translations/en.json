@@ -141,7 +141,42 @@
     "typing": "Typing...",
     "ai_subheading": "Chat with Fruvia AI",
     "cloud_subheading": "Transfer files between your devices",
-    "offline_recent": "Recently active"
+    "offline_recent": "Recently active",
+    "snippet": {
+      "image": "Photo",
+      "video": "Video",
+      "file": "File",
+      "voice": "Voice message",
+      "contact": "Contact card"
+    },
+    "forward": {
+      "title": "Forward message",
+      "forwarded_from": "Forwarded from",
+      "search_placeholder": "Search conversations...",
+      "load": "Load list",
+      "selected": "{{count}} conversation(s) selected",
+      "send": "Send",
+      "success": "Forwarded to {{count}} conversation(s)",
+      "error": "Could not forward. Please try again."
+    },
+    "reply": {
+      "you": "You",
+      "unknown": "User",
+      "recalled": "Message was recalled",
+      "deleted": "Message deleted"
+    }
+  },
+  "share_contact": {
+    "title": "Send contact",
+    "include_phone": "Include phone number",
+    "search_placeholder": "Search friends...",
+    "load": "Load contacts",
+    "selected": "{{count}}/9 selected",
+    "send": "Send",
+    "snippet": "Contact card",
+    "message_btn": "Message",
+    "error_send": "Could not send contact. Please try again.",
+    "unknown_user": "User"
   },
   "settings": {
     "header": "Settings",
@@ -230,6 +265,10 @@
     "education_placeholder": "Enter school/university",
     "workplace": "Workplace",
     "workplace_placeholder": "Enter company/organization",
+    "display_name_label": "Display Name",
+    "display_name_placeholder": "Enter display name",
+    "display_name_preview": "Preview: {{name}}",
+    "display_name_preview_empty": "Your name",
     "edit_profile_title": "Edit Profile",
     "edit_profile_button": "Update Personal Information",
     "error_title": "Error",

@@ -80,15 +80,30 @@ export const chatService = {
       content: string;
       messageType?: string;
       attachments?: unknown[];
+      fileName?: string;
+      fileSize?: number;
+      caption?: string;
+      videoDuration?: number;
+      voiceDuration?: number;
+      replyToMessageId?: string;
+      forwardedFromMessageId?: string;
     }
   ) => {
     const timestamp = new Date().toISOString();
     const endpoint = '/messages';
-    const body = {
+    const body: Record<string, unknown> = {
       conversationId,
       content: payload.content,
       messageType: payload.messageType ?? 'TEXT',
     };
+
+    if (payload.fileName) body.fileName = payload.fileName;
+    if (payload.fileSize) body.fileSize = payload.fileSize;
+    if (payload.caption) body.caption = payload.caption;
+    if (payload.videoDuration) body.videoDuration = payload.videoDuration;
+    if (payload.voiceDuration) body.voiceDuration = payload.voiceDuration;
+    if (payload.replyToMessageId) body.replyToMessageId = payload.replyToMessageId;
+    if (payload.forwardedFromMessageId) body.forwardedFromMessageId = payload.forwardedFromMessageId;
 
     console.log('[SEND_MESSAGE]', {
       timestamp,
@@ -163,6 +178,47 @@ export const chatService = {
 
   getPinnedMessages: async (conversationId: string) => {
     return await api.get(`/messages/conversations/${conversationId}/pinned`);
+  },
+
+  getConversationMembers: async (conversationId: string) => {
+    return await api.get(`/conversations/${conversationId}/members`);
+  },
+
+  addConversationMembers: async (conversationId: string, memberIds: string[]) => {
+    return await api.post(`/conversations/${conversationId}/members`, memberIds);
+  },
+
+  removeConversationMember: async (conversationId: string, memberId: string) => {
+    return await api.delete(`/conversations/${conversationId}/members/${memberId}`);
+  },
+
+  changeMemberRole: async (conversationId: string, memberId: string, role: 'DEPUTY' | 'MEMBER') => {
+    return await api.patch(`/conversations/${conversationId}/members/${memberId}/role`, { role });
+  },
+
+  leaveConversation: async (conversationId: string, successorId?: string) => {
+    const body = successorId ? { successorId } : {};
+    return await api.post(`/conversations/${conversationId}/leave`, body);
+  },
+
+  dissolveConversation: async (conversationId: string) => {
+    return await api.delete(`/conversations/${conversationId}/dissolve`);
+  },
+
+  transferOwnership: async (conversationId: string, newAdminId: string) => {
+    return await api.post(`/conversations/${conversationId}/transfer`, { newAdminId });
+  },
+
+  getConversationMedia: async (conversationId: string) => {
+    return await api.get(`/messages/conversation/${conversationId}/media`);
+  },
+
+  getStorageStats: async () => {
+    return await api.get('/storage/me');
+  },
+
+  clearConversation: async (conversationId: string) => {
+    return await api.delete(`/messages/conversations/${conversationId}/all`);
   },
 
   unwrapApiPayload,

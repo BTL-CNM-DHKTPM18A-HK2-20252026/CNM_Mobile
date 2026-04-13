@@ -9,6 +9,18 @@ export interface ChatUiMessage {
   isEdited?: boolean;
   isRecalled?: boolean;
   reactions?: ChatUiReaction[];
+  fileName?: string;
+  fileSize?: number;
+  caption?: string;
+  videoDuration?: number;
+  voiceDuration?: number;
+  // Reply
+  replyToMessageId?: string;
+  replyToSenderName?: string;
+  replyToContent?: string;
+  replyToMessageType?: string;
+  // Forward
+  forwardedFromSenderName?: string;
 }
 
 export interface ChatUiReaction {
@@ -144,6 +156,16 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
     isEdited,
     isRecalled,
     reactions: mapReactions(payload.reactions),
+    fileName: toStringOrEmpty(payload.fileName) || undefined,
+    fileSize: typeof payload.fileSize === 'number' ? payload.fileSize : undefined,
+    caption: toStringOrEmpty(payload.caption) || undefined,
+    videoDuration: typeof payload.videoDuration === 'number' ? payload.videoDuration : undefined,
+    voiceDuration: typeof payload.voiceDuration === 'number' ? payload.voiceDuration : undefined,
+    replyToMessageId: toStringOrEmpty(payload.replyToMessageId) || undefined,
+    replyToSenderName: toStringOrEmpty(payload.replyToSenderName) || undefined,
+    replyToContent: toStringOrEmpty(payload.replyToContent) || undefined,
+    replyToMessageType: toStringOrEmpty(payload.replyToMessageType) || undefined,
+    forwardedFromSenderName: toStringOrEmpty(payload.forwardedFromSenderName) || undefined,
   };
 };
 
