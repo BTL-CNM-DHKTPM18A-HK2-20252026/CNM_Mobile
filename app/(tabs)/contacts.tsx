@@ -39,7 +39,8 @@ export default function ContactsScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   
-  const [activeTab, setActiveTab] = useState<'Bạn bè' | 'Nhóm'>('Bạn bè');
+  const [activeTab, setActiveTab] = useState<'Bạn bè' | 'Nhóm' | 'OA'>('Bạn bè');
+  const [friendFilter, setFriendFilter] = useState<'all' | 'recent'>('all');
   
   // States dữ liệu
   const [friends, setFriends] = useState<UserResponse[]>([]);
@@ -117,14 +118,44 @@ export default function ContactsScreen() {
         onPress={() => router.push('/friend-requests')} 
       >
         <View style={[styles.iconCircle, { backgroundColor: '#0091ff' }]}>
-          <Ionicons name="people" size={20} color="#fff" />
+          <Ionicons name="people" size={18} color="#fff" />
         </View>
         <Text style={[styles.actionText, { color: colors.text }]}>
           Lời mời kết bạn ({totalRequests})
         </Text>
       </TouchableOpacity>
 
+      {/* Sinh nhật */}
+      <TouchableOpacity style={[styles.actionItem, { backgroundColor: colors.card }]}>
+        <View style={[styles.iconCircle, { backgroundColor: '#0091ff' }]}>
+          <Ionicons name="gift" size={18} color="#fff" />
+        </View>
+        <Text style={[styles.actionText, { color: colors.text }]}>Sinh nhật</Text>
+      </TouchableOpacity>
+
       <View style={[styles.divider, { backgroundColor: isDark ? '#000' : '#f0f2f5' }]} />
+
+      {/* Filter pills */}
+      <View style={[styles.filterRow, { backgroundColor: colors.card }]}>
+        <TouchableOpacity
+          style={[styles.filterPill, friendFilter === 'all' && styles.filterPillActive]}
+          onPress={() => setFriendFilter('all')}
+        >
+          <Text style={[styles.filterPillText, friendFilter === 'all' && styles.filterPillTextActive]}>
+            Tất cả  {friends.length}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterPill, friendFilter === 'recent' && styles.filterPillActive]}
+          onPress={() => setFriendFilter('recent')}
+        >
+          <Text style={[styles.filterPillText, friendFilter === 'recent' && styles.filterPillTextActive]}>
+            Mới truy cập  0
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.divider, { backgroundColor: isDark ? '#000' : '#f0f2f5', height: 1 }]} />
 
       {/* Danh sách bạn bè */}
       {loading && !refreshing ? (
@@ -186,7 +217,7 @@ export default function ContactsScreen() {
       
       {/* Tab Switcher */}
       <View style={[styles.tabContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        {(['Bạn bè', 'Nhóm'] as const).map((tab) => (
+        {(['Bạn bè', 'Nhóm', 'OA'] as const).map((tab) => (
           <TouchableOpacity 
             key={tab} 
             onPress={() => setActiveTab(tab)} 
@@ -197,7 +228,7 @@ export default function ContactsScreen() {
           >
             <Text style={[styles.tabText, { 
               color: activeTab === tab ? (isDark ? colors.text : COLORS.primary) : colors.textSecondary,
-              fontWeight: activeTab === tab ? 'bold' : 'normal'
+              fontWeight: activeTab === tab ? '600' : 'normal'
             }]}>
               {tab}
             </Text>
@@ -207,7 +238,9 @@ export default function ContactsScreen() {
 
       {activeTab === 'Bạn bè' ? renderFriendsContent() : (
         <View style={styles.emptyContainer}>
-          <Text style={{ color: colors.textSecondary }}>Tính năng Nhóm đang phát triển</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+            {activeTab === 'Nhóm' ? 'Tính năng Nhóm đang phát triển' : 'Tính năng OA đang phát triển'}
+          </Text>
         </View>
       )}
     </View>
@@ -216,25 +249,43 @@ export default function ContactsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  searchBarRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, height: 56 },
+  searchBarRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, height: 50 },
   searchBarBox: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   searchIcon: { marginRight: 10 },
-  headerSearchText: { color: 'rgba(255, 255, 255, 0.7)', fontSize: 14 },
+  headerSearchText: { color: 'rgba(255, 255, 255, 0.7)', fontSize: 13 },
   headerIcons: { flexDirection: 'row', alignItems: 'center' },
   icon: { marginRight: 15 },
-  tabContainer: { flexDirection: 'row', height: 45, borderBottomWidth: 0.5 },
+  tabContainer: { flexDirection: 'row', height: 40, borderBottomWidth: 0.5 },
   tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  tabText: { fontSize: 14 },
-  actionItem: { flexDirection: 'row', alignItems: 'center', padding: 15 },
-  iconCircle: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  actionText: { marginLeft: 15, fontSize: 16 },
+  tabText: { fontSize: 13 },
+  actionItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 12 },
+  iconCircle: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  actionText: { marginLeft: 14, fontSize: 14, fontWeight: '400' },
   divider: { height: 8 },
-  letterHeader: { paddingHorizontal: 15, paddingVertical: 4, fontWeight: 'bold', fontSize: 13 },
-  contactItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 12 },
-  avatar: { width: 50, height: 50, borderRadius: 25 },
+  filterRow: { flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F0F2F5',
+  },
+  filterPillActive: {
+    backgroundColor: '#E3EEFF',
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#65676B',
+  },
+  filterPillTextActive: {
+    color: COLORS.primary,
+  },
+  letterHeader: { paddingHorizontal: 15, paddingVertical: 3, fontWeight: '600', fontSize: 12 },
+  contactItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
   nameContainer: { flex: 1, marginLeft: 12 },
-  contactName: { fontSize: 16, fontWeight: '500' },
+  contactName: { fontSize: 14, fontWeight: '500' },
   contactActions: { flexDirection: 'row', alignItems: 'center' },
-  actionBtn: { padding: 8, marginLeft: 5 },
+  actionBtn: { padding: 8, marginLeft: 4 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 }
 });

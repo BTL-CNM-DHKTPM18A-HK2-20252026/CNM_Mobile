@@ -1,12 +1,49 @@
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import '@/i18n';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect } from 'react';
 import 'react-native-reanimated';
+import { authService } from '@/services/authService';
+
+const AUTH_ROUTES = new Set(['index', 'login', 'password', 'forgot-password', 'register']);
 
 function RootLayoutContent() {
   const { isDark } = useTheme();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const guardRoutes = async () => {
+      const authenticated = await authService.isAuthenticated();
+      if (!isMounted) {
+        return;
+      }
+
+      const rootSegment = (segments[0] as string | undefined) ?? 'index';
+      const isAuthRoute = AUTH_ROUTES.has(rootSegment);
+
+      // Logged-in users should never stay on auth stack screens.
+      if (authenticated && isAuthRoute) {
+        router.replace('/(tabs)/chat');
+        return;
+      }
+
+      // Logged-out users must not access non-auth routes.
+      if (!authenticated && !isAuthRoute) {
+        router.replace('/');
+      }
+    };
+
+    void guardRoutes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router, segments]);
 
   return (
     <NavigationProvider value={isDark ? DarkTheme : DefaultTheme}>

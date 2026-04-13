@@ -76,5 +76,12 @@ export const friendService = {
    */
   unfriend: async (userId: string) => {
     return await api.delete('/friends/unfriend', { data: { userId } });
-  }
+  },
+
+  /**
+   * Chặn người dùng
+   */
+  blockUser: async (userId: string) => {
+    return await api.post('/friends/block', { userId });
+  },
 };

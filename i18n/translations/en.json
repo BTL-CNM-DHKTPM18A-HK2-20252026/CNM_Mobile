@@ -14,11 +14,13 @@
     "choose_lang": "Language"
   },
   "login": {
-    "header_title": "Enter email",
+    "header_title": "Login",
     "country_code": "+84",
+    "phone_placeholder": "Enter phone number",
     "email_placeholder": "Enter email",
-    "password_title": "Enter the password for this email",
+    "password_title": "Enter password",
     "password_placeholder": "Enter password",
+    "password_required": "Please enter your password",
     "password_invalid": "Incorrect password, please try again",
     "forgot_password": "Forgot password?",
     "continue": "Continue",
@@ -53,16 +55,38 @@
     "otp": {
       "can_resend": "You can resend OTP now",
       "resend_in": "Resend in",
-      "resend": "Resend OTP"
+      "resend": "Resend OTP",
+      "back_to_register": "Back"
     },
     "validation": {
+      "phone_invalid": "Invalid phone number",
       "email_invalid": "Invalid email address",
+      "first_name_required": "First name is required",
+      "last_name_required": "Last name is required",
       "password_weak": "Password must be at least 8 characters with uppercase, lowercase, number and special character",
       "confirm_mismatch": "Passwords do not match"
+    },
+    "gmail_modal": {
+      "title": "Email verification",
+      "subtitle": "Enter your email to receive OTP before creating account. You can skip this step.",
+      "placeholder": "Enter email",
+      "verify_btn": "Send OTP",
+      "skip_btn": "Skip email",
+      "invalid": "Invalid email address",
+      "email_exists": "Email already exists",
+      "skip_warning_title": "Skip email verification?",
+      "skip_warning_desc": "You can still register, but some features may be limited.",
+      "skip_warning_continue": "Continue without email"
     }
   },
   "register": {
     "header_title": "Create account",
+    "first_name_label": "First name",
+    "first_name_placeholder": "Enter first name",
+    "last_name_label": "Last name",
+    "last_name_placeholder": "Enter last name",
+    "phone_label": "Phone number",
+    "phone_placeholder": "Enter phone number",
     "email_label": "Email",
     "email_placeholder": "Enter email",
     "display_name_label": "Display name",
@@ -86,8 +110,10 @@
     "otp_resent_title": "OTP resent",
     "otp_resent_message": "Please check your email for the new OTP.",
     "otp_resend_failed": "Failed to resend OTP",
+    "otp_send_failed": "Failed to send OTP",
     "error_title": "Error",
-    "phone_invalid": "Invalid email address",
+    "error_register_failed": "Registration failed",
+    "phone_invalid": "Invalid phone number",
     "email_invalid": "Invalid email address",
     "display_name_required": "Display name is required",
     "password_invalid": "Password must be at least 8 characters with uppercase, lowercase, number and special character",
@@ -112,7 +138,10 @@
     "pin": "Pin",
     "send_message": "Send",
     "active": "Active",
-    "typing": "Typing..."
+    "typing": "Typing...",
+    "ai_subheading": "Chat with Fruvia AI",
+    "cloud_subheading": "Transfer files between your devices",
+    "offline_recent": "Recently active"
   },
   "settings": {
     "header": "Settings",

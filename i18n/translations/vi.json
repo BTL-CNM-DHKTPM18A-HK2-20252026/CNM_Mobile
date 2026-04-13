@@ -14,11 +14,13 @@
     "choose_lang": "Chọn ngôn ngữ"
   },
   "login": {
-    "header_title": "Nhập email",
+    "header_title": "Đăng nhập",
     "country_code": "+84",
+    "phone_placeholder": "Nhập số điện thoại",
     "email_placeholder": "Nhập email",
-    "password_title": "Nhập mật khẩu của tài khoản gắn với email",
+    "password_title": "Nhập mật khẩu",
     "password_placeholder": "Nhập mật khẩu",
+    "password_required": "Vui lòng nhập mật khẩu",
     "password_invalid": "Mật khẩu không chính xác, vui lòng thử lại",
     "forgot_password": "Quên mật khẩu?",
     "continue": "Tiếp tục",
@@ -50,19 +52,41 @@
       "reset_failed": "Đặt lại mật khẩu thất bại",
       "back_to_login": "Quay lại đăng nhập"
     },
+    "validation": {
+      "phone_invalid": "Số điện thoại không hợp lệ",
+      "email_invalid": "Email không hợp lệ",
+      "first_name_required": "Vui lòng nhập tên",
+      "last_name_required": "Vui lòng nhập họ",
+      "password_weak": "Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt",
+      "confirm_mismatch": "Mật khẩu xác nhận không khớp"
+    },
     "otp": {
       "can_resend": "Bạn có thể gửi lại OTP",
       "resend_in": "Gửi lại sau",
-      "resend": "Gửi lại OTP"
+      "resend": "Gửi lại OTP",
+      "back_to_register": "Quay lại"
     },
-    "validation": {
-      "email_invalid": "Email không hợp lệ",
-      "password_weak": "Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt",
-      "confirm_mismatch": "Mật khẩu xác nhận không khớp"
+    "gmail_modal": {
+      "title": "Xác thực email",
+      "subtitle": "Nhập email để nhận OTP trước khi tạo tài khoản. Bạn có thể bỏ qua bước này.",
+      "placeholder": "Nhập email",
+      "verify_btn": "Gửi OTP",
+      "skip_btn": "Bỏ qua email",
+      "invalid": "Email không hợp lệ",
+      "email_exists": "Email đã tồn tại trong hệ thống",
+      "skip_warning_title": "Bỏ qua xác thực email?",
+      "skip_warning_desc": "Bạn vẫn có thể đăng ký, nhưng có thể bị giới hạn một số tính năng.",
+      "skip_warning_continue": "Tiếp tục bỏ qua"
     }
   },
   "register": {
     "header_title": "Tạo tài khoản",
+    "first_name_label": "Tên",
+    "first_name_placeholder": "Nhập tên",
+    "last_name_label": "Họ",
+    "last_name_placeholder": "Nhập họ",
+    "phone_label": "Số điện thoại",
+    "phone_placeholder": "Nhập số điện thoại",
     "email_label": "Email",
     "email_placeholder": "Nhập email",
     "display_name_label": "Tên hiển thị",
@@ -86,8 +110,10 @@
     "otp_resent_title": "Đã gửi lại OTP",
     "otp_resent_message": "Vui lòng kiểm tra email để nhận mã OTP mới.",
     "otp_resend_failed": "Gửi lại OTP thất bại",
+    "otp_send_failed": "Gửi OTP thất bại",
     "error_title": "Lỗi",
-    "phone_invalid": "Email không hợp lệ",
+    "error_register_failed": "Đăng ký thất bại",
+    "phone_invalid": "Số điện thoại không hợp lệ",
     "email_invalid": "Email không hợp lệ",
     "display_name_required": "Vui lòng nhập tên hiển thị",
     "password_invalid": "Mật khẩu phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt",
@@ -112,7 +138,10 @@
     "pin": "Ghim",
     "send_message": "Gửi",
     "active": "Đang hoạt động",
-    "typing": "Đang nhập..."
+    "typing": "Đang nhập...",
+    "ai_subheading": "Hỏi đáp với Fruvia AI",
+    "cloud_subheading": "Truyền file giữa các thiết bị của bạn",
+    "offline_recent": "Truy cập gần đây"
   },
   "settings": {
     "header": "Cài đặt",

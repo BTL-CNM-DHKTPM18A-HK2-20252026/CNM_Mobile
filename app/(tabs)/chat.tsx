@@ -1,11 +1,9 @@
-
-import { COLORS } from '@/constants/theme';
-import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
+import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { router, useFocusEffect } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -17,191 +15,487 @@ import {
   TextInput,
   TouchableOpacity,
   View,
- 
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Client, type StompSubscription } from '@stomp/stompjs';
+import { TextDecoder as PolyfillTextDecoder, TextEncoder as PolyfillTextEncoder } from 'text-encoding';
+
+type ConversationType = 'PRIVATE' | 'GROUP' | 'CLOUD' | 'SYSTEM' | 'AI' | 'SELF';
 
 interface ChatItem {
   id: string;
   title: string;
   lastMessage: string;
-  avatar: string;
-  time: string;
-  unreadCount?: number;
-  type: 'AI' | 'Cloud' | 'Default';
+  avatarUrl?: string | null;
+  secondAvatarUrl?: string | null;
+  timeText: string;
+  unreadCount: number;
+  pinned: boolean;
+  type: ConversationType;
 }
 
-const DEFAULT_CLOUD_AVATAR = 'https://cdn-icons-png.flaticon.com/512/414/414974.png';
-const DEFAULT_USER_AVATAR = 'https://randomuser.me/api/portraits/men/12.jpg';
+const DEFAULT_CLOUD_ITEM: ChatItem = {
+  id: 'default-cloud',
+  title: 'Cloud của tôi',
+  lastMessage: 'Truyền file giữa các thiết bị của bạn',
+  avatarUrl: null,
+  timeText: 'Mới',
+  unreadCount: 0,
+  pinned: true,
+  type: 'CLOUD',
+};
 
-const DEFAULT_CHAT_ITEMS: ChatItem[] = [
+const DEFAULT_AI_ITEM: ChatItem = {
+  id: 'default-ai',
+  title: 'Fruvia AI',
+  lastMessage: 'Hỏi đáp với Fruvia AI',
+  avatarUrl: null,
+  timeText: 'Mới',
+  unreadCount: 0,
+  pinned: true,
+  type: 'AI',
+};
+
+const FALLBACK_ITEMS: ChatItem[] = [
+  DEFAULT_CLOUD_ITEM,
+  DEFAULT_AI_ITEM,
   {
-    id: 'default-ai',
-    title: 'AI',
-    lastMessage: 'Trợ lý AI của bạn sẵn sàng giúp tìm kiếm.',
-    avatar: DEFAULT_USER_AVATAR,
-    time: 'Mới',
-    type: 'AI',
+    id: 'group-cnm-10',
+    title: 'CNM - Nhóm 10',
+    lastMessage: 'Trần Hồng Nhiên: kê huy',
+    avatarUrl: '/default/image3.jpg',
+    secondAvatarUrl: '/default/image4.jpg',
+    timeText: '35 phút',
+    unreadCount: 0,
+    pinned: false,
+    type: 'GROUP',
   },
   {
-    id: 'default-cloud',
-    title: 'Cloud của tôi',
-    lastMessage: 'Lưu trữ nhanh và tìm lại nội dung dễ dàng.',
-    avatar: DEFAULT_CLOUD_AVATAR,
-    time: 'Mới',
-    type: 'Cloud',
+    id: 'group-phongtro',
+    title: 'Phòng trọ 3H',
+    lastMessage: 'Hoàng Đẹp Trai: oke',
+    avatarUrl: '/default/image4.jpg',
+    secondAvatarUrl: '/default/image5.jpg',
+    timeText: '3 giờ',
+    unreadCount: 0,
+    pinned: false,
+    type: 'GROUP',
   },
 ];
 
-function formatTimestamp(value: unknown) {
-  const date = new Date(value as string);
-  if (isNaN(date.getTime())) {
-    return 'Mới';
-  }
-  return date.toLocaleDateString('vi-VN', {
+const WEEK_DAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+
+function isAiConversationName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return normalized === 'fruvia ai' || normalized === 'fruvia chat ai';
+}
+
+function toTimeText(value: unknown): string {
+  if (!value) return 'Mới';
+
+  const parsed = new Date(value as string);
+  if (Number.isNaN(parsed.getTime())) return 'Mới';
+
+  const now = new Date();
+  const diffMs = now.getTime() - parsed.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) return 'Mới';
+  if (diffMinutes < 60) return `${diffMinutes} phút`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} giờ`;
+
+  const dayDiff = Math.floor(diffHours / 24);
+  if (dayDiff < 7) return WEEK_DAYS[parsed.getDay()];
+
+  return parsed.toLocaleDateString('vi-VN', {
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric',
   });
 }
 
-function normalizeToChatItems(data: any[]): ChatItem[] {
-  if (!Array.isArray(data) || data.length === 0) {
-    return DEFAULT_CHAT_ITEMS;
+function normalizeConversations(rawData: any[], currentUserId?: string | null): ChatItem[] {
+  if (!Array.isArray(rawData) || rawData.length === 0) {
+    return FALLBACK_ITEMS;
   }
 
-  return data.map((item, index) => {
-    const userName = item.displayName ?? item.name ?? item.userName ?? item.fullName ?? 'Người dùng';
-    const id = item.conversationId ?? item.id ?? item.userId ?? `${userName.replace(/\s+/g, '_')}-${index}`;
-    const avatar = item.conversationAvatarUrl ?? item.avatarUrl ?? item.avatar ?? DEFAULT_USER_AVATAR;
-    const lastPreview = item.lastMessageContent ?? item.lastMessage ?? item.preview ?? item.snippet ?? 'Không có tin nhắn nào';
-    const timestamp = item.lastMessageTime ?? item.updatedAt ?? item.lastUpdated ?? item.time;
-    const conversationType = item.conversationType ?? item.type ?? 'PRIVATE';
+  return rawData.map((item, index) => {
+    const members = Array.isArray(item.members) ? item.members : [];
+    const primaryMember = members[0] ?? null;
+    const secondMember = members[1] ?? null;
+
+    const conversationTypeRaw = String(
+      item.conversationType ?? item.type ?? item.kind ?? 'PRIVATE'
+    ).toUpperCase();
+
+    const normalizedCurrentUserId = currentUserId ? String(currentUserId) : '';
+    const getMemberId = (member: any) => String(member?.userId ?? member?.user_id ?? member?.id ?? '');
+    const otherMember = conversationTypeRaw === 'PRIVATE'
+      ? members.find((member) => {
+          const memberId = getMemberId(member);
+          if (!memberId) {
+            return false;
+          }
+
+          return normalizedCurrentUserId ? memberId !== normalizedCurrentUserId : true;
+        }) ?? members[0] ?? null
+      : null;
+
+    const rawConversationName = String(item.conversationName ?? item.name ?? '').trim();
+    const isSelfConversation = conversationTypeRaw === 'SELF';
+    const isAiConversation = isSelfConversation && isAiConversationName(rawConversationName);
+    const isCloudConversation = isSelfConversation && !isAiConversation;
+
+    const conversationType: ConversationType = isAiConversation
+      ? 'AI'
+      : isCloudConversation
+      ? 'CLOUD'
+      : (conversationTypeRaw as ConversationType);
+
+    const title =
+      isAiConversation
+        ? 'Fruvia AI'
+        : isCloudConversation
+        ? 'Cloud của tôi'
+        : conversationTypeRaw === 'PRIVATE'
+        ? otherMember?.displayName ??
+          otherMember?.display_name ??
+          otherMember?.fullName ??
+          otherMember?.full_name ??
+          item.conversationName ??
+          item.name ??
+          `Đoạn chat ${index + 1}`
+        : item.conversationName ??
+      item.name ??
+      primaryMember?.displayName ??
+      primaryMember?.fullName ??
+      `Đoạn chat ${index + 1}`;
+
+    const senderPrefix = item.lastMessageSenderName ? `${item.lastMessageSenderName}: ` : '';
+    const lastMessage =
+      item.lastMessageContent ??
+      item.lastMessage ??
+      item.preview ??
+      item.snippet ??
+      `${senderPrefix}Chưa có tin nhắn`;
 
     return {
-      id: String(id),
-      title: item.conversationName ?? (conversationType === 'Cloud' ? 'Cloud của tôi' : userName),
-      lastMessage: lastPreview,
-      avatar: conversationType === 'Cloud' ? DEFAULT_CLOUD_AVATAR : avatar,
-      time: timestamp ? formatTimestamp(timestamp) : 'Mới',
-      unreadCount: item.unreadCount ?? item.unread ?? 0,
-      type: conversationType === 'PRIVATE' ? 'Default' : conversationType === 'Cloud' ? 'Cloud' : 'AI',
+      id: String(item.conversationId ?? item.id ?? item.userId ?? `conversation-${index}`),
+      title,
+      lastMessage,
+      avatarUrl:
+        (conversationTypeRaw === 'PRIVATE'
+          ? otherMember?.avatarUrl ?? otherMember?.avatar_url
+          : undefined) ??
+        item.conversationAvatarUrl ??
+        item.conversation_avatar_url ??
+        item.avatarUrl ??
+        item.avatar_url ??
+        primaryMember?.avatarUrl ??
+        primaryMember?.avatar_url ??
+        '/default/image1.jpg',
+      secondAvatarUrl:
+        conversationType === 'GROUP' ? secondMember?.avatarUrl ?? null : null,
+      timeText: toTimeText(item.lastMessageTime ?? item.updatedAt ?? item.lastUpdated ?? item.time),
+      unreadCount: Number(item.unreadCount ?? item.unread ?? 0),
+      pinned: Boolean(item.isPinned ?? item.pinned),
+      type: conversationType,
     };
   });
 }
 
+function withDefaultConversations(items: ChatItem[]): ChatItem[] {
+  const hasCloud = items.some(
+    (item) => item.type === 'CLOUD' || item.title.trim().toLowerCase() === 'cloud của tôi'
+  );
+  const hasAi = items.some(
+    (item) => item.type === 'AI' || isAiConversationName(item.title)
+  );
+
+  const defaults: ChatItem[] = [];
+  if (!hasCloud) defaults.push(DEFAULT_CLOUD_ITEM);
+  if (!hasAi) defaults.push(DEFAULT_AI_ITEM);
+
+  return [...defaults, ...items];
+}
+
+function ensureTextEncodingPolyfill(): void {
+  const g = globalThis as any;
+  if (!g.TextEncoder) g.TextEncoder = PolyfillTextEncoder;
+  if (!g.TextDecoder) g.TextDecoder = PolyfillTextDecoder;
+}
+
+function buildStompBrokerUrl(): string {
+  const directBroker = process.env.EXPO_PUBLIC_STOMP_BROKER_URL;
+  if (directBroker) return directBroker;
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (!apiUrl) return '';
+  try {
+    const parsed = new URL(apiUrl);
+    const ws = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${ws}//${parsed.host}/ws-native`;
+  } catch { return ''; }
+}
+
 export default function ChatScreen() {
-  const { colors, isDark } = useTheme();
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState<ChatItem[]>(DEFAULT_CHAT_ITEMS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<ChatItem[]>(FALLBACK_ITEMS);
 
-  const fetchChats = async (searchQuery?: string) => {
+  const filteredItems = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return items;
+
+    return items.filter(
+      (item) =>
+        item.title.toLowerCase().includes(keyword) ||
+        item.lastMessage.toLowerCase().includes(keyword)
+    );
+  }, [items, query]);
+
+  const fetchConversations = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = (await chatService.getConversations(0, 20, searchQuery?.trim())) as any;
+      // Keep Cloud + AI conversations in sync with web flow before listing.
+      await Promise.allSettled([
+        chatService.ensureSelfConversation(),
+        chatService.ensureAiConversation(),
+      ]);
+
+      const response = (await chatService.getConversations(0, 40)) as any;
       const data = Array.isArray(response)
         ? response
         : response?.conversations ?? response?.items ?? response?.data ?? [];
 
-      setItems(normalizeToChatItems(data));
-    } catch (err) {
-      setError('Tải danh sách chat thất bại. Vui lòng thử lại.');
-      setItems(DEFAULT_CHAT_ITEMS);
+      const currentUserId = await SecureStore.getItemAsync('user_id');
+
+      setItems(withDefaultConversations(normalizeConversations(data, currentUserId)));
+    } catch {
+      setError('Không thể tải danh sách chat, đang hiển thị dữ liệu mẫu.');
+      setItems(withDefaultConversations(FALLBACK_ITEMS));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchChats();
+    fetchConversations();
   }, []);
 
-  const handleSearch = () => {
-    Keyboard.dismiss();
-    fetchChats(query);
-  };
-
-  const handleClearSearch = () => {
-    setQuery('');
-    fetchChats();
-  };
-
-  const renderItem = ({ item }: { item: ChatItem }) => (
-    <TouchableOpacity
-      style={[styles.chatItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-      onPress={() => router.push(`/chat-detail?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(item.title)}`)}
-    >
-      <Image source={{ uri: item.avatar }} style={[styles.avatar, { borderColor: colors.border }]} />
-
-      <View style={styles.chatInfo}>
-        <View style={styles.chatTopRow}>
-          <Text style={[styles.chatTitle, { color: colors.text }]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={[styles.chatTime, { color: colors.textSecondary }]}>{item.time}</Text>
-        </View>
-
-        <Text style={[styles.chatSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-          {item.lastMessage}
-        </Text>
-      </View>
-
-      {item.unreadCount ? (
-        <View style={[styles.unreadBadge, { backgroundColor: COLORS.primary }]}> 
-          <Text style={styles.unreadText}>{item.unreadCount}</Text>
-        </View>
-      ) : null}
-    </TouchableOpacity>
+  // Re-fetch khi quay lại tab (giống Web: luôn đồng bộ conversation list)
+  useFocusEffect(
+    useCallback(() => {
+      fetchConversations();
+    }, [])
   );
 
+  // Subscribe STOMP friend-events → re-fetch khi có ACCEPTED (giống Web: ChatDashboardLegacy)
+  const stompClientRef = useRef<Client | null>(null);
+  const stompSubRef = useRef<StompSubscription | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const setupStomp = async () => {
+      const userId = await SecureStore.getItemAsync('user_id');
+      const token = await SecureStore.getItemAsync('user_token');
+      const brokerURL = buildStompBrokerUrl();
+      if (!userId || !token || !brokerURL) return;
+
+      ensureTextEncodingPolyfill();
+
+      const client = new Client({
+        brokerURL,
+        connectHeaders: { Authorization: `Bearer ${token}` },
+        reconnectDelay: 5000,
+        heartbeatIncoming: 25000,
+        heartbeatOutgoing: 25000,
+        debug: () => {},
+        onConnect: () => {
+          if (cancelled) { client.deactivate(); return; }
+          const sub = client.subscribe(`/topic/friend-events/${userId}`, (msg) => {
+            if (msg.body === 'ACCEPTED') {
+              fetchConversations();
+            }
+          });
+          stompSubRef.current = sub;
+        },
+        onStompError: () => {},
+        onWebSocketError: () => {},
+      });
+
+      stompClientRef.current = client;
+      client.activate();
+    };
+
+    setupStomp();
+
+    return () => {
+      cancelled = true;
+      stompSubRef.current?.unsubscribe();
+      stompClientRef.current?.deactivate();
+    };
+  }, []);
+
+  const resolveConversationIdForOpen = async (item: ChatItem): Promise<string> => {
+    if (item.type === 'CLOUD') {
+      const resolvedId = await chatService.ensureSelfConversationId();
+      return resolvedId ?? item.id;
+    }
+
+    if (item.type === 'AI') {
+      const resolvedId = await chatService.ensureAiConversationId();
+      return resolvedId ?? item.id;
+    }
+
+    return item.id;
+  };
+
+  const handleOpenConversation = async (item: ChatItem) => {
+    try {
+      const resolvedId = await resolveConversationIdForOpen(item);
+
+      router.push(
+        `/chat-detail?id=${encodeURIComponent(resolvedId)}&name=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&avatar=${encodeURIComponent(item.avatarUrl ?? '')}`
+      );
+    } catch {
+      router.push(
+        `/chat-detail?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&avatar=${encodeURIComponent(item.avatarUrl ?? '')}`
+      );
+    }
+  };
+
+  const renderAvatar = (item: ChatItem) => {
+    if (item.type === 'AI') {
+      return (
+        <View style={[styles.singleAvatarWrap, styles.specialAvatarWrap, styles.aiAvatarWrap]}>
+          <Ionicons name="sparkles" size={28} color="#FFFFFF" />
+          {item.unreadCount > 0 ? (
+            <View style={styles.unreadDotOnAvatar}>
+              <Text style={styles.unreadDotText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (item.type === 'CLOUD') {
+      return (
+        <View style={[styles.singleAvatarWrap, styles.specialAvatarWrap, styles.cloudAvatarWrap]}>
+          <Ionicons name="folder-open" size={28} color="#FFFFFF" />
+          {item.unreadCount > 0 ? (
+            <View style={styles.unreadDotOnAvatar}>
+              <Text style={styles.unreadDotText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (item.secondAvatarUrl) {
+      return (
+        <View style={styles.groupAvatarWrap}>
+          <Image source={getAvatarSource(item.avatarUrl)} style={styles.groupAvatarPrimary} />
+          <Image source={getAvatarSource(item.secondAvatarUrl)} style={styles.groupAvatarSecondary} />
+          {item.unreadCount > 0 ? (
+            <View style={styles.unreadDotOnAvatar}>
+              <Text style={styles.unreadDotText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
+            </View>
+          ) : null}
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.singleAvatarWrap}>
+        <Image source={getAvatarSource(item.avatarUrl)} style={styles.singleAvatar} />
+        {item.unreadCount > 0 ? (
+          <View style={styles.unreadDotOnAvatar}>
+            <Text style={styles.unreadDotText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  const renderItem = ({ item }: { item: ChatItem }) => {
+    return (
+      <View>
+        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenConversation(item)} activeOpacity={0.8}>
+          {renderAvatar(item)}
+
+          <View style={styles.chatContent}>
+            <View style={styles.chatTopLine}>
+              <Text style={styles.chatTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <View style={styles.timeAndPinWrap}>
+                {item.pinned ? <Ionicons name="pin" size={13} color="#A5A8AE" style={styles.pinIcon} /> : null}
+                <Text style={styles.timeText}>{item.timeText}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.lastMessageText} numberOfLines={1}>
+              {item.lastMessage}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.separator} />
+      </View>
+    );
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}> 
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}> 
-        <Text style={[styles.pageTitle, { color: colors.text }]}>Chat của tôi</Text>
-        <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-          <Ionicons name="search" size={18} color={colors.textSecondary} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2E7DE9" />
+
+      <View style={[styles.topHeader, { paddingTop: insets.top + 6 }]}>
+        <View style={styles.searchRow}>
+          <Ionicons name="search-outline" size={28} color="#FFFFFF" style={styles.searchIcon} />
+
           <TextInput
             value={query}
             onChangeText={setQuery}
-            onSubmitEditing={handleSearch}
-            placeholder={t('chat.search') ?? 'Tìm kiếm đoạn chat'}
-            placeholderTextColor={colors.textSecondary}
-            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Tìm kiếm"
+            placeholderTextColor="#C9DCFF"
             returnKeyType="search"
+            style={styles.searchInput}
+            onSubmitEditing={Keyboard.dismiss}
           />
-          {query.length > 0 ? (
-            <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
-              <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
-          ) : null}
+
+          <TouchableOpacity style={styles.topActionButton} onPress={() => router.push('/qr-scan')}>
+            <Ionicons name="qr-code-outline" size={22} color="#E7F0FF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.topActionButton} onPress={() => router.push('/search')}>
+            <Ionicons name="add" size={30} color="#E7F0FF" />
+          </TouchableOpacity>
         </View>
       </View>
+
       {loading ? (
-        <View style={styles.emptyState}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Đang tải chat...</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.emptyState}>
-          <Text style={[styles.emptyText, { color: colors.text, textAlign: 'center' }]}>{error}</Text>
+        <View style={styles.centerState}>
+          <ActivityIndicator size="large" color="#2F80ED" />
+          <Text style={styles.stateText}>Đang tải hội thoại...</Text>
         </View>
       ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item, index) => item.id ?? String(index)}
-          renderItem={renderItem}
-          ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.border }]} />}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+        <>
+          {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
+          <FlatList
+            data={filteredItems}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        </>
       )}
     </View>
   );
@@ -210,99 +504,175 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
+  topHeader: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    backgroundColor: '#3A8BF4',
   },
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 14,
-  },
-  searchBox: {
+  searchRow: {
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    height: 46,
+    paddingLeft: 0,
+  },
+  searchIcon: {
+    marginLeft: 2,
   },
   searchInput: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 15,
-    minHeight: 40,
+    height: '100%',
+    color: '#FFFFFF',
+    fontSize: 12,
+    paddingHorizontal: 10,
   },
-  clearButton: {
-    padding: 4,
+  topActionButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 2,
+  },
+  errorBanner: {
+    color: '#D14545',
+    backgroundColor: '#FFF3F3',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    fontSize: 11,
   },
   listContent: {
-    paddingVertical: 12,
+    paddingTop: 4,
+    paddingBottom: 16,
   },
   chatItem: {
+    minHeight: 78,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
   },
-  avatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
+  singleAvatarWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  specialAvatarWrap: {
     borderWidth: 1,
+    borderColor: '#E6EAF2',
   },
-  chatInfo: {
+  aiAvatarWrap: {
+    backgroundColor: '#4F74E8',
+  },
+  cloudAvatarWrap: {
+    backgroundColor: '#0068FF',
+  },
+  singleAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#E9EEF5',
+  },
+  groupAvatarWrap: {
+    width: 56,
+    height: 56,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  groupAvatarPrimary: {
+    position: 'absolute',
+    left: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#E9EEF5',
+  },
+  groupAvatarSecondary: {
+    position: 'absolute',
+    right: 2,
+    top: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#E9EEF5',
+  },
+  unreadDotOnAvatar: {
+    position: 'absolute',
+    bottom: -3,
+    right: -2,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#F1F4F8',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  unreadDotText: {
+    color: '#6C717C',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  chatContent: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 12,
+    justifyContent: 'center',
   },
-  chatTopRow: {
+  chatTopLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   chatTitle: {
-    fontSize: 15,
-    fontWeight: '600',
     flex: 1,
+    color: '#101317',
+    fontSize: 13,
+    fontWeight: '500',
     marginRight: 8,
   },
-  chatTime: {
-    fontSize: 11,
-  },
-  chatSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  unreadBadge: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: 12,
-    justifyContent: 'center',
+  timeAndPinWrap: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
   },
-  unreadText: {
-    color: '#fff',
+  pinIcon: {
+    marginRight: 4,
+  },
+  timeText: {
+    color: '#8D929C',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  lastMessageText: {
+    color: '#818792',
     fontSize: 12,
-    fontWeight: '700',
+    lineHeight: 16,
   },
   separator: {
     height: 1,
-    marginLeft: 86,
+    marginLeft: 82,
+    marginRight: 10,
+    backgroundColor: '#EFF1F5',
   },
-  emptyState: {
+  centerState: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
   },
-  emptyText: {
-    marginTop: 12,
-    fontSize: 14,
-    textAlign: 'center',
+  stateText: {
+    marginTop: 10,
+    color: '#8E949F',
+    fontSize: 12,
   },
 });

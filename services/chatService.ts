@@ -1,5 +1,19 @@
 import api from './api';
 
+const unwrapApiPayload = <T>(raw: any): T => {
+  if (raw && typeof raw === 'object' && raw.success && raw.data !== undefined) {
+    return raw.data as T;
+  }
+
+  return raw as T;
+};
+
+const extractConversationId = (raw: any): string | null => {
+  const payload = unwrapApiPayload<any>(raw);
+  const id = payload?.conversationId ?? payload?.conversation_id ?? payload?.id ?? null;
+  return id ? String(id) : null;
+};
+
 export const chatService = {
   getConversations: async (page = 0, size = 20, search?: string) => {
     const params = new URLSearchParams({
@@ -14,11 +28,37 @@ export const chatService = {
     return await api.get(`/conversations?${params.toString()}`);
   },
 
+  ensureSelfConversation: async () => {
+    return await api.get('/conversations/self');
+  },
+
+  ensureSelfConversationId: async (): Promise<string | null> => {
+    const response = await api.get('/conversations/self');
+    return extractConversationId(response);
+  },
+
+  ensureAiConversation: async () => {
+    return await api.get('/messages/ai/conversation');
+  },
+
+  ensureAiConversationId: async (): Promise<string | null> => {
+    const response = await api.get('/messages/ai/conversation');
+    return extractConversationId(response);
+  },
+
   createDirectConversation: async (targetUserId: string) => {
     return await api.post('/conversations', {
       type: 'DIRECT',
       participantIds: [targetUserId],
     });
+  },
+
+  /**
+   * Lấy hoặc tạo cuộc trò chuyện riêng với 1 người bạn.
+   * Backend sẽ tự tạo nếu chưa có.
+   */
+  getPrivateConversation: async (friendId: string) => {
+    return await api.get(`/conversations/private/${friendId}`);
   },
 
   getMessages: async (conversationId: string, page = 0, size = 10, sort = 'createdAt,desc') => {
@@ -71,4 +111,59 @@ export const chatService = {
       throw error;
     }
   },
+
+  sendAiMessage: async (
+    payload: {
+      content: string;
+      conversationId?: string;
+      useRag?: boolean;
+      language?: 'vi' | 'en';
+      fullAccessGranted?: boolean;
+      themeType?: string;
+    }
+  ) => {
+    const body: Record<string, unknown> = {
+      content: payload.content,
+      useRag: payload.useRag ?? true,
+      language: payload.language ?? 'vi',
+      fullAccessGranted: payload.fullAccessGranted ?? false,
+      themeType: payload.themeType ?? 'general',
+    };
+
+    if (payload.conversationId) {
+      body.conversationId = payload.conversationId;
+    }
+
+    return await api.post('/messages/ai', body);
+  },
+
+  reactToMessage: async (messageId: string, reactionType: 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY') => {
+    return await api.post(`/messages/${messageId}/react`, { reactionType });
+  },
+
+  updateMessage: async (messageId: string, content: string) => {
+    return await api.put(`/messages/${messageId}?content=${encodeURIComponent(content)}`, {});
+  },
+
+  recallMessage: async (messageId: string) => {
+    return await api.post(`/messages/${messageId}/recall`, {});
+  },
+
+  deleteMessageLocal: async (messageId: string) => {
+    return await api.delete(`/messages/${messageId}/local`);
+  },
+
+  pinMessage: async (messageId: string) => {
+    return await api.post(`/messages/${messageId}/pin`, {});
+  },
+
+  unpinMessage: async (messageId: string) => {
+    return await api.delete(`/messages/${messageId}/pin`);
+  },
+
+  getPinnedMessages: async (conversationId: string) => {
+    return await api.get(`/messages/conversations/${conversationId}/pinned`);
+  },
+
+  unwrapApiPayload,
 };

@@ -1,6 +1,7 @@
 import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
+import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -128,7 +129,7 @@ export default function ChatUI() {
       style={[styles.chatItem, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={() => router.push(`/chat-detail?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(item.title)}`)}
     >
-      <Image source={{ uri: item.avatar }} style={[styles.avatar, { borderColor: colors.border }]} />
+      <Image source={getAvatarSource(item.avatar)} style={[styles.avatar, { borderColor: colors.border }]} />
 
       <View style={styles.chatInfo}>
         <View style={styles.chatTopRow}>

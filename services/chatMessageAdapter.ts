@@ -4,6 +4,18 @@ export interface ChatUiMessage {
   senderId: string;
   createdAt: string;
   senderName?: string;
+  senderAvatarUrl?: string;
+  messageType?: string;
+  isEdited?: boolean;
+  isRecalled?: boolean;
+  reactions?: ChatUiReaction[];
+}
+
+export interface ChatUiReaction {
+  id: string;
+  userId: string;
+  emoji: string;
+  reactionType: string;
 }
 
 type ChatPayload = Record<string, unknown>;
@@ -26,6 +38,49 @@ const normalizeDate = (value: unknown) => {
   }
 
   return new Date().toISOString();
+};
+
+const toBoolean = (value: unknown) => value === true;
+
+const mapReactionTypeToEmoji = (reactionType?: string) => {
+  switch ((reactionType || '').toUpperCase()) {
+    case 'LOVE':
+      return '❤️';
+    case 'HAHA':
+      return '😂';
+    case 'WOW':
+      return '😲';
+    case 'SAD':
+      return '😭';
+    case 'ANGRY':
+      return '😡';
+    default:
+      return '👍';
+  }
+};
+
+const mapReactions = (value: unknown): ChatUiReaction[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((raw, index) => {
+      if (!raw || typeof raw !== 'object') {
+        return null;
+      }
+
+      const reaction = raw as ChatPayload;
+      const reactionType = toStringOrEmpty(reaction.reactionType ?? reaction.icon).toUpperCase() || 'LIKE';
+
+      return {
+        id: toStringOrEmpty(reaction.id ?? reaction.reactionId) || `reaction-${index}`,
+        userId: toStringOrEmpty(reaction.userId),
+        emoji: mapReactionTypeToEmoji(reactionType),
+        reactionType,
+      };
+    })
+    .filter((reaction): reaction is ChatUiReaction => Boolean(reaction));
 };
 
 const getSenderName = (payload: ChatPayload) => {
@@ -68,8 +123,11 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
   const messageId = toStringOrEmpty(rawMessageId) || `tmp-${Date.now()}`;
   const senderId = toStringOrEmpty(rawSenderId);
   const content = toStringOrEmpty(payload.content ?? payload.message);
+  const messageType = toStringOrEmpty(payload.messageType ?? payload.type ?? 'TEXT').toUpperCase();
+  const isRecalled = toBoolean(payload.isRecalled);
+  const isEdited = toBoolean(payload.isEdited);
 
-  if (!senderId || !content) {
+  if (!senderId || (!content && !isRecalled)) {
     return null;
   }
 
@@ -81,6 +139,11 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
     senderId,
     createdAt,
     senderName: getSenderName(payload),
+    senderAvatarUrl: toStringOrEmpty(payload.senderAvatarUrl),
+    messageType,
+    isEdited,
+    isRecalled,
+    reactions: mapReactions(payload.reactions),
   };
 };
 

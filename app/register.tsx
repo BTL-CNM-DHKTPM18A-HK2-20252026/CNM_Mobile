@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -19,159 +19,284 @@ import { useTranslation } from 'react-i18next';
 import { COLORS } from '@/constants/theme';
 import { authService } from '@/services/authService';
 
+type ModalStep = 'email' | 'otp';
+
+type RegisterErrors = {
+  phoneNumber?: string;
+  firstName?: string;
+  lastName?: string;
+  password?: string;
+  confirmPassword?: string;
+};
+
+const PHONE_REGEX = /^(0|\+84)[0-9]{9}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+const OTP_LENGTH = 6;
+const RESEND_SECONDS = 59;
+
+const formatTimer = (seconds: number) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+};
+
 export default function RegisterScreen() {
   const { t } = useTranslation();
 
-  const [email, setEmail] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('TestUser123@');
-  const [confirmPassword, setConfirmPassword] = useState('TestUser123@');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [isResendingOtp, setIsResendingOtp] = useState(false);
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState<string | null>(null);
   const [generatedHint, setGeneratedHint] = useState(false);
 
-  const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<RegisterErrors>({});
+
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [modalStep, setModalStep] = useState<ModalStep>('email');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [secondsLeft]);
+
+  const displayName = useMemo(() => `${lastName} ${firstName}`.trim(), [firstName, lastName]);
 
   const generateStrongPassword = () => {
-    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const lower = 'abcdefghijklmnopqrstuvwxyz';
-    const digits = '0123456789';
-    const special = '!@#$%^&*';
-    const all = upper + lower + digits + special;
-    const getRandom = (str: string) => str[Math.floor(Math.random() * str.length)];
-    const shuffled = [
-      getRandom(upper),
-      getRandom(lower),
-      getRandom(digits),
-      getRandom(special),
-      ...Array.from({ length: 8 }, () => getRandom(all)),
-    ].sort(() => Math.random() - 0.5).join('');
+    const lowers = 'abcdefghijklmnopqrstuvwxyz';
+    const uppers = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numbers = '0123456789';
+    const specials = '!@#$%^&*';
+    const all = lowers + uppers + numbers + specials;
+
+    let generated = '';
+    for (let i = 0; i < 2; i += 1) {
+      generated += lowers.charAt(Math.floor(Math.random() * lowers.length));
+      generated += uppers.charAt(Math.floor(Math.random() * uppers.length));
+      generated += numbers.charAt(Math.floor(Math.random() * numbers.length));
+      generated += specials.charAt(Math.floor(Math.random() * specials.length));
+    }
+    for (let i = 0; i < 4; i += 1) {
+      generated += all.charAt(Math.floor(Math.random() * all.length));
+    }
+
+    const shuffled = generated
+      .split('')
+      .sort(() => Math.random() - 0.5)
+      .join('');
+
     setPassword(shuffled);
     setConfirmPassword(shuffled);
     setShowPassword(true);
     setShowConfirmPassword(true);
     setGeneratedHint(true);
-    setErrors((e) => ({ ...e, password: null, confirmPassword: null }));
+    setErrors((prev) => ({ ...prev, password: undefined, confirmPassword: undefined }));
   };
 
-  const validate = () => {
-    const newErrors: Record<string, string | null> = {};
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+  const validateRegisterForm = () => {
+    const nextErrors: RegisterErrors = {};
 
-    if (!emailRegex.test(email)) {
-      newErrors.email = t('register.email_invalid');
+    if (!lastName.trim()) {
+      nextErrors.lastName = t('login.validation.last_name_required', 'Vui long nhap ho');
     }
-    if (!displayName.trim()) {
-      newErrors.displayName = t('register.display_name_required');
+
+    if (!firstName.trim()) {
+      nextErrors.firstName = t('login.validation.first_name_required', 'Vui long nhap ten');
     }
-    if (!passwordRegex.test(password)) {
-      newErrors.password = t('register.password_invalid');
+
+    if (!PHONE_REGEX.test(phoneNumber.trim())) {
+      nextErrors.phoneNumber = t('login.validation.phone_invalid', 'So dien thoai khong hop le');
     }
+
+    if (!PASSWORD_REGEX.test(password)) {
+      nextErrors.password = t(
+        'login.validation.password_weak',
+        'Mat khau phai co it nhat 8 ky tu, gom chu hoa, chu thuong, so va ky tu dac biet'
+      );
+    }
+
     if (password !== confirmPassword) {
-      newErrors.confirmPassword = t('register.confirm_password_mismatch');
+      nextErrors.confirmPassword = t('login.validation.confirm_mismatch', 'Mat khau xac nhan khong khop');
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const handleRegister = async () => {
-    if (!validate() || isLoading) return;
+  const handleOpenVerificationModal = () => {
+    if (!validateRegisterForm() || isLoading) {
+      return;
+    }
 
+    setModalError(null);
+    setVerificationEmail('');
+    setOtp('');
+    setSecondsLeft(0);
+    setModalStep('email');
+    setShowVerifyModal(true);
+  };
+
+  const completeRegistration = async (email?: string) => {
     setIsLoading(true);
+
     try {
       await authService.register({
+        phoneNumber: phoneNumber.trim(),
         email,
         password,
         displayName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
       });
 
-      setOtp('');
-      setOtpError(null);
-      setShowOtpModal(true);
-
+      setShowVerifyModal(false);
       Alert.alert(
-        t('register.otp_sent_title', 'Đã gửi mã OTP'),
-        t('register.otp_sent_message', 'Vui lòng kiểm tra email để lấy mã xác thực 6 số.')
+        t('register.success_title', 'Thanh cong'),
+        t('register.success_message', 'Tao tai khoan thanh cong. Vui long dang nhap.'),
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/login'),
+          },
+        ]
       );
     } catch (error: any) {
-      Alert.alert(
-        t('register.error_title'),
-        error.toString() || 'Đăng ký thất bại, vui lòng thử lại'
-      );
+      const message = error?.toString?.() || t('register.error_register_failed', 'Dang ky that bai');
+
+      if (showVerifyModal) {
+        setModalError(message);
+      } else {
+        Alert.alert(t('register.error_title', 'Loi'), message);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isFormValid =
-    email.length > 0 &&
-    displayName.trim().length > 0 &&
-    password.length >= 8 &&
-    confirmPassword.length >= 8;
+  const handleVerifyByEmail = async () => {
+    if (isSendingOtp || isLoading) {
+      return;
+    }
 
-  const handleVerifyOtp = async () => {
-    if (isVerifyingOtp) return;
+    const normalizedEmail = verificationEmail.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      setModalError(t('login.gmail_modal.invalid', 'Email khong hop le'));
+      return;
+    }
+
+    setModalError(null);
+    setIsSendingOtp(true);
+
+    try {
+      const emailExists = await authService.checkEmail(normalizedEmail);
+      if (emailExists) {
+        setModalError(t('login.gmail_modal.email_exists', 'Email da ton tai trong he thong'));
+        return;
+      }
+
+      await authService.sendRegisterOtp(normalizedEmail);
+      setVerificationEmail(normalizedEmail);
+      setModalStep('otp');
+      setOtp('');
+      setSecondsLeft(RESEND_SECONDS);
+      setModalError(null);
+    } catch (error: any) {
+      setModalError(error?.toString?.() || t('register.otp_send_failed', 'Khong the gui OTP'));
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (secondsLeft > 0 || isResendingOtp || !verificationEmail) {
+      return;
+    }
+
+    setIsResendingOtp(true);
+    setModalError(null);
+
+    try {
+      await authService.resendRegisterOtp(verificationEmail);
+      setOtp('');
+      setSecondsLeft(RESEND_SECONDS);
+    } catch (error: any) {
+      setModalError(error?.toString?.() || t('register.otp_resend_failed', 'Gui lai OTP that bai'));
+    } finally {
+      setIsResendingOtp(false);
+    }
+  };
+
+  const handleVerifyOtpAndRegister = async () => {
+    if (isVerifyingOtp || isLoading) {
+      return;
+    }
 
     const normalizedOtp = otp.trim();
     if (!/^\d{6}$/.test(normalizedOtp)) {
-      setOtpError(t('register.otp_invalid', 'Mã OTP phải gồm đúng 6 chữ số'));
+      setModalError(t('register.otp_invalid', 'Ma OTP phai gom dung 6 chu so'));
       return;
     }
 
     setIsVerifyingOtp(true);
-    setOtpError(null);
-    try {
-      await authService.verifyEmailOtp(email, normalizedOtp);
-      setShowOtpModal(false);
+    setModalError(null);
 
-      Alert.alert(
-        t('register.success_title'),
-        t('register.success_message', 'Xác thực email thành công. Vui lòng đăng nhập.'),
-        [
-          {
-            text: 'OK',
-            onPress: () =>
-              router.replace({
-                pathname: '/password',
-                params: { email },
-              }),
-          },
-        ]
-      );
+    try {
+      await authService.verifyRegisterOtp(verificationEmail, normalizedOtp);
+      await completeRegistration(verificationEmail);
     } catch (error: any) {
-      setOtpError(error?.toString?.() || t('register.otp_verify_failed', 'Xác thực OTP thất bại'));
+      setModalError(error?.toString?.() || t('register.otp_verify_failed', 'Xac thuc OTP that bai'));
     } finally {
       setIsVerifyingOtp(false);
     }
   };
 
-  const handleResendOtp = async () => {
-    if (isResendingOtp) return;
-
-    setIsResendingOtp(true);
-    try {
-      await authService.resendEmailOtp(email);
-      Alert.alert(
-        t('register.otp_resent_title', 'Đã gửi lại OTP'),
-        t('register.otp_resent_message', 'Vui lòng kiểm tra email để nhận mã OTP mới.')
-      );
-    } catch (error: any) {
-      Alert.alert(
-        t('register.error_title', 'Lỗi'),
-        error?.toString?.() || t('register.otp_resend_failed', 'Gửi lại OTP thất bại')
-      );
-    } finally {
-      setIsResendingOtp(false);
+  const handleSkipEmailVerification = () => {
+    if (isLoading || isSendingOtp || isVerifyingOtp || isResendingOtp) {
+      return;
     }
+
+    Alert.alert(
+      t('login.gmail_modal.skip_warning_title', 'Bo qua xac thuc email?'),
+      t(
+        'login.gmail_modal.skip_warning_desc',
+        'Neu bo qua email, ban van co the dang ky nhung mot so tinh nang se bi gioi han.'
+      ),
+      [
+        {
+          text: t('common.cancel', 'Huy'),
+          style: 'cancel',
+        },
+        {
+          text: t('login.gmail_modal.skip_warning_continue', 'Tiep tuc bo qua'),
+          style: 'destructive',
+          onPress: () => {
+            completeRegistration();
+          },
+        },
+      ]
+    );
   };
+
+  const isBusy = isLoading || isSendingOtp || isVerifyingOtp || isResendingOtp;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -184,7 +309,6 @@ export default function RegisterScreen() {
           bounces={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={22} color="#000000" />
@@ -192,74 +316,82 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.content}>
-            <Text style={styles.title}>{t('register.header_title')}</Text>
+            <Text style={styles.title}>{t('register.header_title', 'Tao tai khoan')}</Text>
 
-            {/* Email */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>{t('register.email_label')}</Text>
-              <View style={[styles.inputWrapper, errors.email ? styles.inputError : null]}>
+              <Text style={styles.label}>{t('register.last_name_label', 'Ho')}</Text>
+              <View style={[styles.inputWrapper, errors.lastName ? styles.inputError : null]}>
                 <TextInput
                   style={styles.input}
-                  placeholder={t('register.email_placeholder')}
+                  placeholder={t('register.last_name_placeholder', 'Nhap ho')}
                   placeholderTextColor="#999"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={(v) => {
-                    setEmail(v);
-                    if (errors.email) setErrors((e) => ({ ...e, email: null }));
+                  value={lastName}
+                  onChangeText={(value) => {
+                    setLastName(value);
+                    if (errors.lastName) setErrors((prev) => ({ ...prev, lastName: undefined }));
                   }}
                 />
               </View>
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+              {errors.lastName ? <Text style={styles.errorText}>{errors.lastName}</Text> : null}
             </View>
 
-            {/* Display name */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>{t('register.display_name_label')}</Text>
-              <View style={[styles.inputWrapper, errors.displayName ? styles.inputError : null]}>
+              <Text style={styles.label}>{t('register.first_name_label', 'Ten')}</Text>
+              <View style={[styles.inputWrapper, errors.firstName ? styles.inputError : null]}>
                 <TextInput
                   style={styles.input}
-                  placeholder={t('register.display_name_placeholder')}
+                  placeholder={t('register.first_name_placeholder', 'Nhap ten')}
                   placeholderTextColor="#999"
-                  value={displayName}
-                  onChangeText={(v) => {
-                    setDisplayName(v);
-                    if (errors.displayName) setErrors((e) => ({ ...e, displayName: null }));
+                  value={firstName}
+                  onChangeText={(value) => {
+                    setFirstName(value);
+                    if (errors.firstName) setErrors((prev) => ({ ...prev, firstName: undefined }));
                   }}
                 />
               </View>
-              {errors.displayName && (
-                <Text style={styles.errorText}>{errors.displayName}</Text>
-              )}
+              {errors.firstName ? <Text style={styles.errorText}>{errors.firstName}</Text> : null}
             </View>
 
-            {/* Password */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.label}>{t('register.phone_label', 'So dien thoai')}</Text>
+              <View style={[styles.inputWrapper, errors.phoneNumber ? styles.inputError : null]}>
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('register.phone_placeholder', 'Nhap so dien thoai')}
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                  value={phoneNumber}
+                  onChangeText={(value) => {
+                    setPhoneNumber(value);
+                    if (errors.phoneNumber) setErrors((prev) => ({ ...prev, phoneNumber: undefined }));
+                  }}
+                />
+              </View>
+              {errors.phoneNumber ? <Text style={styles.errorText}>{errors.phoneNumber}</Text> : null}
+            </View>
+
             <View style={styles.fieldContainer}>
               <View style={styles.labelRow}>
-                <Text style={styles.label}>{t('register.password_label')}</Text>
+                <Text style={styles.label}>{t('register.password_label', 'Mat khau')}</Text>
                 <TouchableOpacity onPress={generateStrongPassword} style={styles.generateBtn}>
                   <Ionicons name="sparkles" size={13} color={COLORS.primary} />
-                  <Text style={styles.generateBtnText}>{t('register.generate_password')}</Text>
+                  <Text style={styles.generateBtnText}>{t('register.generate_password', 'Tao mat khau')}</Text>
                 </TouchableOpacity>
               </View>
               <View style={[styles.inputWrapper, errors.password ? styles.inputError : null]}>
                 <TextInput
                   style={[styles.input, styles.inputFlex]}
-                  placeholder={t('register.password_placeholder')}
+                  placeholder={t('register.password_placeholder', 'Nhap mat khau')}
                   placeholderTextColor="#999"
                   secureTextEntry={!showPassword}
                   value={password}
-                  onChangeText={(v) => {
-                    setPassword(v);
+                  onChangeText={(value) => {
+                    setPassword(value);
                     setGeneratedHint(false);
-                    if (errors.password) setErrors((e) => ({ ...e, password: null }));
+                    if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
                   }}
                 />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                >
+                <TouchableOpacity onPress={() => setShowPassword((prev) => !prev)} style={styles.eyeButton}>
                   <Ionicons
                     name={showPassword ? 'eye-outline' : 'eye-off-outline'}
                     size={20}
@@ -267,31 +399,30 @@ export default function RegisterScreen() {
                   />
                 </TouchableOpacity>
               </View>
-              {errors.password && (
-                <Text style={styles.errorText}>{errors.password}</Text>
-              )}
-              {generatedHint && !errors.password && (
+              {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
+              {generatedHint && !errors.password ? (
                 <Text style={styles.hintText}>{t('register.generated_password_hint')}</Text>
-              )}
+              ) : null}
             </View>
 
-            {/* Confirm Password */}
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>{t('register.confirm_password_label')}</Text>
+              <Text style={styles.label}>{t('register.confirm_password_label', 'Xac nhan mat khau')}</Text>
               <View style={[styles.inputWrapper, errors.confirmPassword ? styles.inputError : null]}>
                 <TextInput
                   style={[styles.input, styles.inputFlex]}
-                  placeholder={t('register.confirm_password_placeholder')}
+                  placeholder={t('register.confirm_password_placeholder', 'Nhap lai mat khau')}
                   placeholderTextColor="#999"
                   secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
-                  onChangeText={(v) => {
-                    setConfirmPassword(v);
-                    if (errors.confirmPassword) setErrors((e) => ({ ...e, confirmPassword: null }));
+                  onChangeText={(value) => {
+                    setConfirmPassword(value);
+                    if (errors.confirmPassword) {
+                      setErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                    }
                   }}
                 />
                 <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  onPress={() => setShowConfirmPassword((prev) => !prev)}
                   style={styles.eyeButton}
                 >
                   <Ionicons
@@ -301,29 +432,25 @@ export default function RegisterScreen() {
                   />
                 </TouchableOpacity>
               </View>
-              {errors.confirmPassword && (
-                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-              )}
+              {errors.confirmPassword ? <Text style={styles.errorText}>{errors.confirmPassword}</Text> : null}
             </View>
 
-            {/* Submit */}
             <TouchableOpacity
-              style={[styles.button, (!isFormValid || isLoading) && styles.buttonDisabled]}
-              onPress={handleRegister}
-              disabled={!isFormValid || isLoading}
+              style={[styles.button, isLoading && styles.buttonDisabled]}
+              onPress={handleOpenVerificationModal}
+              disabled={isLoading}
               activeOpacity={0.8}
             >
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>{t('register.submit')}</Text>
+                <Text style={styles.buttonText}>{t('register.submit', 'Tao tai khoan')}</Text>
               )}
             </TouchableOpacity>
 
-            {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>{t('register.already_have_account')} </Text>
-              <TouchableOpacity onPress={() => router.back()}>
+              <TouchableOpacity onPress={() => router.replace('/login')}>
                 <Text style={styles.footerLink}>{t('register.login')}</Text>
               </TouchableOpacity>
             </View>
@@ -333,63 +460,148 @@ export default function RegisterScreen() {
 
       <Modal
         transparent
-        visible={showOtpModal}
+        visible={showVerifyModal}
         animationType="fade"
         onRequestClose={() => {
-          if (!isVerifyingOtp && !isResendingOtp) {
-            setShowOtpModal(false);
+          if (!isBusy) {
+            setShowVerifyModal(false);
           }
         }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{t('register.otp_modal_title', 'Xác thực email')}</Text>
-            <Text style={styles.modalDesc}>
-              {t('register.otp_modal_desc', 'Nhập mã OTP 6 số đã gửi đến email')}
-            </Text>
-            <Text style={styles.modalEmail}>{email}</Text>
-
-            <View style={[styles.inputWrapper, styles.otpInputWrapper, otpError ? styles.inputError : null]}>
-              <TextInput
-                style={[styles.input, styles.otpInput]}
-                placeholder={t('register.otp_placeholder', 'Nhập OTP')}
-                placeholderTextColor="#999"
-                keyboardType="number-pad"
-                maxLength={6}
-                value={otp}
-                onChangeText={(v) => {
-                  setOtp(v.replace(/\D/g, ''));
-                  if (otpError) setOtpError(null);
-                }}
-              />
-            </View>
-            {otpError && <Text style={styles.errorText}>{otpError}</Text>}
-
             <TouchableOpacity
-              style={[styles.button, (otp.length !== 6 || isVerifyingOtp) && styles.buttonDisabled]}
-              onPress={handleVerifyOtp}
-              disabled={otp.length !== 6 || isVerifyingOtp}
-              activeOpacity={0.85}
+              style={styles.modalCloseBtn}
+              onPress={() => setShowVerifyModal(false)}
+              disabled={isBusy}
             >
-              {isVerifyingOtp ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>{t('register.verify_otp', 'Xác thực OTP')}</Text>
-              )}
+              <Ionicons name="close" size={18} color="#666" />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.resendOtpBtn}
-              onPress={handleResendOtp}
-              disabled={isResendingOtp || isVerifyingOtp}
-              activeOpacity={0.8}
-            >
-              {isResendingOtp ? (
-                <ActivityIndicator color={COLORS.primary} />
-              ) : (
-                <Text style={styles.resendOtpText}>{t('register.resend_otp', 'Gửi lại OTP')}</Text>
-              )}
-            </TouchableOpacity>
+            {modalStep === 'email' ? (
+              <>
+                <Text style={styles.modalTitle}>{t('login.gmail_modal.title', 'Xac thuc email')}</Text>
+                <Text style={styles.modalDesc}>
+                  {t(
+                    'login.gmail_modal.subtitle',
+                    'Nhap email de nhan OTP truoc khi tao tai khoan. Ban co the bo qua buoc nay.'
+                  )}
+                </Text>
+
+                <View style={[styles.inputWrapper, modalError ? styles.inputError : null]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('login.gmail_modal.placeholder', 'Nhap email')}
+                    placeholderTextColor="#999"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={verificationEmail}
+                    onChangeText={(value) => {
+                      setVerificationEmail(value);
+                      if (modalError) setModalError(null);
+                    }}
+                  />
+                </View>
+
+                {modalError ? <Text style={styles.errorText}>{modalError}</Text> : null}
+
+                <TouchableOpacity
+                  style={[styles.button, isSendingOtp && styles.buttonDisabled]}
+                  onPress={handleVerifyByEmail}
+                  disabled={isSendingOtp}
+                >
+                  {isSendingOtp ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>{t('login.gmail_modal.verify_btn', 'Gui OTP')}</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.skipButton}
+                  onPress={handleSkipEmailVerification}
+                  disabled={isBusy}
+                >
+                  <Text style={styles.skipButtonText}>{t('login.gmail_modal.skip_btn', 'Bo qua email')}</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalTitle}>{t('register.otp_modal_title', 'Xac thuc OTP')}</Text>
+                <Text style={styles.modalDesc}>{t('register.otp_modal_desc', 'Nhap ma OTP 6 so da gui den email')}</Text>
+                <Text style={styles.modalEmail}>{verificationEmail}</Text>
+
+                <View style={[styles.inputWrapper, modalError ? styles.inputError : null]}>
+                  <TextInput
+                    style={[styles.input, styles.otpInput]}
+                    placeholder={t('register.otp_placeholder', 'Nhap OTP')}
+                    placeholderTextColor="#999"
+                    keyboardType="number-pad"
+                    maxLength={OTP_LENGTH}
+                    value={otp}
+                    onChangeText={(value) => {
+                      setOtp(value.replace(/\D/g, ''));
+                      if (modalError) setModalError(null);
+                    }}
+                  />
+                </View>
+
+                {modalError ? <Text style={styles.errorText}>{modalError}</Text> : null}
+
+                <View style={styles.resendRow}>
+                  <Text style={styles.resendHint}>
+                    {secondsLeft > 0
+                      ? `${t('login.otp.resend_in', 'Gui lai sau')} ${formatTimer(secondsLeft)}`
+                      : t('login.otp.can_resend', 'Ban co the gui lai OTP')}
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={handleResendOtp}
+                    disabled={secondsLeft > 0 || isResendingOtp}
+                    style={styles.resendBtn}
+                  >
+                    {isResendingOtp ? (
+                      <ActivityIndicator color={COLORS.primary} />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.resendText,
+                          (secondsLeft > 0 || isResendingOtp) && styles.resendTextDisabled,
+                        ]}
+                      >
+                        {t('register.resend_otp', 'Gui lai OTP')}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.button, (otp.length !== OTP_LENGTH || isBusy) && styles.buttonDisabled]}
+                  onPress={handleVerifyOtpAndRegister}
+                  disabled={otp.length !== OTP_LENGTH || isBusy}
+                >
+                  {isVerifyingOtp || isLoading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>{t('register.verify_otp', 'Xac thuc OTP')}</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!isBusy) {
+                      setModalStep('email');
+                      setOtp('');
+                      setModalError(null);
+                    }
+                  }}
+                  disabled={isBusy}
+                  style={styles.backStepBtn}
+                >
+                  <Text style={styles.backStepText}>{t('login.otp.back_to_register', 'Quay lai')}</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -502,7 +714,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   buttonDisabled: {
-    backgroundColor: '#b0c4de',
+    opacity: 0.7,
   },
   buttonText: {
     color: '#fff',
@@ -537,16 +749,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 18,
   },
+  modalCloseBtn: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    padding: 6,
+    zIndex: 5,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#000',
     marginBottom: 8,
+    paddingRight: 18,
   },
   modalDesc: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   modalEmail: {
     fontSize: 14,
@@ -554,22 +774,54 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
   },
-  otpInputWrapper: {
-    marginBottom: 6,
+  skipButton: {
+    marginTop: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 24,
+  },
+  skipButtonText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '600',
   },
   otpInput: {
     textAlign: 'center',
     letterSpacing: 4,
     fontWeight: '700',
   },
-  resendOtpBtn: {
+  resendRow: {
+    marginTop: 10,
+    marginBottom: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  resendHint: {
+    fontSize: 12,
+    color: '#666',
+  },
+  resendBtn: {
+    minHeight: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resendText: {
+    color: COLORS.primary,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  resendTextDisabled: {
+    color: '#9fb5df',
+  },
+  backStepBtn: {
     marginTop: 10,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 24,
   },
-  resendOtpText: {
-    color: COLORS.primary,
+  backStepText: {
+    color: '#666',
     fontSize: 14,
     fontWeight: '600',
   },

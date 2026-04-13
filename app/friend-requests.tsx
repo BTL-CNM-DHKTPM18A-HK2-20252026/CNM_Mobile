@@ -16,6 +16,7 @@ import { COLORS } from '@/constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { friendService } from '@/services/friendService';
+import { chatService } from '@/services/chatService';
 import { getAvatarSource } from '@/services/mediaUtils';
 
 interface ApiResponse<T = any> {
@@ -79,7 +80,7 @@ export default function FriendRequestsScreen() {
     }, []);
 
     // Hàm xử lý hành động (Chấp nhận/Từ chối/Thu hồi)
-    const handleAction = async (requestId: string, actionType: 'accept' | 'reject' | 'recall') => {
+    const handleAction = async (requestId: string, actionType: 'accept' | 'reject' | 'recall', senderInfo?: { senderId: string; senderName: string; senderAvatarUrl?: string }) => {
         if (processingRequests.has(requestId)) return;
 
         setProcessingRequests(prev => new Set(prev).add(requestId));
@@ -97,6 +98,19 @@ export default function FriendRequestsScreen() {
 
             if (res.success) {
                 fetchRequests(); // Tải lại danh sách
+
+                // Auto mở chat private sau khi chấp nhận (giống Web: handleAccept → onSelectUser)
+                if (actionType === 'accept' && senderInfo) {
+                    try {
+                        const convRes: any = await chatService.getPrivateConversation(senderInfo.senderId);
+                        const convId = convRes?.conversationId ?? convRes?.conversation_id ?? convRes?.data?.conversationId ?? convRes?.data?.conversation_id;
+                        if (convId) {
+                            router.push(`/chat-detail?id=${encodeURIComponent(convId)}&name=${encodeURIComponent(senderInfo.senderName)}`);
+                        }
+                    } catch (chatErr) {
+                        console.error('Lỗi mở chat sau khi chấp nhận:', chatErr);
+                    }
+                }
             } else {
                 Alert.alert('Thông báo', res.message || 'Thao tác thất bại');
             }
@@ -134,6 +148,11 @@ export default function FriendRequestsScreen() {
                 <View style={styles.infoContainer}>
                     <Text style={[styles.name, { color: colors.text }]}>{displayName}</Text>
                     <Text style={[styles.date, { color: colors.textSecondary }]}>{date}</Text>
+                    {item.message ? (
+                        <Text style={[styles.requestMessage, { color: colors.textSecondary }]} numberOfLines={2}>
+                            "{item.message}"
+                        </Text>
+                    ) : null}
 
                     <View style={styles.buttonRow}>
                         {isReceived ? (
@@ -149,7 +168,11 @@ export default function FriendRequestsScreen() {
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.button, { backgroundColor: '#e7f3ff' }]}
-                                    onPress={() => handleAction(item.requestId, 'accept')}
+                                    onPress={() => handleAction(item.requestId, 'accept', {
+                                        senderId: item.senderId,
+                                        senderName: item.senderName,
+                                        senderAvatarUrl: item.senderAvatarUrl,
+                                    })}
                                     disabled={processingRequests.has(item.requestId)}
                                 >
                                     <Text style={[styles.buttonText, { color: '#0068ff' }]}>
@@ -287,7 +310,12 @@ const styles = StyleSheet.create({
     date: {
         fontSize: 12,
         marginTop: 2,
-        marginBottom: 10,
+        marginBottom: 4,
+    },
+    requestMessage: {
+        fontSize: 13,
+        fontStyle: 'italic',
+        marginBottom: 8,
     },
     buttonRow: {
         flexDirection: 'row',

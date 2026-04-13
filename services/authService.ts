@@ -3,6 +3,7 @@ import api from './api';
 
 export interface AuthenticationResponse {
   access_token: string;
+  refresh_token?: string;
   expires_in: number;
   token_type: string;
 }
@@ -13,47 +14,52 @@ export interface ApiResponse<T> {
   success: boolean;
 }
 
+const decodeUserIdFromToken = async (token: string) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    const userId = payload.sub;
+
+    if (userId) {
+      await SecureStore.setItemAsync('user_id', String(userId));
+      return String(userId);
+    }
+  } catch (decodeError) {
+    console.error('[AUTH] Failed to decode user_id from token:', decodeError);
+  }
+
+  return null;
+};
+
 export const authService = {
-  login: async (email: string, password = 'password123') => {
+  login: async (username: string, password: string) => {
     try {
       console.log('[LOGIN] URL:', api.defaults.baseURL + '/auth/login');
-      console.log('[LOGIN] Body:', { username: email, password });
+      console.log('[LOGIN] Body:', { username, password });
       
       const response = await api.post<any, ApiResponse<AuthenticationResponse>>('/auth/login', {
-        username: email,
-        password: password
+        username,
+        password
       });
       console.log('[LOGIN] Response:', response);
 
       if (response.success && response.data.access_token) {
         const token = response.data.access_token;
-        
-        // 1. Lưu token như cũ
         await SecureStore.setItemAsync('user_token', token);
         
-        // 2. GIẢI MÃ TOKEN ĐỂ LẤY USER_ID (Giống hệt cách bạn đang làm ở hàm confirmQrLogin)
-        try {
-          const base64Url = token.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(
-            atob(base64)
-              .split('')
-              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-              .join('')
-          );
-          const payload = JSON.parse(jsonPayload);
-          
-          // ID người dùng thường nằm trong trường 'sub' của JWT
-          const userId = payload.sub; 
-          
-          // 3. LƯU USER_ID VÀO MÁY
-          if (userId) {
-            await SecureStore.setItemAsync('user_id', String(userId));
-            console.log('[LOGIN] Đã lưu user_id thành công:', userId);
-          }
-        } catch (decodeError) {
-          console.error('[LOGIN] Lỗi khi giải mã token để lấy user_id:', decodeError);
+        // Save refresh token for silent token renewal
+        if (response.data.refresh_token) {
+          await SecureStore.setItemAsync('refresh_token', response.data.refresh_token);
         }
+        
+        await decodeUserIdFromToken(token);
         
         return response.data;
       }
@@ -73,6 +79,8 @@ export const authService = {
       }
     } finally {
       await SecureStore.deleteItemAsync('user_token');
+      await SecureStore.deleteItemAsync('refresh_token');
+      await SecureStore.deleteItemAsync('user_id');
     }
   },
 
@@ -83,16 +91,27 @@ export const authService = {
 
   checkEmail: async (email: string) => {
     try {
-      console.log(api);
       const response = await api.post<any, ApiResponse<boolean>>('/auth/check-email', {
-        email: email
+        email
       });
 
-      console.log(response)
-      return response.success && response.data;
+      return Boolean(response.success && response.data);
     } catch (error: any) {
       console.error('Check email error:', error);
-      return false;
+      throw error.response?.data?.message || error.message || 'Network error';
+    }
+  },
+
+  checkPhone: async (phoneNumber: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<boolean>>('/auth/check-phone', {
+        phoneNumber,
+      });
+
+      return Boolean(response.success && response.data);
+    } catch (error: any) {
+      console.error('Check phone error:', error);
+      throw error.response?.data?.message || error.message || 'Network error';
     }
   },
 
@@ -155,7 +174,8 @@ export const authService = {
   },
 
   register: async (data: {
-    email: string;
+    phoneNumber: string;
+    email?: string;
     password: string;
     displayName: string;
     firstName?: string;
@@ -172,7 +192,7 @@ export const authService = {
     }
   },
 
-  verifyEmailOtp: async (email: string, otp: string) => {
+  verifyOtp: async (email: string, otp: string) => {
     try {
       const response = await api.post<any, ApiResponse<void>>('/auth/verify-otp', {
         email,
@@ -185,7 +205,7 @@ export const authService = {
     }
   },
 
-  resendEmailOtp: async (email: string) => {
+  resendOtp: async (email: string) => {
     try {
       const response = await api.post<any, ApiResponse<void>>('/auth/resend-otp', {
         email,
@@ -195,6 +215,51 @@ export const authService = {
       console.error('Resend OTP error:', error);
       throw error.response?.data?.message || error.message || 'Resend OTP failed';
     }
+  },
+
+  sendRegisterOtp: async (email: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<void>>('/auth/register/send-otp', {
+        email,
+      });
+      return response.success;
+    } catch (error: any) {
+      console.error('Send register OTP error:', error);
+      throw error.response?.data?.message || error.message || 'Send register OTP failed';
+    }
+  },
+
+  verifyRegisterOtp: async (email: string, otp: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<void>>('/auth/register/verify-otp', {
+        email,
+        otp,
+      });
+      return response.success;
+    } catch (error: any) {
+      console.error('Verify register OTP error:', error);
+      throw error.response?.data?.message || error.message || 'Verify register OTP failed';
+    }
+  },
+
+  resendRegisterOtp: async (email: string) => {
+    try {
+      const response = await api.post<any, ApiResponse<void>>('/auth/register/send-otp', {
+        email,
+      });
+      return response.success;
+    } catch (error: any) {
+      console.error('Resend register OTP error:', error);
+      throw error.response?.data?.message || error.message || 'Resend register OTP failed';
+    }
+  },
+
+  verifyEmailOtp: async (email: string, otp: string) => {
+    return authService.verifyOtp(email, otp);
+  },
+
+  resendEmailOtp: async (email: string) => {
+    return authService.resendOtp(email);
   },
 
   sendPasswordResetOtp: async (email: string) => {
