@@ -67,6 +67,8 @@ interface Message {
   replyToMessageType?: string;
   // Forward
   forwardedFromSenderName?: string;
+  // IMAGE_GROUP attachments
+  attachments?: { url: string; fileName?: string; fileSize?: number; thumbnailUrl?: string }[];
 }
 
 interface PinnedMessageItem {
@@ -212,10 +214,10 @@ export default function ChatDetailScreen() {
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
-  const [pendingMedia, setPendingMedia] = useState<PickedMedia | null>(null);
+  const [pendingMediaList, setPendingMediaList] = useState<PickedMedia[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  const [uploadCurrentIndex, setUploadCurrentIndex] = useState(0);
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
   const [fullscreenVideoUrl, setFullscreenVideoUrl] = useState<string | null>(null);
 
@@ -973,22 +975,27 @@ export default function ChatDetailScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: false,
+      allowsMultipleSelection: true,
       quality: 0.8,
     });
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const picked: PickedMedia = {
+    if (!result.canceled && result.assets.length > 0) {
+      const oversized = result.assets.filter(a => (a.fileSize || 0) > 50 * 1024 * 1024);
+      if (oversized.length) {
+        Alert.alert('File quá lớn', `${oversized.length} ảnh vượt quá giới hạn 50MB và sẽ không được gửi.`);
+      }
+      const valid = result.assets.filter(a => (a.fileSize || 0) <= 50 * 1024 * 1024);
+      if (!valid.length) return;
+      const picked: PickedMedia[] = valid.map((asset) => ({
         uri: asset.uri,
         fileName: asset.fileName || `image_${Date.now()}.jpg`,
         fileSize: asset.fileSize || 0,
         mimeType: asset.mimeType || 'image/jpeg',
-        mediaType: 'IMAGE',
+        mediaType: 'IMAGE' as const,
         width: asset.width,
         height: asset.height,
-      };
-      setPendingMedia(picked);
-      setMediaPreviewUrl(asset.uri);
+      }));
+      setPendingMediaList(picked);
     }
   }, []);
 
@@ -1009,6 +1016,10 @@ export default function ChatDetailScreen() {
 
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
+      if ((asset.fileSize || 0) > 50 * 1024 * 1024) {
+        Alert.alert('File quá lớn', 'Video vượt quá giới hạn 50MB, vui lòng chọn video ngắn hơn.');
+        return;
+      }
       const picked: PickedMedia = {
         uri: asset.uri,
         fileName: asset.fileName || `video_${Date.now()}.mp4`,
@@ -1019,8 +1030,7 @@ export default function ChatDetailScreen() {
         height: asset.height,
         duration: asset.duration ? Math.round(asset.duration / 1000) : undefined,
       };
-      setPendingMedia(picked);
-      setMediaPreviewUrl(asset.uri);
+      setPendingMediaList([picked]);
     }
   }, []);
 
@@ -1150,6 +1160,10 @@ export default function ChatDetailScreen() {
 
       if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
+        if ((asset.size || 0) > 50 * 1024 * 1024) {
+          Alert.alert('File quá lớn', `File "${asset.name}" vượt quá giới hạn 50MB.`);
+          return;
+        }
         const picked: PickedMedia = {
           uri: asset.uri,
           fileName: asset.name || `file_${Date.now()}`,
@@ -1157,8 +1171,7 @@ export default function ChatDetailScreen() {
           mimeType: asset.mimeType || 'application/octet-stream',
           mediaType: chatFileService.resolveMediaType(asset.mimeType || ''),
         };
-        setPendingMedia(picked);
-        setMediaPreviewUrl(null);
+        setPendingMediaList([picked]);
       }
     } catch (error) {
       console.error('Failed to pick file:', error);
@@ -1189,91 +1202,150 @@ export default function ChatDetailScreen() {
         width: asset.width,
         height: asset.height,
       };
-      setPendingMedia(picked);
-      setMediaPreviewUrl(asset.uri);
+      setPendingMediaList([picked]);
     }
   }, []);
 
   const handleCancelMedia = useCallback(() => {
-    setPendingMedia(null);
-    setMediaPreviewUrl(null);
+    setPendingMediaList([]);
     setUploadProgress(0);
   }, []);
 
   const handleSendMedia = useCallback(async () => {
-    if (!pendingMedia || !conversationId || isUploading) return;
+    if (pendingMediaList.length === 0 || !conversationId || isUploading) return;
 
-    const media = pendingMedia;
+    const mediaItems = [...pendingMediaList];
     const caption = inputText.trim();
-    const tempMessageId = `temp-media-${Date.now()}`;
-    const now = new Date();
 
-    // Optimistic message
-    const optimisticMessage: Message = {
-      messageId: tempMessageId,
-      content: media.uri,
-      senderId: currentUserId ?? 'local-user',
-      senderName: 'Me',
-      createdAt: toLocalIsoLike(now),
-      messageType: media.mediaType,
-      fileName: media.fileName,
-      fileSize: media.fileSize,
-      caption,
-    };
-
-    setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
-    requestScrollToLatest(true);
-    setPendingMedia(null);
-    setMediaPreviewUrl(null);
+    setPendingMediaList([]);
     setInputText('');
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadCurrentIndex(0);
 
-    try {
-      // Upload to S3
-      const s3Url = await chatFileService.uploadMedia(media, (progress) => {
-        setUploadProgress(progress.percent);
-      });
+    // Check if all items are images and there are multiple → send as IMAGE_GROUP
+    const allImages = mediaItems.every((m) => m.mediaType === 'image');
+    if (allImages && mediaItems.length > 1) {
+      const tempMessageId = `temp-album-${Date.now()}`;
+      const now = new Date();
 
-      // Update optimistic message content to S3 URL so polling cleanup can match it
-      setMessages((prev) =>
-        prev.map((m) => m.messageId === tempMessageId ? { ...m, content: s3Url } : m)
-      );
+      // Optimistic album message
+      const optimisticMessage: Message = {
+        messageId: tempMessageId,
+        content: '',
+        senderId: currentUserId ?? 'local-user',
+        senderName: 'Me',
+        createdAt: toLocalIsoLike(now),
+        messageType: 'IMAGE_GROUP',
+        caption: caption || undefined,
+        attachments: mediaItems.map((m) => ({ url: m.uri })),
+      };
 
-      // Send message with S3 URL (map FILE → MEDIA for backend)
-      const response = await chatService.sendMessage(conversationId, {
-        content: s3Url,
-        messageType: chatFileService.toBackendMessageType(media.mediaType),
+      setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
+      requestScrollToLatest(true);
+
+      try {
+        const s3Urls: string[] = [];
+        for (let i = 0; i < mediaItems.length; i++) {
+          setUploadCurrentIndex(i);
+          const s3Url = await chatFileService.uploadMedia(mediaItems[i], (progress) => {
+            const overallProgress = Math.round(((i * 100 + progress.percent) / mediaItems.length));
+            setUploadProgress(overallProgress);
+          });
+          s3Urls.push(s3Url);
+        }
+
+        // Send single IMAGE_GROUP message
+        const response = await chatService.sendMessage(conversationId, {
+          content: s3Urls[0],
+          messageType: 'IMAGE_GROUP',
+          caption: caption || undefined,
+          mediaUrls: s3Urls,
+        });
+
+        const mappedMessage = mapAnyPayloadToUiMessage(response);
+        if (mappedMessage) {
+          setMessages((prev) => {
+            const withoutTemp = prev.filter((m) => m.messageId !== tempMessageId);
+            return mergeUniqueMessages(withoutTemp, [mappedMessage]);
+          });
+        }
+      } catch (error: any) {
+        const errorMsg = error?.response?.data?.message || error?.message || 'Unknown error';
+        console.error('Failed to send album:', errorMsg);
+        setMessages((prev) => prev.filter((m) => m.messageId !== tempMessageId));
+        Alert.alert('Lỗi', `Không thể gửi album ảnh: ${errorMsg}`);
+      }
+
+      setIsUploading(false);
+      setUploadProgress(0);
+      setUploadCurrentIndex(0);
+      requestScrollToLatest(true);
+      return;
+    }
+
+    // Single image or non-image media: send individually
+    for (let i = 0; i < mediaItems.length; i++) {
+      const media = mediaItems[i];
+      const tempMessageId = `temp-media-${Date.now()}-${i}`;
+      const now = new Date();
+
+      setUploadCurrentIndex(i);
+
+      // Optimistic message
+      const optimisticMessage: Message = {
+        messageId: tempMessageId,
+        content: media.uri,
+        senderId: currentUserId ?? 'local-user',
+        senderName: 'Me',
+        createdAt: toLocalIsoLike(now),
+        messageType: media.mediaType,
         fileName: media.fileName,
         fileSize: media.fileSize,
-        caption: caption || undefined,
-        videoDuration: media.duration,
-      });
+        caption: i === 0 ? caption : undefined,
+      };
 
-      const mappedMessage = mapAnyPayloadToUiMessage(response);
-      if (mappedMessage) {
-        setMessages((prev) => {
-          const withoutTemp = prev.filter((m) => m.messageId !== tempMessageId);
-          return mergeUniqueMessages(withoutTemp, [mappedMessage]);
+      setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
+      requestScrollToLatest(true);
+
+      try {
+        const s3Url = await chatFileService.uploadMedia(media, (progress) => {
+          setUploadProgress(progress.percent);
         });
-      } else {
-        // Update optimistic message with s3 url
+
         setMessages((prev) =>
           prev.map((m) => m.messageId === tempMessageId ? { ...m, content: s3Url } : m)
         );
+
+        const response = await chatService.sendMessage(conversationId, {
+          content: s3Url,
+          messageType: chatFileService.toBackendMessageType(media.mediaType),
+          fileName: media.fileName,
+          fileSize: media.fileSize,
+          caption: i === 0 ? (caption || undefined) : undefined,
+          videoDuration: media.duration,
+        });
+
+        const mappedMessage = mapAnyPayloadToUiMessage(response);
+        if (mappedMessage) {
+          setMessages((prev) => {
+            const withoutTemp = prev.filter((m) => m.messageId !== tempMessageId);
+            return mergeUniqueMessages(withoutTemp, [mappedMessage]);
+          });
+        }
+      } catch (error: any) {
+        const errorMsg = error?.response?.data?.message || error?.message || 'Unknown error';
+        console.error('Failed to send media:', { index: i, errorMsg, error });
+        setMessages((prev) => prev.filter((m) => m.messageId !== tempMessageId));
+        Alert.alert('Lỗi', `Không thể gửi ảnh ${mediaItems.length > 1 ? `(${i + 1}/${mediaItems.length}) ` : ''}${errorMsg}`);
       }
-      requestScrollToLatest(true);
-    } catch (error: any) {
-      const statusCode = error?.response?.status;
-      const errorMsg = error?.response?.data?.message || error?.message || 'Unknown error';
-      console.error('Failed to send media:', { statusCode, errorMsg, error });
-      setMessages((prev) => prev.filter((m) => m.messageId !== tempMessageId));
-      Alert.alert('Lỗi', `Không thể gửi file: ${errorMsg}`);
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
     }
-  }, [pendingMedia, conversationId, isUploading, inputText, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
+
+    setIsUploading(false);
+    setUploadProgress(0);
+    setUploadCurrentIndex(0);
+    requestScrollToLatest(true);
+  }, [pendingMediaList, conversationId, isUploading, inputText, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
 
   const handleReactWithEmoji = useCallback(async (emoji: string) => {
     if (!selectedMessage) {
@@ -1704,10 +1776,11 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
 
   const msgType = (item.messageType || 'TEXT').toUpperCase();
   const isImageMsg = msgType === 'IMAGE';
+  const isImageGroupMsg = msgType === 'IMAGE_GROUP';
   const isVideoMsg = msgType === 'VIDEO';
   const isVoiceMsg = msgType === 'VOICE';
   const isFileMsg = msgType === 'FILE' || msgType === 'MEDIA';
-  const isMediaMsg = isImageMsg || isVideoMsg || isFileMsg || isVoiceMsg;
+  const isMediaMsg = isImageMsg || isImageGroupMsg || isVideoMsg || isFileMsg || isVoiceMsg;
 
   // Helpers for file bubbles
   const getFileNameFromUrl = (url: string): string => {
@@ -1816,6 +1889,92 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
               </View>
             )}
           </TouchableOpacity>
+        </>
+      );
+    }
+
+    if (isImageGroupMsg && item.attachments && item.attachments.length > 0) {
+      const imgs = item.attachments;
+      const count = imgs.length;
+      const gridWidth = 280;
+      const gap = 2;
+      const halfWidth = (gridWidth - gap) / 2;
+
+      const renderGrid = () => {
+        if (count === 1) {
+          return (
+            <TouchableOpacity activeOpacity={0.85} onPress={() => setFullscreenImageUrl(imgs[0].url)}>
+              <Image source={{ uri: imgs[0].url }} style={{ width: gridWidth, height: gridWidth * 0.75, borderRadius: 8 }} resizeMode="cover" />
+            </TouchableOpacity>
+          );
+        }
+        if (count === 2) {
+          return (
+            <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
+              {imgs.map((att, i) => (
+                <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                  <Image source={{ uri: att.url }} style={{ width: halfWidth, height: halfWidth }} resizeMode="cover" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          );
+        }
+        if (count === 3) {
+          return (
+            <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
+              <TouchableOpacity activeOpacity={0.85} onPress={() => setFullscreenImageUrl(imgs[0].url)}>
+                <Image source={{ uri: imgs[0].url }} style={{ width: halfWidth, height: halfWidth * 2 + gap }} resizeMode="cover" />
+              </TouchableOpacity>
+              <View style={{ gap }}>
+                {imgs.slice(1).map((att, i) => (
+                  <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                    <Image source={{ uri: att.url }} style={{ width: halfWidth, height: halfWidth }} resizeMode="cover" />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          );
+        }
+        // 4+ images: dynamic rows (Zalo-style, shows ALL images)
+        const numRows = Math.ceil(count / 3);
+        const rows: typeof imgs[number][][] = [];
+        let startIdx = 0;
+        let rem = count;
+        for (let r = 0; r < numRows; r++) {
+          const rowsLeft = numRows - r;
+          const perRow = Math.floor(rem / rowsLeft);
+          rows.push(imgs.slice(startIdx, startIdx + perRow));
+          startIdx += perRow;
+          rem -= perRow;
+        }
+        return (
+          <View style={{ borderRadius: 8, overflow: 'hidden', width: gridWidth }}>
+            {rows.map((row, ri) => (
+              <View key={ri} style={{ flexDirection: 'row', gap, marginTop: ri > 0 ? gap : 0 }}>
+                {row.map((att, ci) => {
+                  const itemWidth = (gridWidth - gap * (row.length - 1)) / row.length;
+                  return (
+                    <TouchableOpacity key={ci} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                      <Image source={{ uri: att.url }} style={{ width: itemWidth, height: itemWidth }} resizeMode="cover" />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+        );
+      };
+
+      return (
+        <>
+          {replyBlock}
+          {forwardedBanner}
+          {renderGrid()}
+          {item.caption ? (
+            <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
+              {item.caption}
+            </Text>
+          ) : null}
         </>
       );
     }
@@ -2160,34 +2319,82 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
         ) : null}
 
         {/* Media Preview */}
-        {pendingMedia ? (
-          <View style={styles.mediaPreviewBanner}>
-            {mediaPreviewUrl && pendingMedia.mediaType !== 'FILE' ? (
-              <Image source={{ uri: mediaPreviewUrl }} style={styles.mediaPreviewThumb} resizeMode="cover" />
-            ) : (
-              <View style={styles.mediaPreviewFileIcon}>
-                <Ionicons name="document-outline" size={28} color="#5B7FFF" />
+        {pendingMediaList.length > 0 ? (
+          pendingMediaList.length === 1 && pendingMediaList[0].mediaType !== 'IMAGE' ? (
+            // Single non-image (video / file)
+            <View style={styles.mediaPreviewBanner}>
+              {pendingMediaList[0].mediaType !== 'FILE' ? (
+                <Image source={{ uri: pendingMediaList[0].uri }} style={styles.mediaPreviewThumb} resizeMode="cover" />
+              ) : (
+                <View style={styles.mediaPreviewFileIcon}>
+                  <Ionicons name="document-outline" size={28} color="#5B7FFF" />
+                </View>
+              )}
+              <View style={styles.mediaPreviewInfo}>
+                <Text style={styles.mediaPreviewName} numberOfLines={1}>
+                  {pendingMediaList[0].fileName}
+                </Text>
+                <Text style={styles.mediaPreviewSize}>
+                  {chatFileService.formatFileSize(pendingMediaList[0].fileSize)} • {pendingMediaList[0].mediaType}
+                </Text>
+                {isUploading ? (
+                  <View style={styles.uploadProgressBar}>
+                    <View style={[styles.uploadProgressFill, { width: `${uploadProgress}%` }]} />
+                  </View>
+                ) : null}
               </View>
-            )}
-            <View style={styles.mediaPreviewInfo}>
-              <Text style={styles.mediaPreviewName} numberOfLines={1}>
-                {pendingMedia.fileName}
-              </Text>
-              <Text style={styles.mediaPreviewSize}>
-                {chatFileService.formatFileSize(pendingMedia.fileSize)} • {pendingMedia.mediaType}
-              </Text>
+              {!isUploading ? (
+                <TouchableOpacity onPress={handleCancelMedia} style={styles.mediaPreviewClose}>
+                  <Ionicons name="close-circle" size={22} color="#F04343" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : (
+            // Multi-image preview grid
+            <View style={styles.multiImagePreviewContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.multiImageScroll} contentContainerStyle={styles.multiImageScrollContent}>
+                {pendingMediaList.map((media, index) => (
+                  <View key={`preview-${index}`} style={styles.multiImageThumbWrap}>
+                    <Image source={{ uri: media.uri }} style={styles.multiImageThumb} resizeMode="cover" />
+                    {isUploading && index === uploadCurrentIndex ? (
+                      <View style={styles.multiImageUploadOverlay}>
+                        <Text style={styles.multiImageUploadPct}>{uploadProgress}%</Text>
+                      </View>
+                    ) : isUploading && index < uploadCurrentIndex ? (
+                      <View style={styles.multiImageDoneOverlay}>
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      </View>
+                    ) : null}
+                    {!isUploading ? (
+                      <TouchableOpacity
+                        style={styles.multiImageRemoveBtn}
+                        onPress={() => setPendingMediaList((prev) => prev.filter((_, i) => i !== index))}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#F04343" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={styles.multiImageFooter}>
+                <Text style={styles.multiImageCount}>
+                  {isUploading
+                    ? `Đang gửi ${uploadCurrentIndex + 1}/${pendingMediaList.length}...`
+                    : `${pendingMediaList.length} ảnh đã chọn`}
+                </Text>
+                {!isUploading ? (
+                  <TouchableOpacity onPress={handleCancelMedia}>
+                    <Text style={styles.multiImageCancelText}>Hủy tất cả</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
               {isUploading ? (
                 <View style={styles.uploadProgressBar}>
                   <View style={[styles.uploadProgressFill, { width: `${uploadProgress}%` }]} />
                 </View>
               ) : null}
             </View>
-            {!isUploading ? (
-              <TouchableOpacity onPress={handleCancelMedia} style={styles.mediaPreviewClose}>
-                <Ionicons name="close-circle" size={22} color="#F04343" />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          )
         ) : null}
 
         {/* Emoji Picker Panel - uses native keyboard emoji */}
@@ -2242,7 +2449,7 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
           <TextInput
             ref={textInputRef}
             style={[styles.input, { color: colors.text, maxHeight: 100 }]}
-            placeholder={pendingMedia ? t('chat.add_caption', 'Thêm mô tả...') : t('chat.send_message', 'Tin nhắn')}
+            placeholder={pendingMediaList.length > 0 ? t('chat.add_caption', 'Thêm mô tả...') : t('chat.send_message', 'Tin nhắn')}
             placeholderTextColor="#5BA8D9"
             value={inputText}
             onChangeText={handleInputChange}
@@ -2263,7 +2470,7 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
               color={isRecording ? '#FF3B30' : '#7B808A'}
             />
           </TouchableOpacity>
-          {pendingMedia ? (
+          {pendingMediaList.length > 0 ? (
             <TouchableOpacity
               style={styles.bottomActionButton}
               onPress={handleSendMedia}
@@ -3802,6 +4009,71 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
     backgroundColor: COLORS.primary,
+  },
+  // ── Multi-image preview ──────────────────
+  multiImagePreviewContainer: {
+    backgroundColor: '#F4F7FC',
+    borderTopWidth: 1,
+    borderTopColor: '#DEE5EF',
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 8,
+  },
+  multiImageScroll: {
+    maxHeight: 90,
+  },
+  multiImageScrollContent: {
+    gap: 6,
+    paddingRight: 4,
+  },
+  multiImageThumbWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    overflow: 'hidden' as const,
+    backgroundColor: '#E0E6EF',
+  },
+  multiImageThumb: {
+    width: 72,
+    height: 72,
+  },
+  multiImageUploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  multiImageUploadPct: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  multiImageDoneOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,168,80,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  multiImageRemoveBtn: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  multiImageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingHorizontal: 2,
+  },
+  multiImageCount: {
+    fontSize: 12,
+    color: '#6C7480',
+  },
+  multiImageCancelText: {
+    fontSize: 12,
+    color: '#F04343',
+    fontWeight: '600',
   },
   // ── Attach menu ──────────────────
   attachMenuTitle: {

@@ -87,6 +87,7 @@ export const chatService = {
       voiceDuration?: number;
       replyToMessageId?: string;
       forwardedFromMessageId?: string;
+      mediaUrls?: string[];
     }
   ) => {
     const timestamp = new Date().toISOString();
@@ -104,6 +105,7 @@ export const chatService = {
     if (payload.voiceDuration) body.voiceDuration = payload.voiceDuration;
     if (payload.replyToMessageId) body.replyToMessageId = payload.replyToMessageId;
     if (payload.forwardedFromMessageId) body.forwardedFromMessageId = payload.forwardedFromMessageId;
+    if (payload.mediaUrls && payload.mediaUrls.length > 0) body.mediaUrls = payload.mediaUrls;
 
     console.log('[SEND_MESSAGE]', {
       timestamp,

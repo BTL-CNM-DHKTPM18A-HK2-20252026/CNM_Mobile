@@ -21,6 +21,8 @@ export interface ChatUiMessage {
   replyToMessageType?: string;
   // Forward
   forwardedFromSenderName?: string;
+  // IMAGE_GROUP attachments
+  attachments?: { url: string; fileName?: string; fileSize?: number; thumbnailUrl?: string }[];
 }
 
 export interface ChatUiReaction {
@@ -166,6 +168,14 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
     replyToContent: toStringOrEmpty(payload.replyToContent) || undefined,
     replyToMessageType: toStringOrEmpty(payload.replyToMessageType) || undefined,
     forwardedFromSenderName: toStringOrEmpty(payload.forwardedFromSenderName) || undefined,
+    attachments: Array.isArray(payload.attachments)
+      ? (payload.attachments as Array<Record<string, unknown>>).map((att) => ({
+          url: toStringOrEmpty(att.url),
+          fileName: toStringOrEmpty(att.fileName) || undefined,
+          fileSize: typeof att.fileSize === 'number' ? att.fileSize : undefined,
+          thumbnailUrl: toStringOrEmpty(att.thumbnailUrl) || undefined,
+        }))
+      : undefined,
   };
 };
 
