@@ -27,6 +27,8 @@ interface ChatItem {
   title: string;
   lastMessage: string;
   avatarUrl?: string | null;
+  groupAvatarUrl?: string | null;
+  firstMemberAvatarUrl?: string | null;
   secondAvatarUrl?: string | null;
   thirdAvatarUrl?: string | null;
   groupMemberCount?: number;
@@ -66,6 +68,8 @@ const FALLBACK_ITEMS: ChatItem[] = [
     title: 'CNM - Nhóm 10',
     lastMessage: 'Trần Hồng Nhiên: kê huy',
     avatarUrl: '/default/image3.jpg',
+    groupAvatarUrl: null,
+    firstMemberAvatarUrl: '/default/image3.jpg',
     secondAvatarUrl: '/default/image4.jpg',
     thirdAvatarUrl: '/default/image5.jpg',
     groupMemberCount: 5,
@@ -79,6 +83,8 @@ const FALLBACK_ITEMS: ChatItem[] = [
     title: 'Phòng trọ 3H',
     lastMessage: 'Hoàng Đẹp Trai: oke',
     avatarUrl: '/default/image4.jpg',
+    groupAvatarUrl: null,
+    firstMemberAvatarUrl: '/default/image4.jpg',
     secondAvatarUrl: '/default/image5.jpg',
     thirdAvatarUrl: '/default/image3.jpg',
     groupMemberCount: 4,
@@ -202,7 +208,15 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
         item.avatar_url ??
         primaryMember?.avatarUrl ??
         primaryMember?.avatar_url ??
-        '/default/image1.jpg',
+        (conversationType === 'GROUP' ? null : '/default/image1.jpg'),
+      groupAvatarUrl:
+        conversationType === 'GROUP'
+          ? (item.conversationAvatarUrl ?? item.conversation_avatar_url ?? item.avatarUrl ?? item.avatar_url ?? null)
+          : null,
+      firstMemberAvatarUrl:
+        conversationType === 'GROUP'
+          ? (primaryMember?.avatarUrl ?? primaryMember?.avatar_url ?? null)
+          : null,
       secondAvatarUrl:
         conversationType === 'GROUP' ? secondMember?.avatarUrl ?? null : null,
       thirdAvatarUrl:
@@ -410,8 +424,17 @@ export default function ChatScreen() {
     }
 
     if (item.type === 'GROUP') {
-      const avatarUrls = [item.avatarUrl, item.secondAvatarUrl, item.thirdAvatarUrl].filter(Boolean) as string[];
+      const hasGroupAvatar = Boolean(item.groupAvatarUrl && !String(item.groupAvatarUrl).includes('/default/'));
+      const avatarUrls = [item.firstMemberAvatarUrl, item.secondAvatarUrl, item.thirdAvatarUrl].filter(Boolean) as string[];
       const memberBadgeCount = Math.max(item.groupMemberCount ?? avatarUrls.length, 0);
+
+      if (hasGroupAvatar) {
+        return (
+          <View style={styles.groupAvatarWrap}>
+            <Image source={getAvatarSource(item.groupAvatarUrl)} style={styles.groupAvatarSingle} />
+          </View>
+        );
+      }
 
       return (
         <View style={styles.groupAvatarWrap}>
@@ -591,7 +614,7 @@ const styles = StyleSheet.create({
   singleAvatar: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 50,
     backgroundColor: '#E9EEF5',
   },
   groupAvatarWrap: {
@@ -606,6 +629,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#E9EEF5',
+  },
+  groupAvatarSingle: {
+    width: 60,
+    height: 60,
+    borderRadius: 50,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     backgroundColor: '#E9EEF5',
