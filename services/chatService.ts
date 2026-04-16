@@ -53,6 +53,25 @@ export const chatService = {
     });
   },
 
+  createGroupConversation: async (conversationName: string, memberIds: string[], conversationAvatarUrl?: string) => {
+    const body: {
+      conversationType: 'GROUP';
+      conversationName: string;
+      memberIds: string[];
+      conversationAvatarUrl?: string;
+    } = {
+      conversationType: 'GROUP',
+      conversationName,
+      memberIds,
+    };
+
+    if (conversationAvatarUrl) {
+      body.conversationAvatarUrl = conversationAvatarUrl;
+    }
+
+    return await api.post('/conversations', body);
+  },
+
   /**
    * Lấy hoặc tạo cuộc trò chuyện riêng với 1 người bạn.
    * Backend sẽ tự tạo nếu chưa có.
@@ -117,7 +136,7 @@ export const chatService = {
 
     try {
       const response = await api.post(endpoint, body);
-      console.log('[SEND_MESSAGE_SUCCESS]', { timestamp, endpoint, messageId: response?.id });
+      console.log('[SEND_MESSAGE_SUCCESS]', { timestamp, endpoint, messageId: (response as any)?.data?.id ?? (response as any)?.id });
       return response;
     } catch (error) {
       console.error('[SEND_MESSAGE_ERROR]', {
@@ -188,6 +207,16 @@ export const chatService = {
 
   addConversationMembers: async (conversationId: string, memberIds: string[]) => {
     return await api.post(`/conversations/${conversationId}/members`, memberIds);
+  },
+
+  updateGroupConversationInfo: async (
+    conversationId: string,
+    payload: {
+      conversationName?: string;
+      conversationAvatarUrl?: string;
+    }
+  ) => {
+    return await api.patch(`/conversations/${conversationId}`, payload);
   },
 
   removeConversationMember: async (conversationId: string, memberId: string) => {

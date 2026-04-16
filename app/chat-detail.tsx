@@ -183,16 +183,16 @@ const buildStompBrokerUrl = () => {
 const BROKER_URL = buildStompBrokerUrl();
 
 const EMOJI_LIST = [
-  '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙',
-  '🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬',
-  '🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸',
-  '😎','🤓','🧐','😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱',
-  '😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻',
-  '👋','🤚','🖐️','✋','🖖','👌','🤌','✌️','🤞','🤟','🤘','🤙','👍','👎','✊','👊','🤛','🤜','👏','🙌',
-  '🙏','❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','💕','💞','💓','💗','💖','💘','💝','🎉','🎊',
-  '🎈','🎁','🎀','🔥','⭐','✨','💫','🌟','🌈','☀️','🌙','❄️','🌸','🌺','🌻','🌹','🍀','🌊','🌍','🐶',
-  '🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦',
-  '🍎','🍊','🍋','🍇','🍓','🍒','🍑','🍍','🥭','🍕','🍔','🍟','🌭','🍿','🧁','🍰','🎂','☕','🍵','🥤',
+  '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', '😘', '😗', '😚', '😙',
+  '🥲', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐', '😑', '😶', '😏', '😒', '🙄', '😬',
+  '🤥', '😌', '😔', '😪', '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '🥴', '😵', '🤯', '🤠', '🥳', '🥸',
+  '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱',
+  '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻',
+  '👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '✌️', '🤞', '🤟', '🤘', '🤙', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌',
+  '🙏', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '🎉', '🎊',
+  '🎈', '🎁', '🎀', '🔥', '⭐', '✨', '💫', '🌟', '🌈', '☀️', '🌙', '❄️', '🌸', '🌺', '🌻', '🌹', '🍀', '🌊', '🌍', '🐶',
+  '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🙈', '🙉', '🙊', '🐔', '🐧', '🐦',
+  '🍎', '🍊', '🍋', '🍇', '🍓', '🍒', '🍑', '🍍', '🥭', '🍕', '🍔', '🍟', '🌭', '🍿', '🧁', '🍰', '🎂', '☕', '🍵', '🥤',
 ];
 
 export default function ChatDetailScreen() {
@@ -203,6 +203,8 @@ export default function ChatDetailScreen() {
   const [inputText, setInputText] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState(String(id ?? ''));
+  const [conversationDisplayName, setConversationDisplayName] = useState(String(name ?? ''));
+  const [conversationAvatarUrl, setConversationAvatarUrl] = useState(String(avatar ?? ''));
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isSendingAi, setIsSendingAi] = useState(false);
@@ -232,6 +234,7 @@ export default function ChatDetailScreen() {
   const [infoShowFiles, setInfoShowFiles] = useState(false);
   const [infoShowPinned, setInfoShowPinned] = useState(true);
   const [infoAddMemberVisible, setInfoAddMemberVisible] = useState(false);
+  const [infoAddMemberSearch, setInfoAddMemberSearch] = useState('');
   const [infoFriendsList, setInfoFriendsList] = useState<any[]>([]);
   const [infoSelectedMembers, setInfoSelectedMembers] = useState<string[]>([]);
   const [infoAddingMembers, setInfoAddingMembers] = useState(false);
@@ -239,6 +242,10 @@ export default function ChatDetailScreen() {
   const [infoShowTransferModal, setInfoShowTransferModal] = useState(false);
   const [infoTransferReason, setInfoTransferReason] = useState<'transfer' | 'leave'>('transfer');
   const [infoSelectedImage, setInfoSelectedImage] = useState<string | null>(null);
+  const [infoEditNameVisible, setInfoEditNameVisible] = useState(false);
+  const [infoEditNameValue, setInfoEditNameValue] = useState('');
+  const [infoUpdatingGroupName, setInfoUpdatingGroupName] = useState(false);
+  const [infoUpdatingGroupAvatar, setInfoUpdatingGroupAvatar] = useState(false);
 
   // Reply, Forward, Share Contact
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -273,8 +280,8 @@ export default function ChatDetailScreen() {
   const appStateRef = useRef(AppState.currentState);
   const loadingOlderRef = useRef(false);
   const shouldScrollToLatestRef = useRef(false);
-  const peerAvatarSource = useMemo(() => getAvatarSource(avatar), [avatar]);
-  const normalizedName = String(name ?? '').trim().toLowerCase();
+  const peerAvatarSource = useMemo(() => getAvatarSource(conversationAvatarUrl), [conversationAvatarUrl]);
+  const normalizedName = String(conversationDisplayName ?? '').trim().toLowerCase();
   const normalizedType = String(type ?? '').trim().toUpperCase();
   const isAiConversation = normalizedType === 'AI' || normalizedName === 'fruvia chat ai' || normalizedName === 'fruvia ai';
   const isCloudConversation = normalizedType === 'CLOUD' || normalizedName === 'cloud của tôi';
@@ -285,16 +292,10 @@ export default function ChatDetailScreen() {
   const canUseRealtimeIndicators = !isAiConversation && !isCloudConversation;
   const canUseMessageInteractions = isCloudConversation || isPrivateConversation || isGroupConversation;
 
-  const headerSubtitleText = isAiConversation
-    ? (isSendingAi ? t('chat.typing', 'Đang nhập...') : t('chat.ai_subheading', 'Hỏi đáp với Fruvia AI'))
-    : isCloudConversation
-    ? t('chat.cloud_subheading', 'Truyền file giữa các thiết bị của bạn')
-    : isConnected
-    ? (isTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
-    : t('chat.offline_recent', 'Truy cập gần đây');
-
   useEffect(() => {
     setConversationId(String(id ?? ''));
+    setConversationDisplayName(String(name ?? ''));
+    setConversationAvatarUrl(String(avatar ?? ''));
     setEditingMessageId(null);
     setInputText('');
     setIsPinnedListVisible(false);
@@ -302,7 +303,7 @@ export default function ChatDetailScreen() {
     setSelectedMessage(null);
     setReplyingTo(null);
     setForwardingMsg(null);
-  }, [id]);
+  }, [avatar, id, name]);
 
   useEffect(() => {
     const ensureSpecialConversation = async () => {
@@ -573,6 +574,14 @@ export default function ChatDetailScreen() {
     },
   });
 
+  const headerSubtitleText = isAiConversation
+    ? (isSendingAi ? t('chat.typing', 'Đang nhập...') : t('chat.ai_subheading', 'Hỏi đáp với Fruvia AI'))
+    : isCloudConversation
+      ? t('chat.cloud_subheading', 'Truyền file giữa các thiết bị của bạn')
+      : isConnected
+        ? (isTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
+        : t('chat.offline_recent', 'Truy cập gần đây');
+
   const loadInitialMessages = useCallback(async (uid?: string | null, silent = false) => {
     if (!conversationId) {
       return;
@@ -744,7 +753,7 @@ export default function ChatDetailScreen() {
         const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
         setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setFwdLoading(false));
   }, [forwardingMsg, conversationId]);
 
@@ -760,7 +769,7 @@ export default function ChatDetailScreen() {
         const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
         setScFriends(list);
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setScLoading(false));
   }, [isShareContactVisible]);
 
@@ -1128,8 +1137,8 @@ export default function ChatDetailScreen() {
       return;
     }
     if (soundRef.current) {
-      await soundRef.current.stopAsync().catch(() => {});
-      await soundRef.current.unloadAsync().catch(() => {});
+      await soundRef.current.stopAsync().catch(() => { });
+      await soundRef.current.unloadAsync().catch(() => { });
       soundRef.current = null;
     }
     try {
@@ -1141,7 +1150,7 @@ export default function ChatDetailScreen() {
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
           setPlayingVoiceId(null);
-          sound.unloadAsync().catch(() => {});
+          sound.unloadAsync().catch(() => { });
           if (soundRef.current === sound) soundRef.current = null;
         }
       });
@@ -1224,7 +1233,7 @@ export default function ChatDetailScreen() {
     setUploadCurrentIndex(0);
 
     // Check if all items are images and there are multiple → send as IMAGE_GROUP
-    const allImages = mediaItems.every((m) => m.mediaType === 'image');
+    const allImages = mediaItems.every((m) => m.mediaType === 'IMAGE');
     if (allImages && mediaItems.length > 1) {
       const tempMessageId = `temp-album-${Date.now()}`;
       const now = new Date();
@@ -1519,6 +1528,141 @@ export default function ChatDetailScreen() {
   const infoIsDeputy = infoCurrentUserRole === 'DEPUTY';
   const infoCanAddMembers = infoIsAdmin || infoIsDeputy;
 
+  const handleOpenInfoEditNameModal = useCallback(() => {
+    setInfoEditNameValue(String(conversationDisplayName ?? '').trim());
+    setInfoEditNameVisible(true);
+  }, [conversationDisplayName]);
+
+  const handleInfoUpdateGroupAvatar = useCallback(async (avatarUri: string) => {
+    if (!conversationId || !isGroupConversation || infoUpdatingGroupAvatar) return;
+
+    setInfoUpdatingGroupAvatar(true);
+    try {
+      let finalAvatarUrl = avatarUri.trim();
+
+      if (finalAvatarUrl && !/^https?:\/\//i.test(finalAvatarUrl)) {
+        const now = Date.now();
+        const lowerUri = finalAvatarUrl.toLowerCase();
+        const ext = lowerUri.includes('.png') ? 'png' : 'jpg';
+        const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+        const picked: PickedMedia = {
+          uri: finalAvatarUrl,
+          fileName: `group_avatar_${now}.${ext}`,
+          fileSize: 0,
+          mimeType,
+          mediaType: 'IMAGE',
+        };
+
+        finalAvatarUrl = await chatFileService.uploadMedia(picked);
+      }
+
+      const response = await chatService.updateGroupConversationInfo(conversationId, {
+        conversationAvatarUrl: finalAvatarUrl || undefined,
+      });
+
+      const payload = chatService.unwrapApiPayload<any>(response) ?? {};
+      const nextAvatar = String(payload.conversationAvatarUrl ?? payload.avatarUrl ?? finalAvatarUrl ?? '').trim();
+      setConversationAvatarUrl(nextAvatar);
+      Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện nhóm');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 403) {
+        Alert.alert('Không có quyền', 'Bạn chưa có quyền đổi ảnh đại diện nhóm');
+      } else {
+        Alert.alert('Lỗi', err?.message || 'Không thể cập nhật ảnh đại diện nhóm');
+      }
+    } finally {
+      setInfoUpdatingGroupAvatar(false);
+    }
+  }, [conversationId, infoUpdatingGroupAvatar, isGroupConversation]);
+
+  const handlePickInfoGroupAvatar = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await handleInfoUpdateGroupAvatar(result.assets[0].uri);
+    }
+  }, [handleInfoUpdateGroupAvatar]);
+
+  const handleTakeInfoGroupAvatar = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập camera');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      await handleInfoUpdateGroupAvatar(result.assets[0].uri);
+    }
+  }, [handleInfoUpdateGroupAvatar]);
+
+  const handleSelectInfoGroupAvatarSource = useCallback(() => {
+    Alert.alert(
+      'Ảnh đại diện nhóm',
+      'Chọn cách cập nhật ảnh đại diện nhóm',
+      [
+        { text: 'Thư viện', onPress: () => { void handlePickInfoGroupAvatar(); } },
+        { text: 'Chụp ảnh', onPress: () => { void handleTakeInfoGroupAvatar(); } },
+        { text: 'Hủy', style: 'cancel' },
+      ]
+    );
+  }, [handlePickInfoGroupAvatar, handleTakeInfoGroupAvatar]);
+
+  const handleInfoUpdateGroupName = useCallback(async () => {
+    if (!conversationId || !isGroupConversation || infoUpdatingGroupName) return;
+
+    const trimmedName = infoEditNameValue.trim();
+    if (!trimmedName) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên nhóm');
+      return;
+    }
+
+    setInfoUpdatingGroupName(true);
+    try {
+      const response = await chatService.updateGroupConversationInfo(conversationId, {
+        conversationName: trimmedName,
+      });
+
+      const payload = chatService.unwrapApiPayload<any>(response) ?? {};
+      const nextName = String(payload.conversationName ?? trimmedName).trim();
+      setConversationDisplayName(nextName || trimmedName);
+      setInfoEditNameVisible(false);
+      Alert.alert('Thành công', 'Đã cập nhật tên nhóm');
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 403) {
+        Alert.alert('Không có quyền', 'Bạn chưa có quyền đổi tên nhóm');
+      } else {
+        Alert.alert('Lỗi', err?.message || 'Không thể cập nhật tên nhóm');
+      }
+    } finally {
+      setInfoUpdatingGroupName(false);
+    }
+  }, [
+    conversationId,
+    infoEditNameValue,
+    infoUpdatingGroupName,
+    isGroupConversation,
+  ]);
+
   const fetchInfoFriendsForAdd = useCallback(async () => {
     try {
       const res = chatService.unwrapApiPayload<any[]>(await friendService.getFriendsList());
@@ -1528,18 +1672,65 @@ export default function ChatDetailScreen() {
     } catch { setInfoFriendsList([]); }
   }, [infoMembers]);
 
+  const filteredInfoFriendsList = useMemo(() => {
+    const keyword = infoAddMemberSearch.trim().toLowerCase();
+
+    if (!keyword) {
+      return infoFriendsList;
+    }
+
+    return infoFriendsList.filter((friend: any) => {
+      const displayName = String(friend.display_name ?? friend.full_name ?? friend.name ?? '').toLowerCase();
+      const email = String(friend.email ?? '').toLowerCase();
+      const phone = String(friend.phone ?? '').toLowerCase();
+
+      return displayName.includes(keyword) || email.includes(keyword) || phone.includes(keyword);
+    });
+  }, [infoAddMemberSearch, infoFriendsList]);
+
+  const infoAddMemberListData = useMemo(() => {
+    const output: Array<{ type: 'header'; id: string; letter: string } | { type: 'friend'; id: string; friend: any }> = [];
+    let currentLetter = '';
+
+    filteredInfoFriendsList.forEach((friend: any) => {
+      const displayName = String(friend.display_name ?? friend.full_name ?? friend.name ?? 'Unknown').trim();
+      const letter = displayName.charAt(0).toUpperCase() || '#';
+
+      if (letter !== currentLetter) {
+        currentLetter = letter;
+        output.push({ type: 'header', id: `header-${letter}`, letter });
+      }
+
+      output.push({ type: 'friend', id: `friend-${friend.user_id ?? friend.id}`, friend });
+    });
+
+    return output;
+  }, [filteredInfoFriendsList]);
+
+  const handleOpenInfoAddMemberModal = useCallback(async () => {
+    setInfoAddMemberVisible(true);
+    setInfoAddMemberSearch('');
+    setInfoSelectedMembers([]);
+    await fetchInfoFriendsForAdd();
+  }, [fetchInfoFriendsForAdd]);
+
+  const handleCloseInfoAddMemberModal = useCallback(() => {
+    setInfoAddMemberVisible(false);
+    setInfoAddMemberSearch('');
+    setInfoSelectedMembers([]);
+  }, []);
+
   const handleInfoAddMembers = useCallback(async () => {
     if (infoSelectedMembers.length === 0 || infoAddingMembers || !conversationId) return;
     setInfoAddingMembers(true);
     try {
       await chatService.addConversationMembers(conversationId, infoSelectedMembers);
-      setInfoAddMemberVisible(false);
-      setInfoSelectedMembers([]);
+      handleCloseInfoAddMemberModal();
       await fetchInfoMembers();
     } catch (err: any) {
       Alert.alert('Lỗi', err?.message || 'Không thể thêm thành viên');
     } finally { setInfoAddingMembers(false); }
-  }, [conversationId, fetchInfoMembers, infoAddingMembers, infoSelectedMembers]);
+  }, [conversationId, fetchInfoMembers, handleCloseInfoAddMemberModal, infoAddingMembers, infoSelectedMembers]);
 
   const handleInfoRemoveMember = useCallback((memberId: string, memberName: string) => {
     Alert.alert(
@@ -1705,509 +1896,480 @@ export default function ChatDetailScreen() {
     );
   };
 
-const isFirstInMessageBlock = (current: Message, prev?: Message) => {
-  if (!prev) return true;
-  if (String(current.senderId) !== String(prev.senderId)) return true;
+  const isFirstInMessageBlock = (current: Message, prev?: Message) => {
+    if (!prev) return true;
+    if (String(current.senderId) !== String(prev.senderId)) return true;
 
-  const currentMs = getMessageMillis(current.createdAt);
-  const prevMs = getMessageMillis(prev.createdAt);
-  if (Number.isNaN(currentMs) || Number.isNaN(prevMs)) return true;
+    const currentMs = getMessageMillis(current.createdAt);
+    const prevMs = getMessageMillis(prev.createdAt);
+    if (Number.isNaN(currentMs) || Number.isNaN(prevMs)) return true;
 
-  return currentMs - prevMs > BLOCK_GAP_MS;
-};
-
-const shouldShowMessageTimestamp = (current: Message, next?: Message) => {
-  if (!next) return true;
-  if (String(current.senderId) !== String(next.senderId)) return true;
-
-  const currentMs = getMessageMillis(current.createdAt);
-  const nextMs = getMessageMillis(next.createdAt);
-  if (Number.isNaN(currentMs) || Number.isNaN(nextMs)) return true;
-
-  return nextMs - currentMs > BLOCK_GAP_MS;
-};
-
-const formatDateSeparator = (createdAt?: string) => {
-  const raw = String(createdAt || '').trim();
-  if (!raw) return null;
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return null;
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
-  // Đọc HH:mm thẳng từ chuỗi ISO để tránh Hermes parse UTC sai +7
-  const isoTimeMatch = raw.match(/T(\d{2}):(\d{2})/);
-  const time = isoTimeMatch
-    ? `${isoTimeMatch[1]}:${isoTimeMatch[2]}`
-    : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-  if (isToday) return `${time} Hôm nay`;
-  if (isYesterday) return `${time} Hôm qua`;
-  // Đọc ngày tháng thẳng từ chuỗi ISO
-  const isoDateMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoDateMatch) return `${time} ${isoDateMatch[3]}/${isoDateMatch[2]}/${isoDateMatch[1]}`;
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mo = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  return `${time} ${dd}/${mo}/${yyyy}`;
-};
-
-const shouldShowDateSeparator = (current: Message, prev?: Message) => {
-  if (!prev) return true;
-  const currentDate = new Date(current.createdAt);
-  const prevDate = new Date(prev.createdAt);
-  if (Number.isNaN(currentDate.getTime()) || Number.isNaN(prevDate.getTime())) return false;
-  return currentDate.toDateString() !== prevDate.toDateString()
-    || (currentDate.getTime() - prevDate.getTime() > 15 * 60 * 1000);
-};
-
-const renderMessage = ({ item, index }: { item: Message; index: number }) => {
-  const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
-  const prevMessage = index > 0 ? messages[index - 1] : undefined;
-  const nextMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
-  const showAvatar = !isCurrentUserMessage && isFirstInMessageBlock(item, prevMessage);
-  const showTimestamp = shouldShowMessageTimestamp(item, nextMessage);
-  const timeLabel = formatMessageTime(item.createdAt);
-  const displayContent = getDisplayMessageContent(item);
-  const reactionSummary = buildReactionSummary(item.reactions);
-  const showDateSep = shouldShowDateSeparator(item, prevMessage);
-  const dateSepLabel = showDateSep ? formatDateSeparator(item.createdAt) : null;
-
-  const msgType = (item.messageType || 'TEXT').toUpperCase();
-  const isImageMsg = msgType === 'IMAGE';
-  const isImageGroupMsg = msgType === 'IMAGE_GROUP';
-  const isVideoMsg = msgType === 'VIDEO';
-  const isVoiceMsg = msgType === 'VOICE';
-  const isFileMsg = msgType === 'FILE' || msgType === 'MEDIA';
-  const isMediaMsg = isImageMsg || isImageGroupMsg || isVideoMsg || isFileMsg || isVoiceMsg;
-
-  // Helpers for file bubbles
-  const getFileNameFromUrl = (url: string): string => {
-    try {
-      const decoded = decodeURIComponent(url);
-      const lastPart = decoded.split('/').pop() ?? '';
-      const filename = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart;
-      return filename || 'Tệp đính kèm';
-    } catch {
-      return url.split('/').pop() ?? 'Tệp đính kèm';
-    }
-  };
-  const getFileExt = (url: string): string => {
-    const name = getFileNameFromUrl(url);
-    const parts = name.split('.');
-    return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
-  };
-  const getFileIconColor = (url: string): string => {
-    const ext = getFileExt(url).toLowerCase();
-    if (ext === 'pdf') return '#F40F02';
-    if (['doc', 'docx'].includes(ext)) return '#2B579A';
-    if (['xls', 'xlsx'].includes(ext)) return '#217346';
-    if (['ppt', 'pptx'].includes(ext)) return '#D24726';
-    if (['zip', 'rar', '7z'].includes(ext)) return '#F59E0B';
-    return '#6B7280';
+    return currentMs - prevMs > BLOCK_GAP_MS;
   };
 
-  const renderMediaContent = () => {
-    if (item.isRecalled) {
-      return (
-        <Text style={[styles.recalledText, isCurrentUserMessage && styles.userRecalledText, !isCurrentUserMessage && { color: colors.textSecondary }]}>
-          {t('chat.recalled', 'Tin nhắn đã được thu hồi')}
-        </Text>
-      );
-    }
+  const shouldShowMessageTimestamp = (current: Message, next?: Message) => {
+    if (!next) return true;
+    if (String(current.senderId) !== String(next.senderId)) return true;
 
-    // Reply snippet block
-    const replyBlock = item.replyToMessageId ? (() => {
-      const repliedMsg = messages.find((m) => m.messageId === item.replyToMessageId);
-      const snippet = repliedMsg
-        ? getReplySnippet(repliedMsg)
-        : (item.replyToContent ? (item.replyToContent.length > 80 ? `${item.replyToContent.slice(0, 80)}...` : item.replyToContent) : 'Tin nhắn đã xóa');
-      const senderLabel = repliedMsg
-        ? (repliedMsg.senderId === currentUserId ? 'Bạn' : (repliedMsg.senderName || 'Người dùng'))
-        : (item.replyToSenderName || 'Người dùng');
-      const scrollToReplied = () => {
-        const idx = messages.findIndex((m) => m.messageId === item.replyToMessageId);
-        if (idx >= 0) {
-          try { flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 }); } catch {}
-        }
-      };
-      return (
-        <TouchableOpacity
-          style={[styles.replySnippetBlock, isCurrentUserMessage ? styles.replySnippetBlockUser : styles.replySnippetBlockOther]}
-          onPress={scrollToReplied}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.replySnippetSender, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]} numberOfLines={1}>
-            {senderLabel}
+    const currentMs = getMessageMillis(current.createdAt);
+    const nextMs = getMessageMillis(next.createdAt);
+    if (Number.isNaN(currentMs) || Number.isNaN(nextMs)) return true;
+
+    return nextMs - currentMs > BLOCK_GAP_MS;
+  };
+
+  const formatDateSeparator = (createdAt?: string) => {
+    const raw = String(createdAt || '').trim();
+    if (!raw) return null;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return null;
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+    // Đọc HH:mm thẳng từ chuỗi ISO để tránh Hermes parse UTC sai +7
+    const isoTimeMatch = raw.match(/T(\d{2}):(\d{2})/);
+    const time = isoTimeMatch
+      ? `${isoTimeMatch[1]}:${isoTimeMatch[2]}`
+      : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    if (isToday) return `${time} Hôm nay`;
+    if (isYesterday) return `${time} Hôm qua`;
+    // Đọc ngày tháng thẳng từ chuỗi ISO
+    const isoDateMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoDateMatch) return `${time} ${isoDateMatch[3]}/${isoDateMatch[2]}/${isoDateMatch[1]}`;
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mo = String(date.getMonth() + 1).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    return `${time} ${dd}/${mo}/${yyyy}`;
+  };
+
+  const shouldShowDateSeparator = (current: Message, prev?: Message) => {
+    if (!prev) return true;
+    const currentDate = new Date(current.createdAt);
+    const prevDate = new Date(prev.createdAt);
+    if (Number.isNaN(currentDate.getTime()) || Number.isNaN(prevDate.getTime())) return false;
+    return currentDate.toDateString() !== prevDate.toDateString()
+      || (currentDate.getTime() - prevDate.getTime() > 15 * 60 * 1000);
+  };
+
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
+    const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
+    const prevMessage = index > 0 ? messages[index - 1] : undefined;
+    const nextMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
+    const showAvatar = !isCurrentUserMessage && isFirstInMessageBlock(item, prevMessage);
+    const showSenderName = isGroupConversation && showAvatar;
+    const senderDisplayName = (item.senderName || '').trim() || t('chat.unknown_user', 'Người dùng');
+    const senderAvatarSource = showAvatar
+      ? getAvatarSource(item.senderAvatarUrl || (isGroupConversation ? undefined : conversationAvatarUrl))
+      : null;
+    const showTimestamp = shouldShowMessageTimestamp(item, nextMessage);
+    const timeLabel = formatMessageTime(item.createdAt);
+    const displayContent = getDisplayMessageContent(item);
+    const reactionSummary = buildReactionSummary(item.reactions);
+    const showDateSep = shouldShowDateSeparator(item, prevMessage);
+    const dateSepLabel = showDateSep ? formatDateSeparator(item.createdAt) : null;
+
+    const msgType = (item.messageType || 'TEXT').toUpperCase();
+    const isImageMsg = msgType === 'IMAGE';
+    const isImageGroupMsg = msgType === 'IMAGE_GROUP';
+    const isVideoMsg = msgType === 'VIDEO';
+    const isVoiceMsg = msgType === 'VOICE';
+    const isFileMsg = msgType === 'FILE' || msgType === 'MEDIA';
+    const isMediaMsg = isImageMsg || isImageGroupMsg || isVideoMsg || isFileMsg || isVoiceMsg;
+
+    // Helpers for file bubbles
+    const getFileNameFromUrl = (url: string): string => {
+      try {
+        const decoded = decodeURIComponent(url);
+        const lastPart = decoded.split('/').pop() ?? '';
+        const filename = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart;
+        return filename || 'Tệp đính kèm';
+      } catch {
+        return url.split('/').pop() ?? 'Tệp đính kèm';
+      }
+    };
+    const getFileExt = (url: string): string => {
+      const name = getFileNameFromUrl(url);
+      const parts = name.split('.');
+      return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
+    };
+    const getFileIconColor = (url: string): string => {
+      const ext = getFileExt(url).toLowerCase();
+      if (ext === 'pdf') return '#F40F02';
+      if (['doc', 'docx'].includes(ext)) return '#2B579A';
+      if (['xls', 'xlsx'].includes(ext)) return '#217346';
+      if (['ppt', 'pptx'].includes(ext)) return '#D24726';
+      if (['zip', 'rar', '7z'].includes(ext)) return '#F59E0B';
+      return '#6B7280';
+    };
+
+    const renderMediaContent = () => {
+      if (item.isRecalled) {
+        return (
+          <Text style={[styles.recalledText, isCurrentUserMessage && styles.userRecalledText, !isCurrentUserMessage && { color: colors.textSecondary }]}>
+            {t('chat.recalled', 'Tin nhắn đã được thu hồi')}
           </Text>
-          <Text style={[styles.replySnippetText, { color: isCurrentUserMessage ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]} numberOfLines={2}>
-            {snippet}
-          </Text>
-        </TouchableOpacity>
-      );
-    })() : null;
+        );
+      }
 
-    // Forwarded banner
-    const forwardedBanner = (item.forwardedFromSenderName && !item.isRecalled) ? (
-      <View style={styles.forwardedBanner}>
-        <Ionicons name="return-up-forward-outline" size={12} color={isCurrentUserMessage ? '#90CAF9' : '#0068FF'} />
-        <Text style={[styles.forwardedBannerText, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]}>
-          {`Chuyển tiếp từ ${item.forwardedFromSenderName}`}
-        </Text>
-      </View>
-    ) : null;
-
-    if (isImageMsg) {
-      const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
-      return (
-        <>
-          {replyBlock}
-          {forwardedBanner}
+      // Reply snippet block
+      const replyBlock = item.replyToMessageId ? (() => {
+        const repliedMsg = messages.find((m) => m.messageId === item.replyToMessageId);
+        const snippet = repliedMsg
+          ? getReplySnippet(repliedMsg)
+          : (item.replyToContent ? (item.replyToContent.length > 80 ? `${item.replyToContent.slice(0, 80)}...` : item.replyToContent) : 'Tin nhắn đã xóa');
+        const senderLabel = repliedMsg
+          ? (repliedMsg.senderId === currentUserId ? 'Bạn' : (repliedMsg.senderName || 'Người dùng'))
+          : (item.replyToSenderName || 'Người dùng');
+        const scrollToReplied = () => {
+          const idx = messages.findIndex((m) => m.messageId === item.replyToMessageId);
+          if (idx >= 0) {
+            try { flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 }); } catch { }
+          }
+        };
+        return (
           <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => {
-              if (!isLocalUri) {
-                setFullscreenImageUrl(item.content);
-              }
-            }}
+            style={[styles.replySnippetBlock, isCurrentUserMessage ? styles.replySnippetBlockUser : styles.replySnippetBlockOther]}
+            onPress={scrollToReplied}
+            activeOpacity={0.7}
           >
-            <Image
-              source={{ uri: item.content }}
-              style={styles.mediaImage}
-              resizeMode="cover"
-            />
-            {item.caption ? (
-              <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-                {item.caption}
-              </Text>
-            ) : null}
-            {isLocalUri && (
-              <View style={styles.mediaUploadingOverlay}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
-                <Text style={styles.mediaUploadingText}>Đang gửi...</Text>
-              </View>
-            )}
+            <Text style={[styles.replySnippetSender, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]} numberOfLines={1}>
+              {senderLabel}
+            </Text>
+            <Text style={[styles.replySnippetText, { color: isCurrentUserMessage ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]} numberOfLines={2}>
+              {snippet}
+            </Text>
           </TouchableOpacity>
-        </>
-      );
-    }
+        );
+      })() : null;
 
-    if (isImageGroupMsg && item.attachments && item.attachments.length > 0) {
-      const imgs = item.attachments;
-      const count = imgs.length;
-      const gridWidth = 280;
-      const gap = 2;
-      const halfWidth = (gridWidth - gap) / 2;
+      // Forwarded banner
+      const forwardedBanner = (item.forwardedFromSenderName && !item.isRecalled) ? (
+        <View style={styles.forwardedBanner}>
+          <Ionicons name="return-up-forward-outline" size={12} color={isCurrentUserMessage ? '#90CAF9' : '#0068FF'} />
+          <Text style={[styles.forwardedBannerText, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]}>
+            {`Chuyển tiếp từ ${item.forwardedFromSenderName}`}
+          </Text>
+        </View>
+      ) : null;
 
-      const renderGrid = () => {
-        if (count === 1) {
-          return (
-            <TouchableOpacity activeOpacity={0.85} onPress={() => setFullscreenImageUrl(imgs[0].url)}>
-              <Image source={{ uri: imgs[0].url }} style={{ width: gridWidth, height: gridWidth * 0.75, borderRadius: 8 }} resizeMode="cover" />
+      if (isImageMsg) {
+        const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
+        return (
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                if (!isLocalUri) {
+                  setFullscreenImageUrl(item.content);
+                }
+              }}
+            >
+              <Image
+                source={{ uri: item.content }}
+                style={styles.mediaImage}
+                resizeMode="cover"
+              />
+              {item.caption ? (
+                <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
+                  {item.caption}
+                </Text>
+              ) : null}
+              {isLocalUri && (
+                <View style={styles.mediaUploadingOverlay}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.mediaUploadingText}>Đang gửi...</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          );
-        }
-        if (count === 2) {
-          return (
-            <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
-              {imgs.map((att, i) => (
-                <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
-                  <Image source={{ uri: att.url }} style={{ width: halfWidth, height: halfWidth }} resizeMode="cover" />
-                </TouchableOpacity>
-              ))}
-            </View>
-          );
-        }
-        if (count === 3) {
-          return (
-            <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
+          </>
+        );
+      }
+
+      if (isImageGroupMsg && item.attachments && item.attachments.length > 0) {
+        const imgs = item.attachments;
+        const count = imgs.length;
+        const gridWidth = 280;
+        const gap = 2;
+        const halfWidth = (gridWidth - gap) / 2;
+
+        const renderGrid = () => {
+          if (count === 1) {
+            return (
               <TouchableOpacity activeOpacity={0.85} onPress={() => setFullscreenImageUrl(imgs[0].url)}>
-                <Image source={{ uri: imgs[0].url }} style={{ width: halfWidth, height: halfWidth * 2 + gap }} resizeMode="cover" />
+                <Image source={{ uri: imgs[0].url }} style={{ width: gridWidth, height: gridWidth * 0.75, borderRadius: 8 }} resizeMode="cover" />
               </TouchableOpacity>
-              <View style={{ gap }}>
-                {imgs.slice(1).map((att, i) => (
+            );
+          }
+          if (count === 2) {
+            return (
+              <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
+                {imgs.map((att, i) => (
                   <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
                     <Image source={{ uri: att.url }} style={{ width: halfWidth, height: halfWidth }} resizeMode="cover" />
                   </TouchableOpacity>
                 ))}
               </View>
+            );
+          }
+          if (count === 3) {
+            return (
+              <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
+                <TouchableOpacity activeOpacity={0.85} onPress={() => setFullscreenImageUrl(imgs[0].url)}>
+                  <Image source={{ uri: imgs[0].url }} style={{ width: halfWidth, height: halfWidth * 2 + gap }} resizeMode="cover" />
+                </TouchableOpacity>
+                <View style={{ gap }}>
+                  {imgs.slice(1).map((att, i) => (
+                    <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                      <Image source={{ uri: att.url }} style={{ width: halfWidth, height: halfWidth }} resizeMode="cover" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            );
+          }
+          // 4+ images: dynamic rows (Zalo-style, shows ALL images)
+          const numRows = Math.ceil(count / 3);
+          const rows: typeof imgs[number][][] = [];
+          let startIdx = 0;
+          let rem = count;
+          for (let r = 0; r < numRows; r++) {
+            const rowsLeft = numRows - r;
+            const perRow = Math.floor(rem / rowsLeft);
+            rows.push(imgs.slice(startIdx, startIdx + perRow));
+            startIdx += perRow;
+            rem -= perRow;
+          }
+          return (
+            <View style={{ borderRadius: 8, overflow: 'hidden', width: gridWidth }}>
+              {rows.map((row, ri) => (
+                <View key={ri} style={{ flexDirection: 'row', gap, marginTop: ri > 0 ? gap : 0 }}>
+                  {row.map((att, ci) => {
+                    const itemWidth = (gridWidth - gap * (row.length - 1)) / row.length;
+                    return (
+                      <TouchableOpacity key={ci} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                        <Image source={{ uri: att.url }} style={{ width: itemWidth, height: itemWidth }} resizeMode="cover" />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
             </View>
           );
-        }
-        // 4+ images: dynamic rows (Zalo-style, shows ALL images)
-        const numRows = Math.ceil(count / 3);
-        const rows: typeof imgs[number][][] = [];
-        let startIdx = 0;
-        let rem = count;
-        for (let r = 0; r < numRows; r++) {
-          const rowsLeft = numRows - r;
-          const perRow = Math.floor(rem / rowsLeft);
-          rows.push(imgs.slice(startIdx, startIdx + perRow));
-          startIdx += perRow;
-          rem -= perRow;
-        }
+        };
+
         return (
-          <View style={{ borderRadius: 8, overflow: 'hidden', width: gridWidth }}>
-            {rows.map((row, ri) => (
-              <View key={ri} style={{ flexDirection: 'row', gap, marginTop: ri > 0 ? gap : 0 }}>
-                {row.map((att, ci) => {
-                  const itemWidth = (gridWidth - gap * (row.length - 1)) / row.length;
-                  return (
-                    <TouchableOpacity key={ci} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
-                      <Image source={{ uri: att.url }} style={{ width: itemWidth, height: itemWidth }} resizeMode="cover" />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
-        );
-      };
-
-      return (
-        <>
-          {replyBlock}
-          {forwardedBanner}
-          {renderGrid()}
-          {item.caption ? (
-            <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-              {item.caption}
-            </Text>
-          ) : null}
-        </>
-      );
-    }
-
-    if (isVideoMsg) {
-      const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
-      return (
-        <>
-          {replyBlock}
-          {forwardedBanner}
-          <TouchableOpacity onPress={() => {
-            if (item.content && !isLocalUri) {
-              setFullscreenVideoUrl(item.content);
-            }
-          }}>
-            <View style={styles.videoContainer}>
-              <View style={styles.videoPlayOverlay}>
-                <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
-              </View>
-              {item.videoDuration ? (
-                <View style={styles.videoDurationBadge}>
-                  <Text style={styles.videoDurationText}>
-                    {Math.floor(item.videoDuration / 60)}:{String(item.videoDuration % 60).padStart(2, '0')}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            {renderGrid()}
             {item.caption ? (
               <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
                 {item.caption}
               </Text>
             ) : null}
-          </TouchableOpacity>
-        </>
-      );
-    }
+          </>
+        );
+      }
 
-    if (isVoiceMsg) {
-      const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
-      const isPlaying = playingVoiceId === item.messageId;
-      const dur = item.voiceDuration ?? 0;
-      const waveHeights = [6, 10, 14, 10, 16, 8, 12, 18, 10, 14, 8, 16, 12, 10, 14, 8, 12, 16, 10, 8];
-      return (
-        <>
-          {replyBlock}
-          {forwardedBanner}
-          <TouchableOpacity
-            style={styles.voiceBubble}
-            onPress={() => { if (!isLocalUri) togglePlayVoice(item); }}
-            activeOpacity={0.75}
-          >
-            {isLocalUri ? (
-              <ActivityIndicator size="small" color={isCurrentUserMessage ? '#1A2A3B' : COLORS.primary} />
-            ) : (
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={22}
-                color={isCurrentUserMessage ? '#1A2A3B' : COLORS.primary}
-              />
-            )}
-            <View style={styles.voiceWaveform}>
-              {waveHeights.map((h, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.voiceBar,
-                    { height: h },
-                    isPlaying && { backgroundColor: isCurrentUserMessage ? '#4A90D9' : COLORS.primary },
-                  ]}
-                />
-              ))}
-            </View>
-            <Text style={[styles.voiceDurationText, { color: isCurrentUserMessage ? '#526377' : colors.textSecondary }]}>
-              {Math.floor(dur / 60)}:{String(dur % 60).padStart(2, '0')}
-            </Text>
-          </TouchableOpacity>
-        </>
-      );
-    }
-
-    if (isFileMsg) {
-      const isUploading = item.content?.startsWith('file://') || item.content?.startsWith('content://');
-      const fileUrl = item.content ?? '';
-      const displayName = item.fileName || getFileNameFromUrl(fileUrl);
-      const ext = getFileExt(fileUrl);
-      const iconColor = getFileIconColor(fileUrl);
-      const extLabel = ext.slice(0, 4) || 'FILE';
-      return (
-        <>
-          {replyBlock}
-          {forwardedBanner}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => {
-              if (!isUploading && fileUrl) {
-                Linking.openURL(fileUrl).catch(() => {});
+      if (isVideoMsg) {
+        const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
+        return (
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            <TouchableOpacity onPress={() => {
+              if (item.content && !isLocalUri) {
+                setFullscreenVideoUrl(item.content);
               }
-            }}
-          >
-            <View style={styles.fileBubbleContent}>
-              <View style={[styles.fileIconWrap, { backgroundColor: iconColor }]}>
-                {isUploading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.fileExtLabel}>{extLabel}</Text>
-                )}
-              </View>
-              <View style={styles.fileInfoWrap}>
-                <Text
-                  style={[styles.fileNameMainText, { color: isCurrentUserMessage ? '#1A2A3B' : colors.text }]}
-                  numberOfLines={2}
-                >
-                  {displayName}
-                </Text>
-                {item.fileSize ? (
-                  <Text style={[styles.fileSizeText, { color: isCurrentUserMessage ? '#617287' : colors.textSecondary }]}>
-                    {chatFileService.formatFileSize(item.fileSize)}
-                  </Text>
+            }}>
+              <View style={styles.videoContainer}>
+                <View style={styles.videoPlayOverlay}>
+                  <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                </View>
+                {item.videoDuration ? (
+                  <View style={styles.videoDurationBadge}>
+                    <Text style={styles.videoDurationText}>
+                      {Math.floor(item.videoDuration / 60)}:{String(item.videoDuration % 60).padStart(2, '0')}
+                    </Text>
+                  </View>
                 ) : null}
               </View>
-              {!isUploading && (
-                <Ionicons name="download-outline" size={22} color={isCurrentUserMessage ? '#526377' : COLORS.primary} />
-              )}
-            </View>
-          </TouchableOpacity>
-        </>
-      );
-    }
+              {item.caption ? (
+                <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
+                  {item.caption}
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          </>
+        );
+      }
 
-    // SHARE_CONTACT render
-    if ((item.messageType || '').toUpperCase() === 'SHARE_CONTACT') {
-      let contact: { userId?: string; fullName?: string; phoneNumber?: string; avatar?: string } = {};
-      try { contact = JSON.parse(item.content || '{}'); } catch {}
-      const hasAvatar = Boolean(contact.avatar);
+      if (isVoiceMsg) {
+        const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
+        const isPlaying = playingVoiceId === item.messageId;
+        const dur = item.voiceDuration ?? 0;
+        const waveHeights = [6, 10, 14, 10, 16, 8, 12, 18, 10, 14, 8, 16, 12, 10, 14, 8, 12, 16, 10, 8];
+        return (
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            <TouchableOpacity
+              style={styles.voiceBubble}
+              onPress={() => { if (!isLocalUri) togglePlayVoice(item); }}
+              activeOpacity={0.75}
+            >
+              {isLocalUri ? (
+                <ActivityIndicator size="small" color={isCurrentUserMessage ? '#1A2A3B' : COLORS.primary} />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? 'pause' : 'play'}
+                  size={22}
+                  color={isCurrentUserMessage ? '#1A2A3B' : COLORS.primary}
+                />
+              )}
+              <View style={styles.voiceWaveform}>
+                {waveHeights.map((h, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.voiceBar,
+                      { height: h },
+                      isPlaying && { backgroundColor: isCurrentUserMessage ? '#4A90D9' : COLORS.primary },
+                    ]}
+                  />
+                ))}
+              </View>
+              <Text style={[styles.voiceDurationText, { color: isCurrentUserMessage ? '#526377' : colors.textSecondary }]}>
+                {Math.floor(dur / 60)}:{String(dur % 60).padStart(2, '0')}
+              </Text>
+            </TouchableOpacity>
+          </>
+        );
+      }
+
+      if (isFileMsg) {
+        const isUploading = item.content?.startsWith('file://') || item.content?.startsWith('content://');
+        const fileUrl = item.content ?? '';
+        const displayName = item.fileName || getFileNameFromUrl(fileUrl);
+        const ext = getFileExt(fileUrl);
+        const iconColor = getFileIconColor(fileUrl);
+        const extLabel = ext.slice(0, 4) || 'FILE';
+        return (
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                if (!isUploading && fileUrl) {
+                  Linking.openURL(fileUrl).catch(() => { });
+                }
+              }}
+            >
+              <View style={styles.fileBubbleContent}>
+                <View style={[styles.fileIconWrap, { backgroundColor: iconColor }]}>
+                  {isUploading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.fileExtLabel}>{extLabel}</Text>
+                  )}
+                </View>
+                <View style={styles.fileInfoWrap}>
+                  <Text
+                    style={[styles.fileNameMainText, { color: isCurrentUserMessage ? '#1A2A3B' : colors.text }]}
+                    numberOfLines={2}
+                  >
+                    {displayName}
+                  </Text>
+                  {item.fileSize ? (
+                    <Text style={[styles.fileSizeText, { color: isCurrentUserMessage ? '#617287' : colors.textSecondary }]}>
+                      {chatFileService.formatFileSize(item.fileSize)}
+                    </Text>
+                  ) : null}
+                </View>
+                {!isUploading && (
+                  <Ionicons name="download-outline" size={22} color={isCurrentUserMessage ? '#526377' : COLORS.primary} />
+                )}
+              </View>
+            </TouchableOpacity>
+          </>
+        );
+      }
+
+      // SHARE_CONTACT render
+      if ((item.messageType || '').toUpperCase() === 'SHARE_CONTACT') {
+        let contact: { userId?: string; fullName?: string; phoneNumber?: string; avatar?: string } = {};
+        try { contact = JSON.parse(item.content || '{}'); } catch { }
+        const hasAvatar = Boolean(contact.avatar);
+        return (
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            <View style={[styles.contactCard, isCurrentUserMessage && styles.contactCardUser]}>
+              <View style={styles.contactCardHeader}>
+                <View style={[styles.contactCardAvatar, { backgroundColor: '#4A90D9' }]}>
+                  {hasAvatar ? (
+                    <Image source={{ uri: contact.avatar }} style={styles.contactCardAvatarImg} />
+                  ) : (
+                    <Text style={styles.contactCardAvatarText}>
+                      {(contact.fullName || '?').charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.contactCardInfo}>
+                  <Text style={[styles.contactCardName, { color: isCurrentUserMessage ? '#1A2A3B' : colors.text }]} numberOfLines={2}>
+                    {contact.fullName || 'Người dùng'}
+                  </Text>
+                  {contact.phoneNumber ? (
+                    <Text style={[styles.contactCardPhone, { color: isCurrentUserMessage ? '#617287' : colors.textSecondary }]}>
+                      {contact.phoneNumber}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+              <View style={[styles.contactCardDivider, { backgroundColor: isCurrentUserMessage ? 'rgba(100,120,140,0.25)' : colors.border }]} />
+              <TouchableOpacity
+                style={styles.contactCardBtn}
+                onPress={() => Alert.alert(contact.fullName || 'Danh thiếp', contact.phoneNumber || 'Không có số điện thoại')}
+              >
+                <Text style={[styles.contactCardBtnText, { color: isCurrentUserMessage ? '#1A6DA8' : '#0068FF' }]}>Nhắn tin</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        );
+      }
+
+      // Default: TEXT message
       return (
         <>
           {replyBlock}
           {forwardedBanner}
-          <View style={[styles.contactCard, isCurrentUserMessage && styles.contactCardUser]}>
-            <View style={styles.contactCardHeader}>
-              <View style={[styles.contactCardAvatar, { backgroundColor: '#4A90D9' }]}>
-                {hasAvatar ? (
-                  <Image source={{ uri: contact.avatar }} style={styles.contactCardAvatarImg} />
-                ) : (
-                  <Text style={styles.contactCardAvatarText}>
-                    {(contact.fullName || '?').charAt(0).toUpperCase()}
-                  </Text>
-                )}
-              </View>
-              <View style={styles.contactCardInfo}>
-                <Text style={[styles.contactCardName, { color: isCurrentUserMessage ? '#1A2A3B' : colors.text }]} numberOfLines={2}>
-                  {contact.fullName || 'Người dùng'}
-                </Text>
-                {contact.phoneNumber ? (
-                  <Text style={[styles.contactCardPhone, { color: isCurrentUserMessage ? '#617287' : colors.textSecondary }]}>
-                    {contact.phoneNumber}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-            <View style={[styles.contactCardDivider, { backgroundColor: isCurrentUserMessage ? 'rgba(100,120,140,0.25)' : colors.border }]} />
-            <TouchableOpacity
-              style={styles.contactCardBtn}
-              onPress={() => Alert.alert(contact.fullName || 'Danh thiếp', contact.phoneNumber || 'Không có số điện thoại')}
-            >
-              <Text style={[styles.contactCardBtnText, { color: isCurrentUserMessage ? '#1A6DA8' : '#0068FF' }]}>Nhắn tin</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}>{displayContent}</Text>
+          {item.isEdited ? <Text style={[styles.editedLabel, isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }]}>{t('chat.edited', 'Đã chỉnh sửa')}</Text> : null}
         </>
       );
-    }
+    };
 
-    // Default: TEXT message
     return (
-      <>
-        {replyBlock}
-        {forwardedBanner}
-        <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}>{displayContent}</Text>
-        {item.isEdited ? <Text style={[styles.editedLabel, isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }]}>{t('chat.edited', 'Đã chỉnh sửa')}</Text> : null}
-      </>
-    );
-  };
-
-  return (
-    <View style={[styles.messageContainer, { marginBottom: showTimestamp ? 10 : 4 }]}>
-      {dateSepLabel ? (
-        <View style={styles.dateSeparator}>
-          <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
-        </View>
-      ) : null}
-      {isCurrentUserMessage ? (
-        <View style={styles.userMessageBlock}>
-          <TouchableOpacity
-            activeOpacity={1}
-            onLongPress={() => openMessageActionMenu(item)}
-            delayLongPress={220}
-            style={[
-              styles.messageBubble,
-              styles.userBubble,
-              isMediaMsg && !isFileMsg && !isVoiceMsg && styles.mediaBubble,
-            ]}
-          >
-            {renderMediaContent()}
-          </TouchableOpacity>
-
-          {reactionSummary.length > 0 ? (
-            <View style={styles.reactionRowRight}>
-              {reactionSummary.map((reaction) => (
-                <View key={`${item.messageId}-${reaction.emoji}`} style={styles.reactionChip}>
-                  <Text style={styles.reactionChipText}>{reaction.emoji} {reaction.count}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {showTimestamp ? (
-            <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text>
-          ) : null}
-        </View>
-      ) : (
-        <View style={styles.otherMessageBlock}>
-          <View style={[styles.otherAvatarSlot, { marginBottom: showTimestamp ? 18 : 2 }]}>
-            {showAvatar ? <Image source={peerAvatarSource} style={styles.peerAvatar} /> : null}
+      <View style={[styles.messageContainer, { marginBottom: showTimestamp ? 10 : 4 }]}>
+        {dateSepLabel ? (
+          <View style={styles.dateSeparator}>
+            <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
           </View>
-          <View style={styles.otherContentBlock}>
+        ) : null}
+        {isCurrentUserMessage ? (
+          <View style={styles.userMessageBlock}>
             <TouchableOpacity
               activeOpacity={1}
               onLongPress={() => openMessageActionMenu(item)}
               delayLongPress={220}
               style={[
                 styles.messageBubble,
-                styles.otherBubble,
-                { backgroundColor: colors.card },
+                styles.userBubble,
                 isMediaMsg && !isFileMsg && !isVoiceMsg && styles.mediaBubble,
               ]}
             >
@@ -2215,7 +2377,7 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
             </TouchableOpacity>
 
             {reactionSummary.length > 0 ? (
-              <View style={styles.reactionRowLeft}>
+              <View style={styles.reactionRowRight}>
                 {reactionSummary.map((reaction) => (
                   <View key={`${item.messageId}-${reaction.emoji}`} style={styles.reactionChip}>
                     <Text style={styles.reactionChipText}>{reaction.emoji} {reaction.count}</Text>
@@ -2225,13 +2387,52 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
             ) : null}
 
             {showTimestamp ? (
-              <Text style={[styles.timestamp, styles.timestampLeft]}>{timeLabel}</Text>
+              <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text>
             ) : null}
           </View>
-        </View>
-      )}
-    </View>
-  );
+        ) : (
+          <View style={styles.otherMessageBlock}>
+            <View style={[styles.otherAvatarSlot, { marginBottom: showTimestamp ? 18 : 2 }]}>
+              {showAvatar && senderAvatarSource ? <Image source={senderAvatarSource} style={styles.peerAvatar} /> : null}
+            </View>
+            <View style={styles.otherContentBlock}>
+              {showSenderName ? (
+                <Text style={[styles.groupSenderName, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {senderDisplayName}
+                </Text>
+              ) : null}
+              <TouchableOpacity
+                activeOpacity={1}
+                onLongPress={() => openMessageActionMenu(item)}
+                delayLongPress={220}
+                style={[
+                  styles.messageBubble,
+                  styles.otherBubble,
+                  { backgroundColor: colors.card },
+                  isMediaMsg && !isFileMsg && !isVoiceMsg && styles.mediaBubble,
+                ]}
+              >
+                {renderMediaContent()}
+              </TouchableOpacity>
+
+              {reactionSummary.length > 0 ? (
+                <View style={styles.reactionRowLeft}>
+                  {reactionSummary.map((reaction) => (
+                    <View key={`${item.messageId}-${reaction.emoji}`} style={styles.reactionChip}>
+                      <Text style={styles.reactionChipText}>{reaction.emoji} {reaction.count}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {showTimestamp ? (
+                <Text style={[styles.timestamp, styles.timestampLeft]}>{timeLabel}</Text>
+              ) : null}
+            </View>
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -2245,1255 +2446,1407 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
         keyboardVerticalOffset={0}
       >
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {name}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {headerSubtitleText}
-          </Text>
-        </View>
-        <View style={styles.headerActions}>
-          {showCallActions ? (
-            <>
-              <TouchableOpacity style={styles.headerIcon}>
-                <Ionicons name="call-outline" size={27} color="#FFFFFF" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.headerIcon}>
-                <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
-              </TouchableOpacity>
-            </>
-          ) : null}
-          <TouchableOpacity style={styles.headerIcon} onPress={() => { void handleOpenPinnedList(); }}>
-            <Ionicons name="list-outline" size={30} color="#FFFFFF" />
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
-            <Ionicons name="information-circle-outline" size={28} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Messages List */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => String(item.messageId)}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.messagesList}
-        scrollEnabled={true}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={renderOlderMessagesLoading}
-        onScroll={handleMessageListScroll}
-        scrollEventThrottle={120}
-        onScrollToIndexFailed={(info) => {
-          flatListRef.current?.scrollToOffset({
-            offset: info.averageItemLength * info.index,
-            animated: true,
-          });
-        }}
-      />
-
-      {/* Input Area */}
-      <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
-        {editingMessageId ? (
-          <View style={styles.editingBanner}>
-            <View style={styles.editingBannerTextWrap}>
-              <Text style={styles.editingBannerTitle}>{t('chat.editing_title', 'Đang chỉnh sửa tin nhắn')}</Text>
-              <Text style={styles.editingBannerSubtitle} numberOfLines={1}>{t('chat.editing_hint', 'Nhấn gửi để lưu, hoặc hủy để thoát')}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                setEditingMessageId(null);
-                setInputText('');
-              }}
-              style={styles.editingCloseButton}
-            >
-              <Ionicons name="close" size={18} color="#6F7581" />
+          <View style={styles.headerInfo}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {conversationDisplayName}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {headerSubtitleText}
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            {showCallActions ? (
+              <>
+                <TouchableOpacity style={styles.headerIcon}>
+                  <Ionicons name="call-outline" size={27} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.headerIcon}>
+                  <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
+                </TouchableOpacity>
+              </>
+            ) : null}
+            <TouchableOpacity style={styles.headerIcon} onPress={() => { void handleOpenPinnedList(); }}>
+              <Ionicons name="list-outline" size={30} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
+              <Ionicons name="information-circle-outline" size={28} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        ) : null}
+        </View>
 
-        {/* Media Preview */}
-        {pendingMediaList.length > 0 ? (
-          pendingMediaList.length === 1 && pendingMediaList[0].mediaType !== 'IMAGE' ? (
-            // Single non-image (video / file)
-            <View style={styles.mediaPreviewBanner}>
-              {pendingMediaList[0].mediaType !== 'FILE' ? (
-                <Image source={{ uri: pendingMediaList[0].uri }} style={styles.mediaPreviewThumb} resizeMode="cover" />
-              ) : (
-                <View style={styles.mediaPreviewFileIcon}>
-                  <Ionicons name="document-outline" size={28} color="#5B7FFF" />
+        {/* Messages List */}
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => String(item.messageId)}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.messagesList}
+          scrollEnabled={true}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={renderOlderMessagesLoading}
+          onScroll={handleMessageListScroll}
+          scrollEventThrottle={120}
+          onScrollToIndexFailed={(info) => {
+            flatListRef.current?.scrollToOffset({
+              offset: info.averageItemLength * info.index,
+              animated: true,
+            });
+          }}
+        />
+
+        {/* Input Area */}
+        <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
+          {editingMessageId ? (
+            <View style={styles.editingBanner}>
+              <View style={styles.editingBannerTextWrap}>
+                <Text style={styles.editingBannerTitle}>{t('chat.editing_title', 'Đang chỉnh sửa tin nhắn')}</Text>
+                <Text style={styles.editingBannerSubtitle} numberOfLines={1}>{t('chat.editing_hint', 'Nhấn gửi để lưu, hoặc hủy để thoát')}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setEditingMessageId(null);
+                  setInputText('');
+                }}
+                style={styles.editingCloseButton}
+              >
+                <Ionicons name="close" size={18} color="#6F7581" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Media Preview */}
+          {pendingMediaList.length > 0 ? (
+            pendingMediaList.length === 1 && pendingMediaList[0].mediaType !== 'IMAGE' ? (
+              // Single non-image (video / file)
+              <View style={styles.mediaPreviewBanner}>
+                {pendingMediaList[0].mediaType !== 'FILE' ? (
+                  <Image source={{ uri: pendingMediaList[0].uri }} style={styles.mediaPreviewThumb} resizeMode="cover" />
+                ) : (
+                  <View style={styles.mediaPreviewFileIcon}>
+                    <Ionicons name="document-outline" size={28} color="#5B7FFF" />
+                  </View>
+                )}
+                <View style={styles.mediaPreviewInfo}>
+                  <Text style={styles.mediaPreviewName} numberOfLines={1}>
+                    {pendingMediaList[0].fileName}
+                  </Text>
+                  <Text style={styles.mediaPreviewSize}>
+                    {chatFileService.formatFileSize(pendingMediaList[0].fileSize)} • {pendingMediaList[0].mediaType}
+                  </Text>
+                  {isUploading ? (
+                    <View style={styles.uploadProgressBar}>
+                      <View style={[styles.uploadProgressFill, { width: `${uploadProgress}%` }]} />
+                    </View>
+                  ) : null}
                 </View>
-              )}
-              <View style={styles.mediaPreviewInfo}>
-                <Text style={styles.mediaPreviewName} numberOfLines={1}>
-                  {pendingMediaList[0].fileName}
-                </Text>
-                <Text style={styles.mediaPreviewSize}>
-                  {chatFileService.formatFileSize(pendingMediaList[0].fileSize)} • {pendingMediaList[0].mediaType}
-                </Text>
+                {!isUploading ? (
+                  <TouchableOpacity onPress={handleCancelMedia} style={styles.mediaPreviewClose}>
+                    <Ionicons name="close-circle" size={22} color="#F04343" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : (
+              // Multi-image preview grid
+              <View style={styles.multiImagePreviewContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.multiImageScroll} contentContainerStyle={styles.multiImageScrollContent}>
+                  {pendingMediaList.map((media, index) => (
+                    <View key={`preview-${index}`} style={styles.multiImageThumbWrap}>
+                      <Image source={{ uri: media.uri }} style={styles.multiImageThumb} resizeMode="cover" />
+                      {isUploading && index === uploadCurrentIndex ? (
+                        <View style={styles.multiImageUploadOverlay}>
+                          <Text style={styles.multiImageUploadPct}>{uploadProgress}%</Text>
+                        </View>
+                      ) : isUploading && index < uploadCurrentIndex ? (
+                        <View style={styles.multiImageDoneOverlay}>
+                          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        </View>
+                      ) : null}
+                      {!isUploading ? (
+                        <TouchableOpacity
+                          style={styles.multiImageRemoveBtn}
+                          onPress={() => setPendingMediaList((prev) => prev.filter((_, i) => i !== index))}
+                        >
+                          <Ionicons name="close-circle" size={18} color="#F04343" />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ))}
+                </ScrollView>
+                <View style={styles.multiImageFooter}>
+                  <Text style={styles.multiImageCount}>
+                    {isUploading
+                      ? `Đang gửi ${uploadCurrentIndex + 1}/${pendingMediaList.length}...`
+                      : `${pendingMediaList.length} ảnh đã chọn`}
+                  </Text>
+                  {!isUploading ? (
+                    <TouchableOpacity onPress={handleCancelMedia}>
+                      <Text style={styles.multiImageCancelText}>Hủy tất cả</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
                 {isUploading ? (
                   <View style={styles.uploadProgressBar}>
                     <View style={[styles.uploadProgressFill, { width: `${uploadProgress}%` }]} />
                   </View>
                 ) : null}
               </View>
-              {!isUploading ? (
-                <TouchableOpacity onPress={handleCancelMedia} style={styles.mediaPreviewClose}>
-                  <Ionicons name="close-circle" size={22} color="#F04343" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : (
-            // Multi-image preview grid
-            <View style={styles.multiImagePreviewContainer}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.multiImageScroll} contentContainerStyle={styles.multiImageScrollContent}>
-                {pendingMediaList.map((media, index) => (
-                  <View key={`preview-${index}`} style={styles.multiImageThumbWrap}>
-                    <Image source={{ uri: media.uri }} style={styles.multiImageThumb} resizeMode="cover" />
-                    {isUploading && index === uploadCurrentIndex ? (
-                      <View style={styles.multiImageUploadOverlay}>
-                        <Text style={styles.multiImageUploadPct}>{uploadProgress}%</Text>
-                      </View>
-                    ) : isUploading && index < uploadCurrentIndex ? (
-                      <View style={styles.multiImageDoneOverlay}>
-                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                      </View>
-                    ) : null}
-                    {!isUploading ? (
-                      <TouchableOpacity
-                        style={styles.multiImageRemoveBtn}
-                        onPress={() => setPendingMediaList((prev) => prev.filter((_, i) => i !== index))}
-                      >
-                        <Ionicons name="close-circle" size={18} color="#F04343" />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ))}
-              </ScrollView>
-              <View style={styles.multiImageFooter}>
-                <Text style={styles.multiImageCount}>
-                  {isUploading
-                    ? `Đang gửi ${uploadCurrentIndex + 1}/${pendingMediaList.length}...`
-                    : `${pendingMediaList.length} ảnh đã chọn`}
+            )
+          ) : null}
+
+          {/* Emoji Picker Panel - uses native keyboard emoji */}
+
+          {/* Reply bar */}
+          {replyingTo ? (
+            <View style={[styles.replyBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+              <View style={styles.replyBarAccent} />
+              <View style={styles.replyBarContent}>
+                <Text style={[styles.replyBarSender, { color: '#0068FF' }]} numberOfLines={1}>
+                  {replyingTo.senderId === currentUserId ? 'Bạn' : (replyingTo.senderName || 'Người dùng')}
                 </Text>
-                {!isUploading ? (
-                  <TouchableOpacity onPress={handleCancelMedia}>
-                    <Text style={styles.multiImageCancelText}>Hủy tất cả</Text>
+                <Text style={[styles.replyBarSnippet, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {getReplySnippet(replyingTo)}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyBarDismiss} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                <Ionicons name="close" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          <View style={styles.composerRow}>
+            {isRecording ? (
+              <View style={styles.recordingBar}>
+                <View style={styles.recordingIndicator}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingTimeText}>
+                    {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
+                  </Text>
+                  <Text style={styles.recordingLabel}>Đang ghi âm...</Text>
+                </View>
+                <TouchableOpacity style={styles.recordingCancelBtn} onPress={() => stopVoiceRecording(true)}>
+                  <Ionicons name="trash-outline" size={22} color="#FF3B30" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.recordingSendBtn} onPress={() => stopVoiceRecording(false)}>
+                  <Ionicons name="send" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.attachButton}
+                  onPress={() => textInputRef.current?.focus()}
+                >
+                  <Ionicons
+                    name="happy-outline"
+                    size={30}
+                    color="#7B808A"
+                  />
+                </TouchableOpacity>
+                <TextInput
+                  ref={textInputRef}
+                  style={[styles.input, { color: colors.text, maxHeight: 100 }]}
+                  placeholder={pendingMediaList.length > 0 ? t('chat.add_caption', 'Thêm mô tả...') : t('chat.send_message', 'Tin nhắn')}
+                  placeholderTextColor="#5BA8D9"
+                  value={inputText}
+                  onChangeText={handleInputChange}
+                  editable={!isUploading && (!isAiConversation || !isSendingAi)}
+                  multiline
+                />
+                <TouchableOpacity style={styles.bottomActionButton} onPress={() => setIsAttachMenuVisible(true)} disabled={isUploading}>
+                  <Ionicons name="attach" size={26} color={isUploading ? '#CCC' : '#7B808A'} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bottomActionButton}
+                  onPress={isRecording ? () => stopVoiceRecording(false) : startVoiceRecording}
+                  disabled={isUploading}
+                >
+                  <Ionicons
+                    name={isRecording ? 'stop-circle' : 'mic-outline'}
+                    size={26}
+                    color={isRecording ? '#FF3B30' : '#7B808A'}
+                  />
+                </TouchableOpacity>
+                {pendingMediaList.length > 0 ? (
+                  <TouchableOpacity
+                    style={styles.bottomActionButton}
+                    onPress={handleSendMedia}
+                    disabled={isUploading}
+                  >
+                    <Ionicons
+                      name={isUploading ? 'time-outline' : 'send'}
+                      size={26}
+                      color={isUploading ? '#7B808A' : COLORS.primary}
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.bottomActionButton}
+                    onPress={inputText.trim() ? handleSendMessage : () => setIsAttachMenuVisible(true)}
+                    disabled={isAiConversation && isSendingAi}
+                  >
+                    <Ionicons
+                      name={editingMessageId ? 'checkmark' : (isAiConversation && isSendingAi ? 'time-outline' : (inputText.trim() ? 'send' : 'image-outline'))}
+                      size={26}
+                      color={inputText.trim() && !(isAiConversation && isSendingAi) ? COLORS.primary : '#7B808A'}
+                    />
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </View>
+        </SafeAreaView>
+
+        <Modal
+          visible={isMessageActionVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={closeMessageActionMenu}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeMessageActionMenu}>
+            <Pressable style={[styles.actionSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+              {/* Emoji reaction bar */}
+              <View style={styles.emojiRow}>
+                {REACTION_EMOJIS.map((emoji) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={styles.emojiButton}
+                    onPress={() => { void handleReactWithEmoji(emoji); }}
+                  >
+                    <Text style={styles.emojiButtonText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Action grid */}
+              <View style={styles.actionGrid}>
+                <TouchableOpacity style={styles.actionGridItem} onPress={() => { setReplyingTo(selectedMessage); closeMessageActionMenu(); }}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
+                    <Ionicons name="arrow-undo" size={22} color="#5B7FFF" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.reply', 'Trả lời')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionGridItem} onPress={() => { if (selectedMessage && !selectedMessage.isRecalled) { setForwardingMsg(selectedMessage); closeMessageActionMenu(); } else { closeMessageActionMenu(); } }}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
+                    <Ionicons name="arrow-redo" size={22} color="#5B7FFF" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.forward', 'Chuyển tiếp')}</Text>
+                </TouchableOpacity>
+
+                {!selectedMessage?.isRecalled && (selectedMessage?.messageType === 'TEXT' || !selectedMessage?.messageType) ? (
+                  <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleCopySelectedMessage(); }}>
+                    <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
+                      <Ionicons name="copy-outline" size={22} color="#5B7FFF" />
+                    </View>
+                    <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.copy', 'Sao chép')}</Text>
                   </TouchableOpacity>
                 ) : null}
-              </View>
-              {isUploading ? (
-                <View style={styles.uploadProgressBar}>
-                  <View style={[styles.uploadProgressFill, { width: `${uploadProgress}%` }]} />
-                </View>
-              ) : null}
-            </View>
-          )
-        ) : null}
 
-        {/* Emoji Picker Panel - uses native keyboard emoji */}
-
-        {/* Reply bar */}
-        {replyingTo ? (
-          <View style={[styles.replyBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-            <View style={styles.replyBarAccent} />
-            <View style={styles.replyBarContent}>
-              <Text style={[styles.replyBarSender, { color: '#0068FF' }]} numberOfLines={1}>
-                {replyingTo.senderId === currentUserId ? 'Bạn' : (replyingTo.senderName || 'Người dùng')}
-              </Text>
-              <Text style={[styles.replyBarSnippet, { color: colors.textSecondary }]} numberOfLines={1}>
-                {getReplySnippet(replyingTo)}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyingTo(null)} style={styles.replyBarDismiss} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <Ionicons name="close" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        <View style={styles.composerRow}>
-          {isRecording ? (
-            <View style={styles.recordingBar}>
-              <View style={styles.recordingIndicator}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingTimeText}>
-                  {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
-                </Text>
-                <Text style={styles.recordingLabel}>Đang ghi âm...</Text>
-              </View>
-              <TouchableOpacity style={styles.recordingCancelBtn} onPress={() => stopVoiceRecording(true)}>
-                <Ionicons name="trash-outline" size={22} color="#FF3B30" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.recordingSendBtn} onPress={() => stopVoiceRecording(false)}>
-                <Ionicons name="send" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-          <TouchableOpacity
-            style={styles.attachButton}
-            onPress={() => textInputRef.current?.focus()}
-          >
-            <Ionicons
-              name="happy-outline"
-              size={30}
-              color="#7B808A"
-            />
-          </TouchableOpacity>
-          <TextInput
-            ref={textInputRef}
-            style={[styles.input, { color: colors.text, maxHeight: 100 }]}
-            placeholder={pendingMediaList.length > 0 ? t('chat.add_caption', 'Thêm mô tả...') : t('chat.send_message', 'Tin nhắn')}
-            placeholderTextColor="#5BA8D9"
-            value={inputText}
-            onChangeText={handleInputChange}
-            editable={!isUploading && (!isAiConversation || !isSendingAi)}
-            multiline
-          />
-          <TouchableOpacity style={styles.bottomActionButton} onPress={() => setIsAttachMenuVisible(true)} disabled={isUploading}>
-            <Ionicons name="attach" size={26} color={isUploading ? '#CCC' : '#7B808A'} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.bottomActionButton}
-            onPress={isRecording ? () => stopVoiceRecording(false) : startVoiceRecording}
-            disabled={isUploading}
-          >
-            <Ionicons
-              name={isRecording ? 'stop-circle' : 'mic-outline'}
-              size={26}
-              color={isRecording ? '#FF3B30' : '#7B808A'}
-            />
-          </TouchableOpacity>
-          {pendingMediaList.length > 0 ? (
-            <TouchableOpacity
-              style={styles.bottomActionButton}
-              onPress={handleSendMedia}
-              disabled={isUploading}
-            >
-              <Ionicons
-                name={isUploading ? 'time-outline' : 'send'}
-                size={26}
-                color={isUploading ? '#7B808A' : COLORS.primary}
-              />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.bottomActionButton}
-              onPress={inputText.trim() ? handleSendMessage : () => setIsAttachMenuVisible(true)}
-              disabled={isAiConversation && isSendingAi}
-            >
-              <Ionicons
-                name={editingMessageId ? 'checkmark' : (isAiConversation && isSendingAi ? 'time-outline' : (inputText.trim() ? 'send' : 'image-outline'))}
-                size={26}
-                color={inputText.trim() && !(isAiConversation && isSendingAi) ? COLORS.primary : '#7B808A'}
-              />
-            </TouchableOpacity>
-          )}
-            </>
-          )}
-        </View>
-      </SafeAreaView>
-
-      <Modal
-        visible={isMessageActionVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeMessageActionMenu}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={closeMessageActionMenu}>
-          <Pressable style={[styles.actionSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
-            {/* Emoji reaction bar */}
-            <View style={styles.emojiRow}>
-              {REACTION_EMOJIS.map((emoji) => (
-                <TouchableOpacity
-                  key={emoji}
-                  style={styles.emojiButton}
-                  onPress={() => { void handleReactWithEmoji(emoji); }}
-                >
-                  <Text style={styles.emojiButtonText}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Action grid */}
-            <View style={styles.actionGrid}>
-              <TouchableOpacity style={styles.actionGridItem} onPress={() => { setReplyingTo(selectedMessage); closeMessageActionMenu(); }}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
-                  <Ionicons name="arrow-undo" size={22} color="#5B7FFF" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.reply', 'Trả lời')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionGridItem} onPress={() => { if (selectedMessage && !selectedMessage.isRecalled) { setForwardingMsg(selectedMessage); closeMessageActionMenu(); } else { closeMessageActionMenu(); } }}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
-                  <Ionicons name="arrow-redo" size={22} color="#5B7FFF" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.forward', 'Chuyển tiếp')}</Text>
-              </TouchableOpacity>
-
-              {!selectedMessage?.isRecalled && (selectedMessage?.messageType === 'TEXT' || !selectedMessage?.messageType) ? (
-                <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleCopySelectedMessage(); }}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
-                    <Ionicons name="copy-outline" size={22} color="#5B7FFF" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.copy', 'Sao chép')}</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {isSelectedMessageMine && !selectedMessage?.isRecalled ? (
-                <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleRecallSelectedMessage(); }}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
-                    <Ionicons name="refresh" size={22} color="#F0853A" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.recall', 'Thu hồi')}</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {isSelectedMessageMine && !selectedMessage?.isRecalled ? (
-                <TouchableOpacity style={styles.actionGridItem} onPress={handleStartEditSelectedMessage}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
-                    <Ionicons name="create-outline" size={22} color="#5B7FFF" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.edit', 'Chỉnh sửa')}</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleTogglePinSelectedMessage(); }}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
-                  <Ionicons name={isSelectedMessagePinned ? 'pin-outline' : 'pin'} size={22} color="#F0853A" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>
-                  {isSelectedMessagePinned ? t('chat.menu.unpin', 'Bỏ ghim') : t('chat.menu.pin', 'Ghim')}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionGridItem} onPress={closeMessageActionMenu}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
-                  <Ionicons name="checkmark-done-outline" size={22} color="#5B7FFF" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.multi_select', 'Chọn nhiều')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionGridItem} onPress={closeMessageActionMenu}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
-                  <Ionicons name="information-circle-outline" size={22} color="#5B7FFF" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.details', 'Chi tiết')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleDeleteSelectedMessageLocal(); }}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#FFEBEB' }]}>
-                  <Ionicons name="trash" size={22} color="#F04343" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: '#F04343' }]}>{t('chat.menu.delete_local', 'Xóa')}</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        visible={isPinnedListVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsPinnedListVisible(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setIsPinnedListVisible(false)}>
-          <Pressable style={[styles.pinnedSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.pinnedHeader}>
-              <Text style={[styles.pinnedTitle, { color: colors.text }]}>{t('chat.pinned_title', 'Tin nhắn đã ghim')}</Text>
-              <TouchableOpacity onPress={() => setIsPinnedListVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.pinnedList}>
-              {pinnedMessages.length === 0 ? (
-                <Text style={[styles.pinnedEmpty, { color: colors.textSecondary }]}>{t('chat.pinned_empty', 'Chưa có tin nhắn ghim')}</Text>
-              ) : pinnedMessages.map((item) => (
-                <TouchableOpacity
-                  key={item.id || item.messageId}
-                  style={[styles.pinnedItem, { borderBottomColor: colors.border }]}
-                  onPress={() => handleJumpToPinnedMessage(item.messageId)}
-                >
-                  <View style={styles.pinnedItemMain}>
-                    <Text style={[styles.pinnedSender, { color: colors.text }]} numberOfLines={1}>{item.senderName || t('chat.unknown_user', 'Người dùng')}</Text>
-                    <Text style={[styles.pinnedContent, { color: colors.textSecondary }]} numberOfLines={2}>{item.content || t('chat.empty_message', 'Tin nhắn trống')}</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => { void handleUnpinFromPinnedList(item.messageId); }}
-                    style={styles.unpinButton}
-                  >
-                    <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
+                {isSelectedMessageMine && !selectedMessage?.isRecalled ? (
+                  <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleRecallSelectedMessage(); }}>
+                    <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
+                      <Ionicons name="refresh" size={22} color="#F0853A" />
+                    </View>
+                    <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.recall', 'Thu hồi')}</Text>
                   </TouchableOpacity>
+                ) : null}
+
+                {isSelectedMessageMine && !selectedMessage?.isRecalled ? (
+                  <TouchableOpacity style={styles.actionGridItem} onPress={handleStartEditSelectedMessage}>
+                    <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
+                      <Ionicons name="create-outline" size={22} color="#5B7FFF" />
+                    </View>
+                    <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.edit', 'Chỉnh sửa')}</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleTogglePinSelectedMessage(); }}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
+                    <Ionicons name={isSelectedMessagePinned ? 'pin-outline' : 'pin'} size={22} color="#F0853A" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>
+                    {isSelectedMessagePinned ? t('chat.menu.unpin', 'Bỏ ghim') : t('chat.menu.pin', 'Ghim')}
+                  </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
-      {/* Attachment Picker Modal */}
-      <Modal
-        visible={isAttachMenuVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsAttachMenuVisible(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setIsAttachMenuVisible(false)}>
-          <Pressable style={[styles.actionSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.attachMenuTitle, { color: colors.text }]}>Gửi tệp đính kèm</Text>
-            <View style={styles.actionGrid}>
-              <TouchableOpacity style={styles.actionGridItem} onPress={handlePickImage}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#E8F5E9' }]}>
-                  <Ionicons name="image" size={24} color="#4CAF50" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>Hình ảnh</Text>
-              </TouchableOpacity>
+                <TouchableOpacity style={styles.actionGridItem} onPress={closeMessageActionMenu}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
+                    <Ionicons name="checkmark-done-outline" size={22} color="#5B7FFF" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.multi_select', 'Chọn nhiều')}</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity style={styles.actionGridItem} onPress={handlePickVideo}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#E3F2FD' }]}>
-                  <Ionicons name="videocam" size={24} color="#2196F3" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>Video</Text>
-              </TouchableOpacity>
+                <TouchableOpacity style={styles.actionGridItem} onPress={closeMessageActionMenu}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
+                    <Ionicons name="information-circle-outline" size={22} color="#5B7FFF" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>{t('chat.menu.details', 'Chi tiết')}</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity style={styles.actionGridItem} onPress={handlePickFile}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3E0' }]}>
-                  <Ionicons name="document" size={24} color="#FF9800" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>Tệp</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionGridItem} onPress={handleTakePhoto}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#FCE4EC' }]}>
-                  <Ionicons name="camera" size={24} color="#E91E63" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>Chụp ảnh</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionGridItem} onPress={() => { setIsAttachMenuVisible(false); setIsShareContactVisible(true); }}>
-                <View style={[styles.actionGridIcon, { backgroundColor: '#E8F4FD' }]}>
-                  <Ionicons name="person-circle-outline" size={24} color="#0068FF" />
-                </View>
-                <Text style={[styles.actionGridLabel, { color: colors.text }]}>Danh thiếp</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* Forward Message Modal */}
-      <Modal
-        visible={Boolean(forwardingMsg)}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { setForwardingMsg(null); setFwdSelected(new Set()); setFwdSearch(''); }}
-      >
-        <View style={[styles.modalBackdrop, { justifyContent: 'flex-end' }]}>
-          <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}>
-            {/* Header */}
-            <View style={[styles.fwdHeader, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity onPress={() => { setForwardingMsg(null); setFwdSelected(new Set()); setFwdSearch(''); }}>
-                <Ionicons name="close" size={22} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={[styles.fwdTitle, { color: colors.text }]}>Chuyển tiếp tin nhắn</Text>
-              <View style={{ width: 22 }} />
-            </View>
-            {/* Message preview */}
-            {forwardingMsg ? (
-              <View style={[styles.fwdPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <Ionicons name="return-up-forward-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {getReplySnippet(forwardingMsg)}
-                </Text>
+                <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleDeleteSelectedMessageLocal(); }}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#FFEBEB' }]}>
+                    <Ionicons name="trash" size={22} color="#F04343" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: '#F04343' }]}>{t('chat.menu.delete_local', 'Xóa')}</Text>
+                </TouchableOpacity>
               </View>
-            ) : null}
-            {/* Search */}
-            <View style={[styles.fwdSearchRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Ionicons name="search" size={16} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.fwdSearchInput, { color: colors.text }]}
-                placeholder="Tìm cuộc trò chuyện..."
-                placeholderTextColor={colors.textSecondary}
-                value={fwdSearch}
-                onChangeText={setFwdSearch}
-                onFocus={() => {
-                  if (fwdConversations.length === 0 && !fwdLoading) {
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        <Modal
+          visible={isPinnedListVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsPinnedListVisible(false)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsPinnedListVisible(false)}>
+            <Pressable style={[styles.pinnedSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.pinnedHeader}>
+                <Text style={[styles.pinnedTitle, { color: colors.text }]}>{t('chat.pinned_title', 'Tin nhắn đã ghim')}</Text>
+                <TouchableOpacity onPress={() => setIsPinnedListVisible(false)}>
+                  <Ionicons name="close" size={22} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.pinnedList}>
+                {pinnedMessages.length === 0 ? (
+                  <Text style={[styles.pinnedEmpty, { color: colors.textSecondary }]}>{t('chat.pinned_empty', 'Chưa có tin nhắn ghim')}</Text>
+                ) : pinnedMessages.map((item) => (
+                  <TouchableOpacity
+                    key={item.id || item.messageId}
+                    style={[styles.pinnedItem, { borderBottomColor: colors.border }]}
+                    onPress={() => handleJumpToPinnedMessage(item.messageId)}
+                  >
+                    <View style={styles.pinnedItemMain}>
+                      <Text style={[styles.pinnedSender, { color: colors.text }]} numberOfLines={1}>{item.senderName || t('chat.unknown_user', 'Người dùng')}</Text>
+                      <Text style={[styles.pinnedContent, { color: colors.textSecondary }]} numberOfLines={2}>{item.content || t('chat.empty_message', 'Tin nhắn trống')}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => { void handleUnpinFromPinnedList(item.messageId); }}
+                      style={styles.unpinButton}
+                    >
+                      <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Attachment Picker Modal */}
+        <Modal
+          visible={isAttachMenuVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setIsAttachMenuVisible(false)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsAttachMenuVisible(false)}>
+            <Pressable style={[styles.actionSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+              <Text style={[styles.attachMenuTitle, { color: colors.text }]}>Gửi tệp đính kèm</Text>
+              <View style={styles.actionGrid}>
+                <TouchableOpacity style={styles.actionGridItem} onPress={handlePickImage}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#E8F5E9' }]}>
+                    <Ionicons name="image" size={24} color="#4CAF50" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Hình ảnh</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionGridItem} onPress={handlePickVideo}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#E3F2FD' }]}>
+                    <Ionicons name="videocam" size={24} color="#2196F3" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Video</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionGridItem} onPress={handlePickFile}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3E0' }]}>
+                    <Ionicons name="document" size={24} color="#FF9800" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Tệp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionGridItem} onPress={handleTakePhoto}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#FCE4EC' }]}>
+                    <Ionicons name="camera" size={24} color="#E91E63" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Chụp ảnh</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.actionGridItem} onPress={() => { setIsAttachMenuVisible(false); setIsShareContactVisible(true); }}>
+                  <View style={[styles.actionGridIcon, { backgroundColor: '#E8F4FD' }]}>
+                    <Ionicons name="person-circle-outline" size={24} color="#0068FF" />
+                  </View>
+                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Danh thiếp</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Forward Message Modal */}
+        <Modal
+          visible={Boolean(forwardingMsg)}
+          transparent
+          animationType="slide"
+          onRequestClose={() => { setForwardingMsg(null); setFwdSelected(new Set()); setFwdSearch(''); }}
+        >
+          <View style={[styles.modalBackdrop, { justifyContent: 'flex-end' }]}>
+            <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}>
+              {/* Header */}
+              <View style={[styles.fwdHeader, { borderBottomColor: colors.border }]}>
+                <TouchableOpacity onPress={() => { setForwardingMsg(null); setFwdSelected(new Set()); setFwdSearch(''); }}>
+                  <Ionicons name="close" size={22} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.fwdTitle, { color: colors.text }]}>Chuyển tiếp tin nhắn</Text>
+                <View style={{ width: 22 }} />
+              </View>
+              {/* Message preview */}
+              {forwardingMsg ? (
+                <View style={[styles.fwdPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name="return-up-forward-outline" size={14} color={colors.textSecondary} />
+                  <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                    {getReplySnippet(forwardingMsg)}
+                  </Text>
+                </View>
+              ) : null}
+              {/* Search */}
+              <View style={[styles.fwdSearchRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Ionicons name="search" size={16} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.fwdSearchInput, { color: colors.text }]}
+                  placeholder="Tìm cuộc trò chuyện..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={fwdSearch}
+                  onChangeText={setFwdSearch}
+                  onFocus={() => {
+                    if (fwdConversations.length === 0 && !fwdLoading) {
+                      setFwdLoading(true);
+                      chatService.getConversations?.()
+                        .then((res: any) => {
+                          const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
+                          setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
+                        })
+                        .catch(() => { })
+                        .finally(() => setFwdLoading(false));
+                    }
+                  }}
+                />
+              </View>
+              {/* Load on mount */}
+              {fwdConversations.length === 0 && !fwdLoading ? (
+                <TouchableOpacity
+                  style={{ paddingVertical: 8, alignItems: 'center' }}
+                  onPress={() => {
                     setFwdLoading(true);
                     chatService.getConversations?.()
                       .then((res: any) => {
                         const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
                         setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
                       })
-                      .catch(() => {})
+                      .catch(() => { })
                       .finally(() => setFwdLoading(false));
-                  }
-                }}
-              />
-            </View>
-            {/* Load on mount */}
-            {fwdConversations.length === 0 && !fwdLoading ? (
-              <TouchableOpacity
-                style={{ paddingVertical: 8, alignItems: 'center' }}
-                onPress={() => {
-                  setFwdLoading(true);
-                  chatService.getConversations?.()
-                    .then((res: any) => {
-                      const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
-                      setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
-                    })
-                    .catch(() => {})
-                    .finally(() => setFwdLoading(false));
-                }}
-              >
-                <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh sách</Text>
-              </TouchableOpacity>
-            ) : null}
-            {/* Conversation list */}
-            <ScrollView style={styles.fwdList}>
-              {fwdLoading ? (
-                <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
-              ) : (
-                fwdConversations
-                  .filter((c: any) => {
-                    const name: string = c.conversationName || c.name || '';
-                    return name.toLowerCase().includes(fwdSearch.toLowerCase());
-                  })
-                  .map((c: any) => {
-                    const cId: string = c.conversationId || c.id;
-                    const cName: string = c.conversationName || c.name || 'Cuộc trò chuyện';
-                    const isSelected = fwdSelected.has(cId);
-                    return (
-                      <TouchableOpacity
-                        key={cId}
-                        style={[styles.fwdItem, { borderBottomColor: colors.border }]}
-                        onPress={() => {
-                          setFwdSelected((prev) => {
-                            const next = new Set(prev);
-                            if (isSelected) { next.delete(cId); } else { next.add(cId); }
-                            return next;
-                          });
-                        }}
-                      >
-                        <View style={styles.fwdItemAvatar}>
-                          <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
-                        </View>
-                        <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{cName}</Text>
-                        <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
-                          {isSelected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })
-              )}
-            </ScrollView>
-            {/* Footer */}
-            <View style={[styles.fwdFooter, { borderTopColor: colors.border }]}>
-              {fwdSelected.size > 0 ? (
-                <Text style={[styles.fwdSelectedCount, { color: colors.textSecondary }]}>
-                  {`Đã chọn ${fwdSelected.size} cuộc trò chuyện`}
-                </Text>
-              ) : <View />}
-              <TouchableOpacity
-                style={[styles.fwdSendBtn, { opacity: fwdSelected.size === 0 || fwdSending ? 0.5 : 1 }]}
-                disabled={fwdSelected.size === 0 || fwdSending}
-                onPress={async () => {
-                  if (!forwardingMsg || fwdSelected.size === 0) return;
-                  setFwdSending(true);
-                  const sendPromises = Array.from(fwdSelected).map((cId) =>
-                    chatService.sendMessage(cId, {
-                      content: forwardingMsg.content || '',
-                      messageType: forwardingMsg.messageType || 'TEXT',
-                      attachments: [],
-                      forwardedFromMessageId: forwardingMsg.messageId,
-                    }).catch(() => {})
-                  );
-                  await Promise.all(sendPromises);
-                  setFwdSending(false);
-                  setForwardingMsg(null);
-                  setFwdSelected(new Set());
-                  setFwdSearch('');
-                  Alert.alert('', `Đã chuyển tiếp đến ${sendPromises.length} cuộc trò chuyện`);
-                }}
-              >
-                {fwdSending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  }}
+                >
+                  <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh sách</Text>
+                </TouchableOpacity>
+              ) : null}
+              {/* Conversation list */}
+              <ScrollView style={styles.fwdList}>
+                {fwdLoading ? (
+                  <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
                 ) : (
-                  <Text style={styles.fwdSendBtnText}>Gửi</Text>
+                  fwdConversations
+                    .filter((c: any) => {
+                      const name: string = c.conversationName || c.name || '';
+                      return name.toLowerCase().includes(fwdSearch.toLowerCase());
+                    })
+                    .map((c: any) => {
+                      const cId: string = c.conversationId || c.id;
+                      const cName: string = c.conversationName || c.name || 'Cuộc trò chuyện';
+                      const isSelected = fwdSelected.has(cId);
+                      return (
+                        <TouchableOpacity
+                          key={cId}
+                          style={[styles.fwdItem, { borderBottomColor: colors.border }]}
+                          onPress={() => {
+                            setFwdSelected((prev) => {
+                              const next = new Set(prev);
+                              if (isSelected) { next.delete(cId); } else { next.add(cId); }
+                              return next;
+                            });
+                          }}
+                        >
+                          <View style={styles.fwdItemAvatar}>
+                            <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
+                          </View>
+                          <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{cName}</Text>
+                          <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
+                            {isSelected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
                 )}
-              </TouchableOpacity>
+              </ScrollView>
+              {/* Footer */}
+              <View style={[styles.fwdFooter, { borderTopColor: colors.border }]}>
+                {fwdSelected.size > 0 ? (
+                  <Text style={[styles.fwdSelectedCount, { color: colors.textSecondary }]}>
+                    {`Đã chọn ${fwdSelected.size} cuộc trò chuyện`}
+                  </Text>
+                ) : <View />}
+                <TouchableOpacity
+                  style={[styles.fwdSendBtn, { opacity: fwdSelected.size === 0 || fwdSending ? 0.5 : 1 }]}
+                  disabled={fwdSelected.size === 0 || fwdSending}
+                  onPress={async () => {
+                    if (!forwardingMsg || fwdSelected.size === 0) return;
+                    setFwdSending(true);
+                    const sendPromises = Array.from(fwdSelected).map((cId) =>
+                      chatService.sendMessage(cId, {
+                        content: forwardingMsg.content || '',
+                        messageType: forwardingMsg.messageType || 'TEXT',
+                        attachments: [],
+                        forwardedFromMessageId: forwardingMsg.messageId,
+                      }).catch(() => { })
+                    );
+                    await Promise.all(sendPromises);
+                    setFwdSending(false);
+                    setForwardingMsg(null);
+                    setFwdSelected(new Set());
+                    setFwdSearch('');
+                    Alert.alert('', `Đã chuyển tiếp đến ${sendPromises.length} cuộc trò chuyện`);
+                  }}
+                >
+                  {fwdSending ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.fwdSendBtnText}>Gửi</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* Share Contact Modal */}
-      <Modal
-        visible={isShareContactVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { setIsShareContactVisible(false); setScSelected(new Set()); setScSearch(''); }}
-      >
-        <View style={[styles.modalBackdrop, { justifyContent: 'flex-end' }]}>
-          <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}>
-            {/* Header */}
-            <View style={[styles.fwdHeader, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity onPress={() => { setIsShareContactVisible(false); setScSelected(new Set()); setScSearch(''); }}>
-                <Ionicons name="close" size={22} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={[styles.fwdTitle, { color: colors.text }]}>Gửi danh thiếp</Text>
-              <View style={{ width: 22 }} />
-            </View>
-            {/* Include phone toggle */}
-            <View style={[styles.scToggleRow, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.scToggleLabel, { color: colors.text }]}>Bao gồm số điện thoại</Text>
-              <TouchableOpacity
-                style={[styles.scToggle, { backgroundColor: scIncludePhone ? '#0068FF' : colors.border }]}
-                onPress={() => setScIncludePhone((p) => !p)}
-              >
-                <View style={[styles.scToggleThumb, { left: scIncludePhone ? 18 : 2 }]} />
-              </TouchableOpacity>
-            </View>
-            {/* Search */}
-            <View style={[styles.fwdSearchRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Ionicons name="search" size={16} color={colors.textSecondary} />
-              <TextInput
-                style={[styles.fwdSearchInput, { color: colors.text }]}
-                placeholder="Tìm bạn bè..."
-                placeholderTextColor={colors.textSecondary}
-                value={scSearch}
-                onChangeText={setScSearch}
-                onFocus={() => {
-                  if (scFriends.length === 0 && !scLoading) {
+        {/* Share Contact Modal */}
+        <Modal
+          visible={isShareContactVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => { setIsShareContactVisible(false); setScSelected(new Set()); setScSearch(''); }}
+        >
+          <View style={[styles.modalBackdrop, { justifyContent: 'flex-end' }]}>
+            <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}>
+              {/* Header */}
+              <View style={[styles.fwdHeader, { borderBottomColor: colors.border }]}>
+                <TouchableOpacity onPress={() => { setIsShareContactVisible(false); setScSelected(new Set()); setScSearch(''); }}>
+                  <Ionicons name="close" size={22} color={colors.text} />
+                </TouchableOpacity>
+                <Text style={[styles.fwdTitle, { color: colors.text }]}>Gửi danh thiếp</Text>
+                <View style={{ width: 22 }} />
+              </View>
+              {/* Include phone toggle */}
+              <View style={[styles.scToggleRow, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.scToggleLabel, { color: colors.text }]}>Bao gồm số điện thoại</Text>
+                <TouchableOpacity
+                  style={[styles.scToggle, { backgroundColor: scIncludePhone ? '#0068FF' : colors.border }]}
+                  onPress={() => setScIncludePhone((p) => !p)}
+                >
+                  <View style={[styles.scToggleThumb, { left: scIncludePhone ? 18 : 2 }]} />
+                </TouchableOpacity>
+              </View>
+              {/* Search */}
+              <View style={[styles.fwdSearchRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <Ionicons name="search" size={16} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.fwdSearchInput, { color: colors.text }]}
+                  placeholder="Tìm bạn bè..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={scSearch}
+                  onChangeText={setScSearch}
+                  onFocus={() => {
+                    if (scFriends.length === 0 && !scLoading) {
+                      setScLoading(true);
+                      friendService.getFriendsList()
+                        .then((res: any) => {
+                          const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
+                          setScFriends(list);
+                        })
+                        .catch(() => { }).finally(() => setScLoading(false));
+                    }
+                  }}
+                />
+              </View>
+              {/* Load friends on mount helper */}
+              {scFriends.length === 0 && !scLoading ? (
+                <TouchableOpacity
+                  style={{ paddingVertical: 8, alignItems: 'center' }}
+                  onPress={() => {
                     setScLoading(true);
                     friendService.getFriendsList()
                       .then((res: any) => {
                         const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
                         setScFriends(list);
                       })
-                      .catch(() => {}).finally(() => setScLoading(false));
-                  }
-                }}
-              />
-            </View>
-            {/* Load friends on mount helper */}
-            {scFriends.length === 0 && !scLoading ? (
-              <TouchableOpacity
-                style={{ paddingVertical: 8, alignItems: 'center' }}
-                onPress={() => {
-                  setScLoading(true);
-                  friendService.getFriendsList()
-                    .then((res: any) => {
-                      const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
-                      setScFriends(list);
-                    })
-                    .catch(() => {})
-                    .finally(() => setScLoading(false));
-                }}
-              >
-                <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh bạ</Text>
-              </TouchableOpacity>
-            ) : null}
-            {/* Friends list */}
-            <ScrollView style={styles.fwdList}>
-              {scLoading ? (
-                <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
-              ) : (
-                scFriends
-                  .filter((f: any) => {
-                    const name: string = f.displayName || f.display_name || f.fullName || '';
-                    const phone: string = f.phoneNumber || f.phone_number || '';
-                    const q = scSearch.toLowerCase();
-                    return name.toLowerCase().includes(q) || phone.includes(q);
-                  })
-                  .map((f: any) => {
-                    const fId: string = f.userId || f.user_id || f.id;
-                    const fName: string = f.displayName || f.display_name || f.fullName || 'Người dùng';
-                    const fPhone: string = f.phoneNumber || f.phone_number || '';
-                    const fAvatar: string = f.avatarUrl || f.avatar_url || f.avatar || '';
-                    const isSelected = scSelected.has(fId);
-                    return (
-                      <TouchableOpacity
-                        key={fId}
-                        style={[styles.fwdItem, { borderBottomColor: colors.border }]}
-                        onPress={() => {
-                          setScSelected((prev) => {
-                            const next = new Set(prev);
-                            if (isSelected) { next.delete(fId); } else if (next.size < 9) { next.add(fId); }
-                            return next;
-                          });
-                        }}
-                      >
-                        <View style={styles.fwdItemAvatar}>
-                          {fAvatar ? (
-                            <Image source={{ uri: fAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} />
-                          ) : (
-                            <Text style={styles.fwdItemAvatarText}>{fName.charAt(0).toUpperCase()}</Text>
-                          )}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{fName}</Text>
-                          {fPhone ? <Text style={{ fontSize: 12, color: colors.textSecondary }}>{fPhone}</Text> : null}
-                        </View>
-                        <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
-                          {isSelected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })
-              )}
-            </ScrollView>
-            {/* Footer */}
-            <View style={[styles.fwdFooter, { borderTopColor: colors.border }]}>
-              {scSelected.size > 0 ? (
-                <Text style={[styles.fwdSelectedCount, { color: colors.textSecondary }]}>
-                  {`Đã chọn ${scSelected.size}/9`}
-                </Text>
-              ) : <View />}
-              <TouchableOpacity
-                style={[styles.fwdSendBtn, { opacity: scSelected.size === 0 || scSending ? 0.5 : 1 }]}
-                disabled={scSelected.size === 0 || scSending}
-                onPress={async () => {
-                  if (scSelected.size === 0) return;
-                  setScSending(true);
-                  const selectedFriends = scFriends.filter((f: any) => scSelected.has(f.userId || f.user_id || f.id));
-                  try {
-                    for (const f of selectedFriends) {
-                      const contactData = {
-                        userId: f.userId || f.user_id || f.id,
-                        fullName: f.displayName || f.display_name || f.fullName || '',
-                        phoneNumber: scIncludePhone ? (f.phoneNumber || f.phone_number || '') : '',
-                        avatar: f.avatarUrl || f.avatar_url || f.avatar || '',
-                      };
-                      await chatService.sendMessage(conversationId, {
-                        content: JSON.stringify(contactData),
-                        messageType: 'SHARE_CONTACT',
-                        attachments: [],
-                      });
-                    }
-                    setIsShareContactVisible(false);
-                    setScSelected(new Set());
-                    setScSearch('');
-                  } catch {
-                    Alert.alert('Lỗi', 'Không thể gửi danh thiếp. Vui lòng thử lại.');
-                  } finally {
-                    setScSending(false);
-                  }
-                }}
-              >
-                {scSending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                      .catch(() => { })
+                      .finally(() => setScLoading(false));
+                  }}
+                >
+                  <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh bạ</Text>
+                </TouchableOpacity>
+              ) : null}
+              {/* Friends list */}
+              <ScrollView style={styles.fwdList}>
+                {scLoading ? (
+                  <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
                 ) : (
-                  <Text style={styles.fwdSendBtnText}>Gửi</Text>
+                  scFriends
+                    .filter((f: any) => {
+                      const name: string = f.displayName || f.display_name || f.fullName || '';
+                      const phone: string = f.phoneNumber || f.phone_number || '';
+                      const q = scSearch.toLowerCase();
+                      return name.toLowerCase().includes(q) || phone.includes(q);
+                    })
+                    .map((f: any) => {
+                      const fId: string = f.userId || f.user_id || f.id;
+                      const fName: string = f.displayName || f.display_name || f.fullName || 'Người dùng';
+                      const fPhone: string = f.phoneNumber || f.phone_number || '';
+                      const fAvatar: string = f.avatarUrl || f.avatar_url || f.avatar || '';
+                      const isSelected = scSelected.has(fId);
+                      return (
+                        <TouchableOpacity
+                          key={fId}
+                          style={[styles.fwdItem, { borderBottomColor: colors.border }]}
+                          onPress={() => {
+                            setScSelected((prev) => {
+                              const next = new Set(prev);
+                              if (isSelected) { next.delete(fId); } else if (next.size < 9) { next.add(fId); }
+                              return next;
+                            });
+                          }}
+                        >
+                          <View style={styles.fwdItemAvatar}>
+                            {fAvatar ? (
+                              <Image source={{ uri: fAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+                            ) : (
+                              <Text style={styles.fwdItemAvatarText}>{fName.charAt(0).toUpperCase()}</Text>
+                            )}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{fName}</Text>
+                            {fPhone ? <Text style={{ fontSize: 12, color: colors.textSecondary }}>{fPhone}</Text> : null}
+                          </View>
+                          <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
+                            {isSelected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
                 )}
-              </TouchableOpacity>
+              </ScrollView>
+              {/* Footer */}
+              <View style={[styles.fwdFooter, { borderTopColor: colors.border }]}>
+                {scSelected.size > 0 ? (
+                  <Text style={[styles.fwdSelectedCount, { color: colors.textSecondary }]}>
+                    {`Đã chọn ${scSelected.size}/9`}
+                  </Text>
+                ) : <View />}
+                <TouchableOpacity
+                  style={[styles.fwdSendBtn, { opacity: scSelected.size === 0 || scSending ? 0.5 : 1 }]}
+                  disabled={scSelected.size === 0 || scSending}
+                  onPress={async () => {
+                    if (scSelected.size === 0) return;
+                    setScSending(true);
+                    const selectedFriends = scFriends.filter((f: any) => scSelected.has(f.userId || f.user_id || f.id));
+                    try {
+                      for (const f of selectedFriends) {
+                        const contactData = {
+                          userId: f.userId || f.user_id || f.id,
+                          fullName: f.displayName || f.display_name || f.fullName || '',
+                          phoneNumber: scIncludePhone ? (f.phoneNumber || f.phone_number || '') : '',
+                          avatar: f.avatarUrl || f.avatar_url || f.avatar || '',
+                        };
+                        await chatService.sendMessage(conversationId, {
+                          content: JSON.stringify(contactData),
+                          messageType: 'SHARE_CONTACT',
+                          attachments: [],
+                        });
+                      }
+                      setIsShareContactVisible(false);
+                      setScSelected(new Set());
+                      setScSearch('');
+                    } catch {
+                      Alert.alert('Lỗi', 'Không thể gửi danh thiếp. Vui lòng thử lại.');
+                    } finally {
+                      setScSending(false);
+                    }
+                  }}
+                >
+                  {scSending ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.fwdSendBtnText}>Gửi</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* Fullscreen Image Preview */}
-      <Modal
-        visible={!!fullscreenImageUrl}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFullscreenImageUrl(null)}
-      >
-        <View style={styles.fullscreenImageBackdrop}>
-          <TouchableOpacity
-            style={styles.fullscreenImageClose}
-            onPress={() => setFullscreenImageUrl(null)}
-          >
-            <Ionicons name="close" size={30} color="#FFFFFF" />
-          </TouchableOpacity>
-          {fullscreenImageUrl ? (
-            <Image
-              source={{ uri: fullscreenImageUrl }}
-              style={styles.fullscreenImage}
-              resizeMode="contain"
-            />
-          ) : null}
-          <TouchableOpacity
-            style={styles.fullscreenImageDownload}
-            onPress={() => {
-              if (fullscreenImageUrl) {
-                Linking.openURL(fullscreenImageUrl);
-              }
-            }}
-          >
-            <Ionicons name="download-outline" size={26} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      {/* Fullscreen Video Preview */}
-      <Modal
-        visible={!!fullscreenVideoUrl}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFullscreenVideoUrl(null)}
-      >
-        <View style={styles.fullscreenImageBackdrop}>
-          <TouchableOpacity
-            style={styles.fullscreenImageClose}
-            onPress={() => setFullscreenVideoUrl(null)}
-          >
-            <Ionicons name="close" size={30} color="#FFFFFF" />
-          </TouchableOpacity>
-          {fullscreenVideoUrl ? (
-            <Video
-              source={{ uri: fullscreenVideoUrl }}
-              style={styles.fullscreenVideo}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
-            />
-          ) : null}
-        </View>
-      </Modal>
-
-      {/* ── Chat Info Panel ──────────────────────────────────────────────── */}
-      <Modal
-        visible={isInfoPanelVisible}
-        animationType="slide"
-        onRequestClose={() => setIsInfoPanelVisible(false)}
-      >
-        <SafeAreaView style={[styles.infoPanelContainer, { backgroundColor: colors.background }]}>
-          {/* Panel Header */}
-          <View style={[styles.infoPanelHeader, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-            <Text style={[styles.infoPanelTitle, { color: colors.text }]}>Thông tin hội thoại</Text>
-            <TouchableOpacity onPress={() => setIsInfoPanelVisible(false)}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
+        {/* Fullscreen Image Preview */}
+        <Modal
+          visible={!!fullscreenImageUrl}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setFullscreenImageUrl(null)}
+        >
+          <View style={styles.fullscreenImageBackdrop}>
+            <TouchableOpacity
+              style={styles.fullscreenImageClose}
+              onPress={() => setFullscreenImageUrl(null)}
+            >
+              <Ionicons name="close" size={30} color="#FFFFFF" />
+            </TouchableOpacity>
+            {fullscreenImageUrl ? (
+              <Image
+                source={{ uri: fullscreenImageUrl }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            ) : null}
+            <TouchableOpacity
+              style={styles.fullscreenImageDownload}
+              onPress={() => {
+                if (fullscreenImageUrl) {
+                  Linking.openURL(fullscreenImageUrl);
+                }
+              }}
+            >
+              <Ionicons name="download-outline" size={26} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
+        </Modal>
 
-          <ScrollView style={styles.infoPanelScroll} showsVerticalScrollIndicator={false}>
+        {/* Fullscreen Video Preview */}
+        <Modal
+          visible={!!fullscreenVideoUrl}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setFullscreenVideoUrl(null)}
+        >
+          <View style={styles.fullscreenImageBackdrop}>
+            <TouchableOpacity
+              style={styles.fullscreenImageClose}
+              onPress={() => setFullscreenVideoUrl(null)}
+            >
+              <Ionicons name="close" size={30} color="#FFFFFF" />
+            </TouchableOpacity>
+            {fullscreenVideoUrl ? (
+              <Video
+                source={{ uri: fullscreenVideoUrl }}
+                style={styles.fullscreenVideo}
+                useNativeControls
+                resizeMode={ResizeMode.CONTAIN}
+                shouldPlay
+              />
+            ) : null}
+          </View>
+        </Modal>
 
-            {/* Profile section */}
-            <View style={[styles.infoPanelProfile, { borderBottomColor: colors.border }]}>
-              {isAiConversation ? (
-                <View style={styles.infoPanelAiAvatar}>
-                  <Ionicons name="sparkles" size={34} color="#FFFFFF" />
-                </View>
-              ) : isCloudConversation ? (
-                <View style={[styles.infoPanelCloudAvatar]}>
-                  <Ionicons name="cloud" size={36} color="#FFFFFF" />
-                </View>
-              ) : avatar ? (
-                <Image source={peerAvatarSource} style={styles.infoPanelAvatarImg} />
-              ) : (
-                <View style={styles.infoPanelDefaultAvatar}>
-                  <Text style={styles.infoPanelDefaultAvatarText}>{(String(name ?? '?')).charAt(0).toUpperCase()}</Text>
-                </View>
-              )}
-              <Text style={[styles.infoPanelName, { color: colors.text }]} numberOfLines={2}>{name}</Text>
-              {isGroupConversation && infoMembers.length > 0 && (
-                <Text style={[styles.infoPanelSubName, { color: colors.textSecondary }]}>{infoMembers.length} thành viên</Text>
-              )}
+        {/* ── Chat Info Panel ──────────────────────────────────────────────── */}
+        <Modal
+          visible={isInfoPanelVisible}
+          animationType="slide"
+          onRequestClose={() => setIsInfoPanelVisible(false)}
+        >
+          <SafeAreaView style={[styles.infoPanelContainer, { backgroundColor: colors.background }]}>
+            {/* Panel Header */}
+            <View style={[styles.infoPanelHeader, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+              <Text style={[styles.infoPanelTitle, { color: colors.text }]}>Thông tin hội thoại</Text>
+              <TouchableOpacity onPress={() => setIsInfoPanelVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
             </View>
 
-            {/* AI Info section */}
-            {isAiConversation && (
-              <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.infoPanelSectionTitle, { color: colors.text }]}>Khả năng của Fruvia AI</Text>
-                {['Trả lời câu hỏi thông minh về mọi chủ đề', 'Tạo hình ảnh từ mô tả văn bản', 'Hỗ trợ phân tích tài liệu và file cá nhân'].map((cap) => (
-                  <Text key={cap} style={[styles.infoPanelCapItem, { color: colors.textSecondary }]}>• {cap}</Text>
-                ))}
-                <TouchableOpacity
-                  style={styles.infoPanelDangerBtn}
-                  onPress={handleInfoClearChat}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#F04343" />
-                  <Text style={styles.infoPanelDangerBtnText}>Xóa lịch sử chat</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            <ScrollView style={styles.infoPanelScroll} showsVerticalScrollIndicator={false}>
 
-            {/* Cloud storage section */}
-            {isCloudConversation && infoStorageStats && (
-              <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
-                <View style={styles.infoPanelStorageHeader}>
-                  <Text style={[styles.infoPanelSectionTitle, { color: colors.text }]}>Dung lượng lưu trữ</Text>
-                  <Text style={[styles.infoPanelStorageUsed, { color: colors.textSecondary }]}>
-                    {infoStorageStats.totalSizeFormatted ?? '0 B'} / 500 MB
-                  </Text>
-                </View>
-                <View style={styles.infoPanelStorageBar}>
-                  {infoStorageStats.totalSize > 0 && (
-                    <>
-                      <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#F97316', flex: (infoStorageStats.imageSize ?? 0) / infoStorageStats.totalSize }]} />
-                      <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#3B82F6', flex: (infoStorageStats.videoSize ?? 0) / infoStorageStats.totalSize }]} />
-                      <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#22C55E', flex: (infoStorageStats.fileSize ?? 0) / infoStorageStats.totalSize }]} />
-                      <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#EC4899', flex: (infoStorageStats.voiceSize ?? 0) / infoStorageStats.totalSize }]} />
-                    </>
+              {/* Profile section */}
+              <View style={[styles.infoPanelProfile, { borderBottomColor: colors.border }]}>
+                <View style={styles.infoPanelAvatarWrap}>
+                  {isAiConversation ? (
+                    <View style={styles.infoPanelAiAvatar}>
+                      <Ionicons name="sparkles" size={34} color="#FFFFFF" />
+                    </View>
+                  ) : isCloudConversation ? (
+                    <View style={[styles.infoPanelCloudAvatar]}>
+                      <Ionicons name="cloud" size={36} color="#FFFFFF" />
+                    </View>
+                  ) : conversationAvatarUrl ? (
+                    <Image source={peerAvatarSource} style={styles.infoPanelAvatarImg} />
+                  ) : (
+                    <View style={styles.infoPanelDefaultAvatar}>
+                      <Text style={styles.infoPanelDefaultAvatarText}>{(String(conversationDisplayName ?? '?')).charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+
+                  {isGroupConversation && (
+                    <TouchableOpacity
+                      style={styles.infoPanelAvatarCameraBadge}
+                      onPress={handleSelectInfoGroupAvatarSource}
+                      disabled={infoUpdatingGroupAvatar}
+                    >
+                      <Ionicons name="camera" size={16} color={colors.text} />
+                    </TouchableOpacity>
                   )}
                 </View>
-                <View style={styles.infoPanelStorageLegend}>
-                  {[
-                    { color: '#F97316', label: `Ảnh ${infoStorageStats.imageSizeFormatted ? `(${infoStorageStats.imageSizeFormatted})` : ''}` },
-                    { color: '#3B82F6', label: `Video ${infoStorageStats.videoSizeFormatted ? `(${infoStorageStats.videoSizeFormatted})` : ''}` },
-                    { color: '#22C55E', label: `File ${infoStorageStats.fileSizeFormatted ? `(${infoStorageStats.fileSizeFormatted})` : ''}` },
-                    { color: '#EC4899', label: `Giọng nói ${infoStorageStats.voiceSizeFormatted ? `(${infoStorageStats.voiceSizeFormatted})` : ''}` },
-                  ].map((item) => (
-                    <View key={item.color} style={styles.infoPanelLegendItem}>
-                      <View style={[styles.infoPanelLegendDot, { backgroundColor: item.color }]} />
-                      <Text style={[styles.infoPanelLegendText, { color: colors.textSecondary }]}>{item.label}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
 
-            {/* Group Members section */}
-            {isGroupConversation && (
-              <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
-                <TouchableOpacity
-                  style={styles.infoPanelSectionToggle}
-                  onPress={() => setInfoShowMembers((v) => !v)}
-                >
-                  <View style={styles.infoPanelSectionToggleLeft}>
-                    <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
-                    <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>
-                      Thành viên ({infoMembers.length})
-                    </Text>
-                  </View>
-                  <Ionicons name={infoShowMembers ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-
-                {infoShowMembers && (
-                  <View style={styles.infoPanelMemberList}>
-                    {/* Add member button */}
-                    {infoCanAddMembers && !infoAddMemberVisible && (
-                      <TouchableOpacity
-                        style={styles.infoPanelAddMemberBtn}
-                        onPress={async () => { setInfoAddMemberVisible(true); await fetchInfoFriendsForAdd(); }}
-                      >
-                        <Ionicons name="person-add-outline" size={16} color="#0068FF" />
-                        <Text style={styles.infoPanelAddMemberBtnText}>Thêm thành viên</Text>
-                      </TouchableOpacity>
-                    )}
-
-                    {/* Add member panel */}
-                    {infoAddMemberVisible && (
-                      <View style={[styles.infoPanelAddPanel, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                        <View style={styles.infoPanelAddPanelHeader}>
-                          <Text style={[styles.infoPanelAddPanelTitle, { color: colors.text }]}>Chọn bạn bè</Text>
-                          <TouchableOpacity onPress={() => { setInfoAddMemberVisible(false); setInfoSelectedMembers([]); }}>
-                            <Ionicons name="close" size={18} color={colors.textSecondary} />
-                          </TouchableOpacity>
-                        </View>
-                        {infoFriendsList.length === 0 ? (
-                          <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Không có bạn bè nào</Text>
-                        ) : infoFriendsList.map((f: any) => {
-                          const fId = f.user_id || f.id;
-                          const fName = f.display_name || f.full_name || f.name || 'Unknown';
-                          const fAvatar = f.avatar_url || f.avatar;
-                          const isSelected = infoSelectedMembers.includes(fId);
-                          return (
-                            <TouchableOpacity
-                              key={fId}
-                              style={styles.infoPanelFriendRow}
-                              onPress={() => setInfoSelectedMembers((prev) =>
-                                isSelected ? prev.filter((id) => id !== fId) : [...prev, fId]
-                              )}
-                            >
-                              {fAvatar ? (
-                                <Image source={getAvatarSource(fAvatar)} style={styles.infoPanelSmallAvatar} />
-                              ) : (
-                                <View style={[styles.infoPanelSmallAvatar, styles.infoPanelDefaultAvatar]}>
-                                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{fName.charAt(0)}</Text>
-                                </View>
-                              )}
-                              <Text style={[styles.infoPanelMemberName, { color: colors.text, flex: 1 }]} numberOfLines={1}>{fName}</Text>
-                              <Ionicons
-                                name={isSelected ? 'checkbox' : 'square-outline'}
-                                size={20}
-                                color={isSelected ? '#0068FF' : colors.textSecondary}
-                              />
-                            </TouchableOpacity>
-                          );
-                        })}
-                        {infoSelectedMembers.length > 0 && (
-                          <TouchableOpacity
-                            style={[styles.infoPanelAddMemberBtn, { marginTop: 8 }]}
-                            onPress={handleInfoAddMembers}
-                            disabled={infoAddingMembers}
-                          >
-                            <Text style={styles.infoPanelAddMemberBtnText}>
-                              {infoAddingMembers ? 'Đang thêm...' : `Thêm ${infoSelectedMembers.length} người`}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Members list */}
-                    {infoMembers.map((m: any) => {
-                      const mName = m.displayName || m.userName || 'Unknown';
-                      const mAvatar = m.avatarUrl || m.avatar;
-                      const mRole = m.role;
-                      const isMe = m.userId === currentUserId;
-                      const menuOpen = infoMemberMenuId === m.userId;
-                      return (
-                        <View key={m.userId} style={styles.infoPanelMemberRow}>
-                          {mAvatar ? (
-                            <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelMemberAvatar} />
-                          ) : (
-                            <View style={[styles.infoPanelMemberAvatar, styles.infoPanelDefaultAvatar]}>
-                              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{mName.charAt(0)}</Text>
-                            </View>
-                          )}
-                          <View style={styles.infoPanelMemberInfo}>
-                            <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>
-                              {mName}{isMe ? ' (Bạn)' : ''}
-                            </Text>
-                            {mRole === 'ADMIN' && <Text style={styles.infoPanelRoleBadgeAdmin}>Trưởng nhóm</Text>}
-                            {mRole === 'DEPUTY' && <Text style={styles.infoPanelRoleBadgeDeputy}>Phó nhóm</Text>}
-                          </View>
-                          {infoIsAdmin && !isMe && (
-                            <TouchableOpacity
-                              style={styles.infoPanelMemberMenuBtn}
-                              onPress={() => setInfoMemberMenuId(menuOpen ? null : m.userId)}
-                            >
-                              <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                          )}
-                          {menuOpen && (
-                            <View style={[styles.infoPanelMemberMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                              {mRole !== 'DEPUTY' && (
-                                <TouchableOpacity
-                                  style={styles.infoPanelMemberMenuItem}
-                                  onPress={() => handleInfoChangeRole(m.userId, mName, 'DEPUTY')}
-                                >
-                                  <Text style={[styles.infoPanelMemberMenuItemText, { color: colors.text }]}>Đặt làm phó nhóm</Text>
-                                </TouchableOpacity>
-                              )}
-                              {mRole === 'DEPUTY' && (
-                                <TouchableOpacity
-                                  style={styles.infoPanelMemberMenuItem}
-                                  onPress={() => handleInfoChangeRole(m.userId, mName, 'MEMBER')}
-                                >
-                                  <Text style={[styles.infoPanelMemberMenuItemText, { color: colors.text }]}>Hạ xuống thành viên</Text>
-                                </TouchableOpacity>
-                              )}
-                              <TouchableOpacity
-                                style={styles.infoPanelMemberMenuItem}
-                                onPress={() => { setInfoMemberMenuId(null); setInfoTransferReason('transfer'); handleInfoTransferOwnership(m.userId, mName); }}
-                              >
-                                <Text style={[styles.infoPanelMemberMenuItemText, { color: '#F97316' }]}>Chuyển quyền trưởng nhóm</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.infoPanelMemberMenuItem}
-                                onPress={() => { setInfoMemberMenuId(null); handleInfoRemoveMember(m.userId, mName); }}
-                              >
-                                <Text style={[styles.infoPanelMemberMenuItemText, { color: '#F04343' }]}>Xóa khỏi nhóm</Text>
-                              </TouchableOpacity>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-
-                    {/* Leave / Dissolve buttons */}
-                    <TouchableOpacity style={styles.infoPanelDangerBtn} onPress={handleInfoLeaveGroup}>
-                      <Ionicons name="exit-outline" size={16} color="#F04343" />
-                      <Text style={styles.infoPanelDangerBtnText}>
-                        {infoIsAdmin ? 'Chuyển quyền & rời nhóm' : 'Rời nhóm'}
-                      </Text>
+                <View style={styles.infoPanelNameRow}>
+                  <Text style={[styles.infoPanelName, { color: colors.text }]} numberOfLines={2}>{conversationDisplayName}</Text>
+                  {isGroupConversation && (
+                    <TouchableOpacity style={styles.infoPanelNameEditBtn} onPress={handleOpenInfoEditNameModal}>
+                      <Ionicons name="create-outline" size={16} color={colors.text} />
                     </TouchableOpacity>
-                    {infoIsAdmin && (
-                      <TouchableOpacity style={[styles.infoPanelDangerBtn, { marginTop: 6 }]} onPress={handleInfoDissolveGroup}>
-                        <Ionicons name="warning-outline" size={16} color="#DC2626" />
-                        <Text style={[styles.infoPanelDangerBtnText, { color: '#DC2626' }]}>Giải tán nhóm</Text>
-                      </TouchableOpacity>
-                    )}
+                  )}
+                </View>
 
-                    {/* Transfer ownership modal */}
-                    {infoShowTransferModal && (
-                      <View style={[styles.infoPanelTransferBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                        <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginBottom: 8 }]}>
-                          {infoTransferReason === 'leave' ? 'Chọn trưởng nhóm kế tiếp' : 'Chọn người nhận quyền'}
-                        </Text>
-                        {infoMembers.filter((m) => m.userId !== currentUserId).map((m: any) => {
-                          const mName = m.displayName || m.userName || 'Unknown';
-                          const mAvatar = m.avatarUrl || m.avatar;
-                          return (
-                            <TouchableOpacity
-                              key={m.userId}
-                              style={styles.infoPanelFriendRow}
-                              onPress={() => handleInfoTransferOwnership(m.userId, mName)}
-                            >
-                              {mAvatar ? (
-                                <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelSmallAvatar} />
-                              ) : (
-                                <View style={[styles.infoPanelSmallAvatar, styles.infoPanelDefaultAvatar]}>
-                                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{mName.charAt(0)}</Text>
-                                </View>
-                              )}
-                              <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>{mName}</Text>
-                              <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                            </TouchableOpacity>
-                          );
-                        })}
-                        <TouchableOpacity onPress={() => setInfoShowTransferModal(false)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
-                          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Hủy</Text>
-                        </TouchableOpacity>
+                {isGroupConversation && infoMembers.length > 0 && (
+                  <Text style={[styles.infoPanelSubName, { color: colors.textSecondary }]}>{infoMembers.length} thành viên</Text>
+                )}
+
+                {isGroupConversation && (
+                  <View style={styles.infoPanelQuickActions}>
+                    <TouchableOpacity
+                      style={styles.infoPanelQuickAction}
+                      onPress={() => Alert.alert('Tìm tin nhắn', 'Chức năng đang phát triển')}
+                    >
+                      <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Ionicons name="search" size={22} color={colors.text} />
                       </View>
-                    )}
+                      <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Tìm
+                        {'\n'}tin nhắn</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.infoPanelQuickAction}
+                      onPress={() => { void handleOpenInfoAddMemberModal(); }}
+                    >
+                      <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Ionicons name="person-add-outline" size={22} color={colors.text} />
+                      </View>
+                      <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Thêm
+                        {'\n'}thành viên</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.infoPanelQuickAction}
+                      onPress={() => Alert.alert('Đổi hình nền', 'Chức năng đang phát triển')}
+                    >
+                      <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Ionicons name="color-wand-outline" size={22} color={colors.text} />
+                      </View>
+                      <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Đổi hình
+                        {'\n'}nền</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.infoPanelQuickAction}
+                      onPress={() => Alert.alert('Tắt thông báo', 'Chức năng đang phát triển')}
+                    >
+                      <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Ionicons name="notifications-off-outline" size={22} color={colors.text} />
+                      </View>
+                      <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Tắt
+                        {'\n'}thông báo</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
-            )}
 
-            {/* Pinned Messages section */}
-            {!isAiConversation && (
-              <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
-                <TouchableOpacity
-                  style={styles.infoPanelSectionToggle}
-                  onPress={() => setInfoShowPinned((v) => !v)}
-                >
-                  <View style={styles.infoPanelSectionToggleLeft}>
-                    <Ionicons name="pin-outline" size={20} color={colors.textSecondary} />
-                    <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>
-                      Tin nhắn đã ghim {pinnedMessages.length > 0 ? `(${pinnedMessages.length})` : ''}
+              {/* AI Info section */}
+              {isAiConversation && (
+                <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.infoPanelSectionTitle, { color: colors.text }]}>Khả năng của Fruvia AI</Text>
+                  {['Trả lời câu hỏi thông minh về mọi chủ đề', 'Tạo hình ảnh từ mô tả văn bản', 'Hỗ trợ phân tích tài liệu và file cá nhân'].map((cap) => (
+                    <Text key={cap} style={[styles.infoPanelCapItem, { color: colors.textSecondary }]}>• {cap}</Text>
+                  ))}
+                  <TouchableOpacity
+                    style={styles.infoPanelDangerBtn}
+                    onPress={handleInfoClearChat}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#F04343" />
+                    <Text style={styles.infoPanelDangerBtnText}>Xóa lịch sử chat</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Cloud storage section */}
+              {isCloudConversation && infoStorageStats && (
+                <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
+                  <View style={styles.infoPanelStorageHeader}>
+                    <Text style={[styles.infoPanelSectionTitle, { color: colors.text }]}>Dung lượng lưu trữ</Text>
+                    <Text style={[styles.infoPanelStorageUsed, { color: colors.textSecondary }]}>
+                      {infoStorageStats.totalSizeFormatted ?? '0 B'} / 500 MB
                     </Text>
                   </View>
-                  <Ionicons name={infoShowPinned ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-                {infoShowPinned && (
-                  <View>
-                    {pinnedMessages.length === 0 ? (
-                      <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Chưa có tin nhắn ghim</Text>
-                    ) : pinnedMessages.map((pin, idx) => (
-                      <View key={pin.id || pin.messageId} style={[styles.infoPanelPinnedRow, { borderBottomColor: colors.border }]}>
-                        <View style={styles.infoPanelPinnedIndex}>
-                          <Text style={styles.infoPanelPinnedIndexText}>{idx + 1}</Text>
-                        </View>
-                        <View style={styles.infoPanelPinnedContent}>
-                          <Text style={[styles.infoPanelPinnedSender, { color: '#0068FF' }]} numberOfLines={1}>{pin.senderName}</Text>
-                          <Text style={[styles.infoPanelPinnedText, { color: colors.text }]} numberOfLines={2}>{pin.content}</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => { void handleUnpinFromPinnedList(pin.messageId); }}>
-                          <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
+                  <View style={styles.infoPanelStorageBar}>
+                    {infoStorageStats.totalSize > 0 && (
+                      <>
+                        <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#F97316', flex: (infoStorageStats.imageSize ?? 0) / infoStorageStats.totalSize }]} />
+                        <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#3B82F6', flex: (infoStorageStats.videoSize ?? 0) / infoStorageStats.totalSize }]} />
+                        <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#22C55E', flex: (infoStorageStats.fileSize ?? 0) / infoStorageStats.totalSize }]} />
+                        <View style={[styles.infoPanelStorageSegment, { backgroundColor: '#EC4899', flex: (infoStorageStats.voiceSize ?? 0) / infoStorageStats.totalSize }]} />
+                      </>
+                    )}
+                  </View>
+                  <View style={styles.infoPanelStorageLegend}>
+                    {[
+                      { color: '#F97316', label: `Ảnh ${infoStorageStats.imageSizeFormatted ? `(${infoStorageStats.imageSizeFormatted})` : ''}` },
+                      { color: '#3B82F6', label: `Video ${infoStorageStats.videoSizeFormatted ? `(${infoStorageStats.videoSizeFormatted})` : ''}` },
+                      { color: '#22C55E', label: `File ${infoStorageStats.fileSizeFormatted ? `(${infoStorageStats.fileSizeFormatted})` : ''}` },
+                      { color: '#EC4899', label: `Giọng nói ${infoStorageStats.voiceSizeFormatted ? `(${infoStorageStats.voiceSizeFormatted})` : ''}` },
+                    ].map((item) => (
+                      <View key={item.color} style={styles.infoPanelLegendItem}>
+                        <View style={[styles.infoPanelLegendDot, { backgroundColor: item.color }]} />
+                        <Text style={[styles.infoPanelLegendText, { color: colors.textSecondary }]}>{item.label}</Text>
                       </View>
                     ))}
                   </View>
-                )}
-              </View>
-            )}
-
-            {/* Media section */}
-            <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
-              <TouchableOpacity
-                style={styles.infoPanelSectionToggle}
-                onPress={() => setInfoShowMedia((v) => !v)}
-              >
-                <View style={styles.infoPanelSectionToggleLeft}>
-                  <Ionicons name="images-outline" size={20} color={colors.textSecondary} />
-                  <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>Ảnh &amp; Video</Text>
                 </View>
-                <Ionicons name={infoShowMedia ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-              {infoShowMedia && (
-                <View>
-                  {infoMediaItems.length === 0 ? (
-                    <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Chưa có ảnh hoặc video</Text>
-                  ) : (
-                    <View style={styles.infoPanelMediaGrid}>
-                      {infoMediaItems.slice(0, 9).map((m: any, i: number) => (
-                        <TouchableOpacity
-                          key={m.id || i}
-                          style={styles.infoPanelMediaThumb}
-                          onPress={() => {
-                            if (m.messageType === 'IMAGE') setInfoSelectedImage(m.content);
-                            else if (m.messageType === 'VIDEO') setInfoSelectedImage(null);
-                          }}
-                        >
-                          {m.messageType === 'IMAGE' ? (
-                            <Image source={{ uri: m.content }} style={styles.infoPanelMediaThumbImg} resizeMode="cover" />
-                          ) : (
-                            <View style={[styles.infoPanelMediaThumbImg, { backgroundColor: '#1A1A2E', justifyContent: 'center', alignItems: 'center' }]}>
-                              <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.7)" />
+              )}
+
+              {/* Group Members section */}
+              {isGroupConversation && (
+                <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
+                  <TouchableOpacity
+                    style={styles.infoPanelSectionToggle}
+                    onPress={() => setInfoShowMembers((v) => !v)}
+                  >
+                    <View style={styles.infoPanelSectionToggleLeft}>
+                      <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
+                      <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>
+                        Thành viên ({infoMembers.length})
+                      </Text>
+                    </View>
+                    <Ionicons name={infoShowMembers ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+
+                  {infoShowMembers && (
+                    <View style={styles.infoPanelMemberList}>
+                      {/* Members list */}
+                      {infoMembers.map((m: any) => {
+                        const mName = m.displayName || m.userName || 'Unknown';
+                        const mAvatar = m.avatarUrl || m.avatar;
+                        const mRole = m.role;
+                        const isMe = m.userId === currentUserId;
+                        const menuOpen = infoMemberMenuId === m.userId;
+                        return (
+                          <View key={m.userId} style={styles.infoPanelMemberRow}>
+                            {mAvatar ? (
+                              <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelMemberAvatar} />
+                            ) : (
+                              <View style={[styles.infoPanelMemberAvatar, styles.infoPanelDefaultAvatar]}>
+                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{mName.charAt(0)}</Text>
+                              </View>
+                            )}
+                            <View style={styles.infoPanelMemberInfo}>
+                              <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>
+                                {mName}{isMe ? ' (Bạn)' : ''}
+                              </Text>
+                              {mRole === 'ADMIN' && <Text style={styles.infoPanelRoleBadgeAdmin}>Trưởng nhóm</Text>}
+                              {mRole === 'DEPUTY' && <Text style={styles.infoPanelRoleBadgeDeputy}>Phó nhóm</Text>}
                             </View>
-                          )}
+                            {infoIsAdmin && !isMe && (
+                              <TouchableOpacity
+                                style={styles.infoPanelMemberMenuBtn}
+                                onPress={() => setInfoMemberMenuId(menuOpen ? null : m.userId)}
+                              >
+                                <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
+                              </TouchableOpacity>
+                            )}
+                            {menuOpen && (
+                              <View style={[styles.infoPanelMemberMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                                {mRole !== 'DEPUTY' && (
+                                  <TouchableOpacity
+                                    style={styles.infoPanelMemberMenuItem}
+                                    onPress={() => handleInfoChangeRole(m.userId, mName, 'DEPUTY')}
+                                  >
+                                    <Text style={[styles.infoPanelMemberMenuItemText, { color: colors.text }]}>Đặt làm phó nhóm</Text>
+                                  </TouchableOpacity>
+                                )}
+                                {mRole === 'DEPUTY' && (
+                                  <TouchableOpacity
+                                    style={styles.infoPanelMemberMenuItem}
+                                    onPress={() => handleInfoChangeRole(m.userId, mName, 'MEMBER')}
+                                  >
+                                    <Text style={[styles.infoPanelMemberMenuItemText, { color: colors.text }]}>Hạ xuống thành viên</Text>
+                                  </TouchableOpacity>
+                                )}
+                                <TouchableOpacity
+                                  style={styles.infoPanelMemberMenuItem}
+                                  onPress={() => { setInfoMemberMenuId(null); setInfoTransferReason('transfer'); handleInfoTransferOwnership(m.userId, mName); }}
+                                >
+                                  <Text style={[styles.infoPanelMemberMenuItemText, { color: '#F97316' }]}>Chuyển quyền trưởng nhóm</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={styles.infoPanelMemberMenuItem}
+                                  onPress={() => { setInfoMemberMenuId(null); handleInfoRemoveMember(m.userId, mName); }}
+                                >
+                                  <Text style={[styles.infoPanelMemberMenuItemText, { color: '#F04343' }]}>Xóa khỏi nhóm</Text>
+                                </TouchableOpacity>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+
+                      {/* Leave / Dissolve buttons */}
+                      <TouchableOpacity style={styles.infoPanelDangerBtn} onPress={handleInfoLeaveGroup}>
+                        <Ionicons name="exit-outline" size={16} color="#F04343" />
+                        <Text style={styles.infoPanelDangerBtnText}>
+                          {infoIsAdmin ? 'Chuyển quyền & rời nhóm' : 'Rời nhóm'}
+                        </Text>
+                      </TouchableOpacity>
+                      {infoIsAdmin && (
+                        <TouchableOpacity style={[styles.infoPanelDangerBtn, { marginTop: 6 }]} onPress={handleInfoDissolveGroup}>
+                          <Ionicons name="warning-outline" size={16} color="#DC2626" />
+                          <Text style={[styles.infoPanelDangerBtnText, { color: '#DC2626' }]}>Giải tán nhóm</Text>
                         </TouchableOpacity>
+                      )}
+
+                      {/* Transfer ownership modal */}
+                      {infoShowTransferModal && (
+                        <View style={[styles.infoPanelTransferBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                          <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginBottom: 8 }]}>
+                            {infoTransferReason === 'leave' ? 'Chọn trưởng nhóm kế tiếp' : 'Chọn người nhận quyền'}
+                          </Text>
+                          {infoMembers.filter((m) => m.userId !== currentUserId).map((m: any) => {
+                            const mName = m.displayName || m.userName || 'Unknown';
+                            const mAvatar = m.avatarUrl || m.avatar;
+                            return (
+                              <TouchableOpacity
+                                key={m.userId}
+                                style={styles.infoPanelFriendRow}
+                                onPress={() => handleInfoTransferOwnership(m.userId, mName)}
+                              >
+                                {mAvatar ? (
+                                  <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelSmallAvatar} />
+                                ) : (
+                                  <View style={[styles.infoPanelSmallAvatar, styles.infoPanelDefaultAvatar]}>
+                                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{mName.charAt(0)}</Text>
+                                  </View>
+                                )}
+                                <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>{mName}</Text>
+                                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                              </TouchableOpacity>
+                            );
+                          })}
+                          <TouchableOpacity onPress={() => setInfoShowTransferModal(false)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
+                            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Hủy</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Pinned Messages section */}
+              {!isAiConversation && (
+                <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
+                  <TouchableOpacity
+                    style={styles.infoPanelSectionToggle}
+                    onPress={() => setInfoShowPinned((v) => !v)}
+                  >
+                    <View style={styles.infoPanelSectionToggleLeft}>
+                      <Ionicons name="pin-outline" size={20} color={colors.textSecondary} />
+                      <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>
+                        Tin nhắn đã ghim {pinnedMessages.length > 0 ? `(${pinnedMessages.length})` : ''}
+                      </Text>
+                    </View>
+                    <Ionicons name={infoShowPinned ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                  {infoShowPinned && (
+                    <View>
+                      {pinnedMessages.length === 0 ? (
+                        <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Chưa có tin nhắn ghim</Text>
+                      ) : pinnedMessages.map((pin, idx) => (
+                        <View key={pin.id || pin.messageId} style={[styles.infoPanelPinnedRow, { borderBottomColor: colors.border }]}>
+                          <View style={styles.infoPanelPinnedIndex}>
+                            <Text style={styles.infoPanelPinnedIndexText}>{idx + 1}</Text>
+                          </View>
+                          <View style={styles.infoPanelPinnedContent}>
+                            <Text style={[styles.infoPanelPinnedSender, { color: '#0068FF' }]} numberOfLines={1}>{pin.senderName}</Text>
+                            <Text style={[styles.infoPanelPinnedText, { color: colors.text }]} numberOfLines={2}>{pin.content}</Text>
+                          </View>
+                          <TouchableOpacity onPress={() => { void handleUnpinFromPinnedList(pin.messageId); }}>
+                            <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
+                          </TouchableOpacity>
+                        </View>
                       ))}
                     </View>
                   )}
                 </View>
               )}
-            </View>
 
-            {/* Files section */}
-            <View style={[styles.infoPanelSection, { borderBottomColor: colors.border, marginBottom: 32 }]}>
-              <TouchableOpacity
-                style={styles.infoPanelSectionToggle}
-                onPress={() => setInfoShowFiles((v) => !v)}
-              >
-                <View style={styles.infoPanelSectionToggleLeft}>
-                  <Ionicons name="document-outline" size={20} color={colors.textSecondary} />
-                  <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>Tệp đính kèm</Text>
-                </View>
-                <Ionicons name={infoShowFiles ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
+              {/* Media section */}
+              <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
+                <TouchableOpacity
+                  style={styles.infoPanelSectionToggle}
+                  onPress={() => setInfoShowMedia((v) => !v)}
+                >
+                  <View style={styles.infoPanelSectionToggleLeft}>
+                    <Ionicons name="images-outline" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>Ảnh &amp; Video</Text>
+                  </View>
+                  <Ionicons name={infoShowMedia ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+                {infoShowMedia && (
+                  <View>
+                    {infoMediaItems.length === 0 ? (
+                      <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Chưa có ảnh hoặc video</Text>
+                    ) : (
+                      <View style={styles.infoPanelMediaGrid}>
+                        {infoMediaItems.slice(0, 9).map((m: any, i: number) => (
+                          <TouchableOpacity
+                            key={m.id || i}
+                            style={styles.infoPanelMediaThumb}
+                            onPress={() => {
+                              if (m.messageType === 'IMAGE') setInfoSelectedImage(m.content);
+                              else if (m.messageType === 'VIDEO') setInfoSelectedImage(null);
+                            }}
+                          >
+                            {m.messageType === 'IMAGE' ? (
+                              <Image source={{ uri: m.content }} style={styles.infoPanelMediaThumbImg} resizeMode="cover" />
+                            ) : (
+                              <View style={[styles.infoPanelMediaThumbImg, { backgroundColor: '#1A1A2E', justifyContent: 'center', alignItems: 'center' }]}>
+                                <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.7)" />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Files section */}
+              <View style={[styles.infoPanelSection, { borderBottomColor: colors.border, marginBottom: 32 }]}>
+                <TouchableOpacity
+                  style={styles.infoPanelSectionToggle}
+                  onPress={() => setInfoShowFiles((v) => !v)}
+                >
+                  <View style={styles.infoPanelSectionToggleLeft}>
+                    <Ionicons name="document-outline" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>Tệp đính kèm</Text>
+                  </View>
+                  <Ionicons name={infoShowFiles ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+                {infoShowFiles && (
+                  <View>
+                    {infoFileItems.length === 0 ? (
+                      <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Chưa có tệp đính kèm</Text>
+                    ) : infoFileItems.slice(0, 10).map((f: any, i: number) => {
+                      const rawName = (f.content ?? '').split('/').pop()?.split('_').slice(1).join('_') || 'Tệp đính kèm';
+                      const fileName = decodeURIComponent(rawName);
+                      const ext = fileName.split('.').pop()?.toLowerCase() || '';
+                      const extColor = ext === 'pdf' ? '#F40F02' : ['doc', 'docx'].includes(ext) ? '#0068FF' : ['xls', 'xlsx'].includes(ext) ? '#217346' : '#6B7280';
+                      return (
+                        <TouchableOpacity
+                          key={f.id || i}
+                          style={styles.infoPanelFileRow}
+                          onPress={() => f.content && Linking.openURL(f.content)}
+                        >
+                          <View style={[styles.infoPanelFileIcon, { backgroundColor: extColor }]}>
+                            <Text style={styles.infoPanelFileExt}>{ext.toUpperCase().slice(0, 3) || 'FILE'}</Text>
+                          </View>
+                          <View style={styles.infoPanelFileInfo}>
+                            <Text style={[styles.infoPanelFileName, { color: colors.text }]} numberOfLines={1}>{fileName}</Text>
+                            {f.fileSize ? <Text style={[styles.infoPanelFileSize, { color: colors.textSecondary }]}>{chatFileService.formatFileSize(f.fileSize)}</Text> : null}
+                          </View>
+                          <Ionicons name="download-outline" size={20} color={colors.textSecondary} />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+            </ScrollView>
+          </SafeAreaView>
+
+          {/* Lightbox inside info panel */}
+          <Modal
+            visible={!!infoSelectedImage}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setInfoSelectedImage(null)}
+          >
+            <View style={styles.fullscreenImageBackdrop}>
+              <TouchableOpacity style={styles.fullscreenImageClose} onPress={() => setInfoSelectedImage(null)}>
+                <Ionicons name="close" size={30} color="#FFFFFF" />
               </TouchableOpacity>
-              {infoShowFiles && (
-                <View>
-                  {infoFileItems.length === 0 ? (
-                    <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Chưa có tệp đính kèm</Text>
-                  ) : infoFileItems.slice(0, 10).map((f: any, i: number) => {
-                    const rawName = (f.content ?? '').split('/').pop()?.split('_').slice(1).join('_') || 'Tệp đính kèm';
-                    const fileName = decodeURIComponent(rawName);
-                    const ext = fileName.split('.').pop()?.toLowerCase() || '';
-                    const extColor = ext === 'pdf' ? '#F40F02' : ['doc', 'docx'].includes(ext) ? '#0068FF' : ['xls', 'xlsx'].includes(ext) ? '#217346' : '#6B7280';
-                    return (
-                      <TouchableOpacity
-                        key={f.id || i}
-                        style={styles.infoPanelFileRow}
-                        onPress={() => f.content && Linking.openURL(f.content)}
-                      >
-                        <View style={[styles.infoPanelFileIcon, { backgroundColor: extColor }]}>
-                          <Text style={styles.infoPanelFileExt}>{ext.toUpperCase().slice(0, 3) || 'FILE'}</Text>
-                        </View>
-                        <View style={styles.infoPanelFileInfo}>
-                          <Text style={[styles.infoPanelFileName, { color: colors.text }]} numberOfLines={1}>{fileName}</Text>
-                          {f.fileSize ? <Text style={[styles.infoPanelFileSize, { color: colors.textSecondary }]}>{chatFileService.formatFileSize(f.fileSize)}</Text> : null}
-                        </View>
-                        <Ionicons name="download-outline" size={20} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
+              {infoSelectedImage ? (
+                <Image source={{ uri: infoSelectedImage }} style={styles.fullscreenImage} resizeMode="contain" />
+              ) : null}
             </View>
+          </Modal>
+        </Modal>
 
-          </ScrollView>
-        </SafeAreaView>
-
-        {/* Lightbox inside info panel */}
         <Modal
-          visible={!!infoSelectedImage}
+          visible={infoEditNameVisible}
           transparent
           animationType="fade"
-          onRequestClose={() => setInfoSelectedImage(null)}
+          onRequestClose={() => setInfoEditNameVisible(false)}
         >
-          <View style={styles.fullscreenImageBackdrop}>
-            <TouchableOpacity style={styles.fullscreenImageClose} onPress={() => setInfoSelectedImage(null)}>
-              <Ionicons name="close" size={30} color="#FFFFFF" />
-            </TouchableOpacity>
-            {infoSelectedImage ? (
-              <Image source={{ uri: infoSelectedImage }} style={styles.fullscreenImage} resizeMode="contain" />
-            ) : null}
-          </View>
+          <Pressable style={styles.infoNameModalBackdrop} onPress={() => setInfoEditNameVisible(false)}>
+            <Pressable
+              style={[styles.infoNameModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text style={[styles.infoNameModalTitle, { color: colors.text }]}>Đổi tên nhóm</Text>
+              <TextInput
+                value={infoEditNameValue}
+                onChangeText={setInfoEditNameValue}
+                maxLength={100}
+                autoFocus
+                placeholder="Nhập tên nhóm"
+                placeholderTextColor={colors.textSecondary}
+                style={[styles.infoNameModalInput, { color: colors.text, borderColor: colors.border }]}
+              />
+              <View style={styles.infoNameModalActions}>
+                <TouchableOpacity
+                  style={[styles.infoNameModalBtn, { borderColor: colors.border }]}
+                  onPress={() => setInfoEditNameVisible(false)}
+                >
+                  <Text style={[styles.infoNameModalBtnText, { color: colors.textSecondary }]}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.infoNameModalBtnPrimary, (infoUpdatingGroupName || !infoEditNameValue.trim()) && styles.infoNameModalBtnPrimaryDisabled]}
+                  onPress={() => { void handleInfoUpdateGroupName(); }}
+                  disabled={infoUpdatingGroupName || !infoEditNameValue.trim()}
+                >
+                  <Text style={styles.infoNameModalBtnPrimaryText}>{infoUpdatingGroupName ? '...' : 'Lưu'}</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
         </Modal>
-      </Modal>
+
+        <Modal
+          visible={infoAddMemberVisible}
+          animationType="slide"
+          onRequestClose={handleCloseInfoAddMemberModal}
+        >
+          <SafeAreaView style={[styles.addMemberModalContainer, { backgroundColor: colors.background }]}>
+            <View style={[styles.addMemberModalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+              <TouchableOpacity style={styles.addMemberModalBackBtn} onPress={handleCloseInfoAddMemberModal}>
+                <Ionicons name="arrow-back" size={24} color={colors.text} />
+              </TouchableOpacity>
+
+              <View style={styles.addMemberModalHeaderCenter}>
+                <Text style={[styles.addMemberModalTitle, { color: colors.text }]}>Thêm thành viên</Text>
+                <Text style={[styles.addMemberModalSubtitle, { color: colors.textSecondary }]}>
+                  Đã chọn: {infoSelectedMembers.length}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.addMemberModalActionBtn,
+                  (!infoSelectedMembers.length || infoAddingMembers) && styles.addMemberModalActionBtnDisabled,
+                ]}
+                onPress={handleInfoAddMembers}
+                disabled={!infoSelectedMembers.length || infoAddingMembers}
+              >
+                <Text style={styles.addMemberModalActionBtnText}>
+                  {infoAddingMembers ? '...' : 'Thêm'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.searchWrap, { backgroundColor: colors.surface }]}> 
+              <Ionicons name="search" size={26} color={colors.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                value={infoAddMemberSearch}
+                onChangeText={setInfoAddMemberSearch}
+                placeholder="Tìm tên hoặc số điện thoại"
+                placeholderTextColor={colors.textSecondary}
+                style={[styles.searchInput, { color: colors.text }]}
+              />
+            </View>
+
+            <View style={styles.addMemberListWrap}>
+              <FlatList
+                data={infoAddMemberListData}
+                keyExtractor={(item) => item.id}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.addMemberListContent}
+                renderItem={({ item }) => {
+                  if (item.type === 'header') {
+                    return (
+                      <View style={[styles.addMemberLetterRow, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.addMemberLetterText, { color: colors.text }]}>{item.letter}</Text>
+                      </View>
+                    );
+                  }
+
+                  const friend = item.friend;
+                  const friendId = String(friend.user_id ?? friend.id ?? '');
+                  const friendName = String(friend.display_name ?? friend.full_name ?? friend.name ?? 'Unknown');
+                  const friendAvatar = friend.avatar_url || friend.avatarUrl || friend.avatar;
+                  const selected = infoSelectedMembers.includes(friendId);
+
+                  return (
+                    <TouchableOpacity
+                      style={[styles.addMemberFriendRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}
+                      activeOpacity={0.7}
+                      onPress={() => setInfoSelectedMembers((prev) => (
+                        prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId]
+                      ))}
+                    >
+                      {friendAvatar ? (
+                        <Image source={getAvatarSource(friendAvatar)} style={styles.addMemberAvatar} />
+                      ) : (
+                        <View style={[styles.addMemberAvatar, { backgroundColor: '#4A90D9' }]}>
+                          <Text style={styles.addMemberAvatarText}>{friendName.charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+
+                      <View style={styles.addMemberFriendInfo}>
+                        <Text style={[styles.addMemberFriendName, { color: colors.text }]} numberOfLines={1}>
+                          {friendName}
+                        </Text>
+                        {friend.email ? (
+                          <Text style={[styles.addMemberFriendSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                            {friend.email}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <View style={[styles.addMemberCheckCircle, selected && styles.addMemberCheckCircleSelected]}>
+                        {selected ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={styles.addMemberEmptyWrap}>
+                    <Text style={[styles.addMemberEmptyText, { color: colors.textSecondary }]}>Không tìm thấy bạn bè phù hợp</Text>
+                  </View>
+                }
+              />
+            </View>
+          </SafeAreaView>
+        </Modal>
 
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -3501,7 +3854,7 @@ const renderMessage = ({ item, index }: { item: Message; index: number }) => {
 }
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     flex: 1,
     backgroundColor: '#EBF0F6',
   },
@@ -3515,36 +3868,36 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: '#2F87F2',
   },
-  headerInfo: { 
-    flex: 1, 
-    marginLeft: 14 
+  headerInfo: {
+    flex: 1,
+    marginLeft: 14
   },
-  headerTitle: { 
+  headerTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 1,
   },
-  headerSubtitle: { 
+  headerSubtitle: {
     fontSize: 10,
     color: '#CFE4FF',
     fontWeight: '500',
   },
-  headerActions: { 
+  headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
   },
-  headerIcon: { 
+  headerIcon: {
     width: 42,
     height: 42,
-    justifyContent: 'center', 
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  messagesList: { 
-    paddingHorizontal: 10, 
-    paddingVertical: 12, 
-    flexGrow: 1, 
+  messagesList: {
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    flexGrow: 1,
     justifyContent: 'flex-end'
   },
   olderLoadingContainer: {
@@ -3558,7 +3911,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
-  messageContainer: { 
+  messageContainer: {
     marginBottom: 2,
     width: '100%',
   },
@@ -3576,6 +3929,12 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     alignItems: 'flex-start',
   },
+  groupSenderName: {
+    fontSize: 11,
+    marginLeft: 6,
+    marginBottom: 4,
+    fontWeight: '500',
+  },
   otherAvatarSlot: {
     width: 40,
     alignItems: 'center',
@@ -3587,7 +3946,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#E8EDF3',
   },
-  messageBubble: { 
+  messageBubble: {
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderRadius: 18,
@@ -3603,7 +3962,7 @@ const styles = StyleSheet.create({
   otherBubble: {
     borderTopLeftRadius: 6,
   },
-  messageText: { 
+  messageText: {
     fontSize: 14,
     lineHeight: 19,
     fontWeight: '400',
@@ -3626,7 +3985,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
   },
-  timestamp: { 
+  timestamp: {
     fontSize: 10,
     marginTop: 4,
     color: '#8D929C',
@@ -3690,12 +4049,12 @@ const styles = StyleSheet.create({
     color: '#2D3640',
     fontWeight: '600',
   },
-  inputArea: { 
-    flexDirection: 'column', 
-    alignItems: 'stretch', 
-    paddingHorizontal: 12, 
+  inputArea: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderTopWidth: 1, 
+    borderTopWidth: 1,
     gap: 6,
     backgroundColor: '#FFFFFF',
   },
@@ -3735,13 +4094,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  attachButton: { 
+  attachButton: {
     width: 34,
     height: 34,
-    justifyContent: 'center', 
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  input: { 
+  input: {
     flex: 1,
     borderWidth: 0,
     borderRadius: 0,
@@ -3754,7 +4113,7 @@ const styles = StyleSheet.create({
   bottomActionButton: {
     width: 34,
     height: 34,
-    justifyContent: 'center', 
+    justifyContent: 'center',
     alignItems: 'center',
   },
   modalBackdrop: {
@@ -4544,6 +4903,252 @@ const styles = StyleSheet.create({
   },
   infoPanelSubName: {
     fontSize: 13,
+    textAlign: 'center',
+  },
+  infoPanelAvatarWrap: {
+    position: 'relative',
+  },
+  infoPanelAvatarCameraBadge: {
+    position: 'absolute',
+    right: -3,
+    bottom: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoPanelNameRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoPanelNameEditBtn: {
+    marginLeft: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoNameModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  infoNameModalCard: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+  },
+  infoNameModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  infoNameModalInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  infoNameModalActions: {
+    marginTop: 12,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  infoNameModalBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  infoNameModalBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  infoNameModalBtnPrimary: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: COLORS.primary,
+  },
+  infoNameModalBtnPrimaryDisabled: {
+    backgroundColor: '#9DBEF9',
+  },
+  infoNameModalBtnPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  addMemberModalContainer: {
+    flex: 1,
+  },
+  addMemberModalHeader: {
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  addMemberModalBackBtn: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addMemberModalHeaderCenter: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  addMemberModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  addMemberModalSubtitle: {
+    marginTop: 2,
+    fontSize: 11,
+  },
+  addMemberModalActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+  },
+  addMemberModalActionBtnDisabled: {
+    backgroundColor: '#9DBEF9',
+  },
+  addMemberModalActionBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  searchIcon: {
+    marginRight: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 12,
+  },
+  addMemberListWrap: {
+    flex: 1,
+  },
+  addMemberListContent: {
+    paddingBottom: 20,
+  },
+  addMemberLetterRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 3,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    backgroundColor: '#F1F2F4',
+  },
+  addMemberLetterText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  addMemberFriendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  addMemberAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addMemberAvatarText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  addMemberFriendInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  addMemberFriendName: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  addMemberFriendSub: {
+    marginTop: 2,
+    fontSize: 11,
+  },
+  addMemberCheckCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#999FA8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addMemberCheckCircleSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary,
+  },
+  addMemberEmptyWrap: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addMemberEmptyText: {
+    fontSize: 12,
+  },
+  infoPanelQuickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+    marginTop: 18,
+    paddingHorizontal: 8,
+  },
+  infoPanelQuickAction: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  infoPanelQuickActionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  infoPanelQuickActionLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
     textAlign: 'center',
   },
   infoPanelSection: {
