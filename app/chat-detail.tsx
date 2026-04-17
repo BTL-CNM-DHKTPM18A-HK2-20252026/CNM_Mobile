@@ -79,6 +79,8 @@ interface PinnedMessageItem {
   id: string;
   messageId: string;
   content: string;
+  messageType?: string;
+  contentUrl?: string;
   senderName?: string;
   pinnedAt?: string;
 }
@@ -228,6 +230,7 @@ export default function ChatDetailScreen() {
   const [conversationDisplayName, setConversationDisplayName] = useState(String(name ?? ''));
   const [conversationAvatarUrl, setConversationAvatarUrl] = useState(String(avatar ?? ''));
   const [messages, setMessages] = useState<Message[]>([]);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isSendingAi, setIsSendingAi] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -299,6 +302,7 @@ export default function ChatDetailScreen() {
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<TextInput>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const loadingOlderRef = useRef(false);
   const shouldScrollToLatestRef = useRef(false);
@@ -571,6 +575,10 @@ export default function ChatDetailScreen() {
           id: String(item.id ?? item.messageId ?? ''),
           messageId: String(item.messageId ?? ''),
           content: String(item.content ?? ''),
+          messageType: item.messageType ? String(item.messageType) : undefined,
+          contentUrl: item.contentUrl
+            ? String(item.contentUrl)
+            : (item.mediaUrl ? String(item.mediaUrl) : undefined),
           senderName: item.senderName ? String(item.senderName) : undefined,
           pinnedAt: item.pinnedAt ? String(item.pinnedAt) : undefined,
         }))
@@ -624,6 +632,42 @@ export default function ChatDetailScreen() {
   const latestPinnedMessage = pinnedMessages.length > 0
     ? pinnedMessages[pinnedMessages.length - 1]
     : null;
+  const latestPinnedType = (latestPinnedMessage?.messageType || '').toUpperCase();
+  const latestPinnedIsImage = latestPinnedType === 'IMAGE';
+  const latestPinnedThumbUrl = latestPinnedIsImage
+    ? (latestPinnedMessage?.contentUrl || latestPinnedMessage?.content || '')
+    : '';
+  const latestPinnedLabel = latestPinnedMessage
+    ? (() => {
+      const text = (latestPinnedMessage.content || '').trim();
+      if (latestPinnedIsImage) return '[Hình ảnh]';
+      return text || t('chat.empty_message', 'Tin nhắn trống');
+    })()
+    : '';
+
+  const getPinnedPreviewText = useCallback((item: PinnedMessageItem) => {
+    const pinnedType = (item.messageType || '').toUpperCase();
+    if (pinnedType === 'IMAGE') {
+      return '[Hình ảnh]';
+    }
+
+    const text = (item.content || '').trim();
+    return text || t('chat.empty_message', 'Tin nhắn trống');
+  }, [t]);
+
+  const getPinnedPreviewThumb = useCallback((item: PinnedMessageItem) => {
+    const pinnedType = (item.messageType || '').toUpperCase();
+    if (pinnedType !== 'IMAGE') return '';
+    return item.contentUrl || item.content || '';
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
 
   const loadInitialMessages = useCallback(async (uid?: string | null, silent = false) => {
     if (!conversationId) {
@@ -1515,6 +1559,15 @@ export default function ChatDetailScreen() {
     const targetIndex = messages.findIndex((message) => String(message.messageId) === String(messageId));
     if (targetIndex >= 0) {
       flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true, viewPosition: 0.5 });
+      setHighlightedMessageId(String(messageId));
+
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+      }
+
+      highlightTimerRef.current = setTimeout(() => {
+        setHighlightedMessageId((prev) => (prev === String(messageId) ? null : prev));
+      }, 1800);
     }
 
     setIsPinnedListVisible(false);
@@ -1931,15 +1984,16 @@ export default function ChatDetailScreen() {
       return null;
     }
 
-    // Only show the indicator when actively loading older messages (user scrolled to top)
-    if (!isLoadingOlder) {
-      return null;
-    }
-
     return (
       <View style={styles.olderLoadingContainer}>
-        <ActivityIndicator size="small" color={COLORS.primary} />
-        <Text style={[styles.olderLoadingText, { color: colors.textSecondary }]}>Đang tải tin cũ...</Text>
+        {isLoadingOlder ? (
+          <>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={[styles.olderLoadingText, { color: colors.textSecondary }]}>Đang tải tin cũ...</Text>
+          </>
+        ) : (
+          <View style={styles.olderLoadingPlaceholder} />
+        )}
       </View>
     );
   };
@@ -2062,6 +2116,8 @@ export default function ChatDetailScreen() {
     };
 
     const renderMediaContent = () => {
+      const handleMediaLongPress = () => openMessageActionMenu(item);
+
       if (item.isRecalled) {
         return (
           <Text style={[styles.recalledText, isCurrentUserMessage && styles.userRecalledText, !isCurrentUserMessage && { color: colors.textSecondary }]}>
@@ -2124,6 +2180,8 @@ export default function ChatDetailScreen() {
                   setFullscreenImageUrl(item.content);
                 }
               }}
+              onLongPress={handleMediaLongPress}
+              delayLongPress={220}
             >
               <Image
                 source={{ uri: item.content }}
@@ -2156,7 +2214,12 @@ export default function ChatDetailScreen() {
         const renderGrid = () => {
           if (count === 1) {
             return (
-              <TouchableOpacity activeOpacity={0.85} onPress={() => setFullscreenImageUrl(imgs[0].url)}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setFullscreenImageUrl(imgs[0].url)}
+                onLongPress={handleMediaLongPress}
+                delayLongPress={220}
+              >
                 <Image source={{ uri: imgs[0].url }} style={{ width: gridWidth, height: gridWidth * 0.75, borderRadius: 8 }} resizeMode="cover" />
               </TouchableOpacity>
             );
@@ -2165,7 +2228,13 @@ export default function ChatDetailScreen() {
             return (
               <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
                 {imgs.map((att, i) => (
-                  <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                  <TouchableOpacity
+                    key={i}
+                    activeOpacity={0.85}
+                    onPress={() => setFullscreenImageUrl(att.url)}
+                    onLongPress={handleMediaLongPress}
+                    delayLongPress={220}
+                  >
                     <Image source={{ uri: att.url }} style={{ width: halfWidth, height: halfWidth }} resizeMode="cover" />
                   </TouchableOpacity>
                 ))}
@@ -2175,12 +2244,23 @@ export default function ChatDetailScreen() {
           if (count === 3) {
             return (
               <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
-                <TouchableOpacity activeOpacity={0.85} onPress={() => setFullscreenImageUrl(imgs[0].url)}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => setFullscreenImageUrl(imgs[0].url)}
+                  onLongPress={handleMediaLongPress}
+                  delayLongPress={220}
+                >
                   <Image source={{ uri: imgs[0].url }} style={{ width: halfWidth, height: halfWidth * 2 + gap }} resizeMode="cover" />
                 </TouchableOpacity>
                 <View style={{ gap }}>
                   {imgs.slice(1).map((att, i) => (
-                    <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                    <TouchableOpacity
+                      key={i}
+                      activeOpacity={0.85}
+                      onPress={() => setFullscreenImageUrl(att.url)}
+                      onLongPress={handleMediaLongPress}
+                      delayLongPress={220}
+                    >
                       <Image source={{ uri: att.url }} style={{ width: halfWidth, height: halfWidth }} resizeMode="cover" />
                     </TouchableOpacity>
                   ))}
@@ -2207,7 +2287,13 @@ export default function ChatDetailScreen() {
                   {row.map((att, ci) => {
                     const itemWidth = (gridWidth - gap * (row.length - 1)) / row.length;
                     return (
-                      <TouchableOpacity key={ci} activeOpacity={0.85} onPress={() => setFullscreenImageUrl(att.url)}>
+                      <TouchableOpacity
+                        key={ci}
+                        activeOpacity={0.85}
+                        onPress={() => setFullscreenImageUrl(att.url)}
+                        onLongPress={handleMediaLongPress}
+                        delayLongPress={220}
+                      >
                         <Image source={{ uri: att.url }} style={{ width: itemWidth, height: itemWidth }} resizeMode="cover" />
                       </TouchableOpacity>
                     );
@@ -2238,11 +2324,15 @@ export default function ChatDetailScreen() {
           <>
             {replyBlock}
             {forwardedBanner}
-            <TouchableOpacity onPress={() => {
-              if (item.content && !isLocalUri) {
-                setFullscreenVideoUrl(item.content);
-              }
-            }}>
+            <TouchableOpacity
+              onPress={() => {
+                if (item.content && !isLocalUri) {
+                  setFullscreenVideoUrl(item.content);
+                }
+              }}
+              onLongPress={handleMediaLongPress}
+              delayLongPress={220}
+            >
               <View style={styles.videoContainer}>
                 <View style={styles.videoPlayOverlay}>
                   <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
@@ -2277,6 +2367,8 @@ export default function ChatDetailScreen() {
             <TouchableOpacity
               style={styles.voiceBubble}
               onPress={() => { if (!isLocalUri) togglePlayVoice(item); }}
+              onLongPress={handleMediaLongPress}
+              delayLongPress={220}
               activeOpacity={0.75}
             >
               {isLocalUri ? (
@@ -2412,7 +2504,13 @@ export default function ChatDetailScreen() {
     };
 
     return (
-      <View style={[styles.messageContainer, { marginBottom: showTimestamp ? 10 : 4 }]}>
+      <View
+        style={[
+          styles.messageContainer,
+          { marginBottom: showTimestamp ? 10 : 4 },
+          highlightedMessageId === String(item.messageId) && styles.messageContainerHighlighted,
+        ]}
+      >
         {dateSepLabel ? (
           <View style={styles.dateSeparator}>
             <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
@@ -2535,18 +2633,26 @@ export default function ChatDetailScreen() {
 
         {latestPinnedMessage ? (
           <View style={styles.pinnedBannerWrap}>
-            <View style={styles.pinnedBanner}>
-              <Ionicons name="pin-outline" size={14} color="#C9D1DE" />
-              <Text style={styles.pinnedBannerText} numberOfLines={1}>
-                {latestPinnedMessage.content || t('chat.empty_message', 'Tin nhắn trống')}
-              </Text>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.pinnedBanner}
+              onPress={() => handleJumpToPinnedMessage(latestPinnedMessage.messageId)}
+            >
+              <View style={styles.pinnedBannerMain}>
+                <Text style={styles.pinnedBannerText} numberOfLines={1}>
+                  {latestPinnedLabel}
+                </Text>
+                {latestPinnedIsImage && latestPinnedThumbUrl ? (
+                  <Image source={{ uri: latestPinnedThumbUrl }} style={styles.pinnedBannerThumb} resizeMode="cover" />
+                ) : null}
+              </View>
               <TouchableOpacity
                 style={styles.pinnedBannerAction}
                 onPress={() => setIsPinnedListVisible(true)}
               >
                 <Ionicons name="chevron-down" size={16} color="#DCE3EE" />
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -2903,7 +3009,14 @@ export default function ChatDetailScreen() {
                   >
                     <View style={styles.pinnedItemMain}>
                       <Text style={[styles.pinnedSender, { color: colors.text }]} numberOfLines={1}>{item.senderName || t('chat.unknown_user', 'Người dùng')}</Text>
-                      <Text style={[styles.pinnedContent, { color: colors.textSecondary }]} numberOfLines={2}>{item.content || t('chat.empty_message', 'Tin nhắn trống')}</Text>
+                      <View style={styles.pinnedContentRow}>
+                        <Text style={[styles.pinnedContent, { color: colors.textSecondary }]} numberOfLines={2}>
+                          {getPinnedPreviewText(item)}
+                        </Text>
+                        {getPinnedPreviewThumb(item) ? (
+                          <Image source={{ uri: getPinnedPreviewThumb(item) }} style={styles.pinnedItemThumb} resizeMode="cover" />
+                        ) : null}
+                      </View>
                     </View>
                     <TouchableOpacity
                       onPress={() => { void handleUnpinFromPinnedList(item.messageId); }}
@@ -4002,6 +4115,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pinnedBannerThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
   messagesList: {
     paddingHorizontal: 10,
     paddingVertical: 12,
@@ -4013,15 +4132,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 8,
+    minHeight: 28,
+    paddingVertical: 4,
   },
   olderLoadingText: {
     fontSize: 11,
     fontWeight: '500',
   },
+  olderLoadingPlaceholder: {
+    height: 14,
+  },
   messageContainer: {
     marginBottom: 2,
     width: '100%',
+  },
+  messageContainerHighlighted: {
+    backgroundColor: 'rgba(0, 104, 255, 0.09)',
+    borderRadius: 12,
+    paddingHorizontal: 4,
   },
   userMessageBlock: {
     alignItems: 'flex-end',
@@ -4056,11 +4184,11 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingVertical: 8,
     borderRadius: 18,
     maxWidth: '85%',
     minWidth: 48,
-    minHeight: 42,
+    minHeight: 34,
     justifyContent: 'center' as const,
   },
   userBubble: {
@@ -4072,16 +4200,23 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 14,
-    lineHeight: 19,
+    lineHeight: 20,
     fontWeight: '400',
   },
   userMessageText: {
-    color: '#1A2A3B',
+    paddingVertical: 0,
   },
   dateSeparator: {
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 10,
+    gap: 6,
+  },
+  pinnedBannerMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   dateSeparatorText: {
     fontSize: 10,
@@ -4218,9 +4353,9 @@ const styles = StyleSheet.create({
     color: '#6C7480',
   },
   editingCloseButton: {
-    width: 26,
-    height: 26,
-    alignItems: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 4,
     justifyContent: 'center',
   },
   attachButton: {
@@ -4337,13 +4472,25 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  pinnedContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   pinnedSender: {
     fontSize: 12,
     fontWeight: '700',
   },
   pinnedContent: {
+    flex: 1,
     fontSize: 12,
     lineHeight: 16,
+  },
+  pinnedItemThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: '#E6EBF2',
   },
   unpinButton: {
     width: 28,
