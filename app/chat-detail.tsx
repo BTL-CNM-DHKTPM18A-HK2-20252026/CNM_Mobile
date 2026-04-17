@@ -621,6 +621,10 @@ export default function ChatDetailScreen() {
         ? (isTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
         : t('chat.offline_recent', 'Truy cập gần đây');
 
+  const latestPinnedMessage = pinnedMessages.length > 0
+    ? pinnedMessages[pinnedMessages.length - 1]
+    : null;
+
   const loadInitialMessages = useCallback(async (uid?: string | null, silent = false) => {
     if (!conversationId) {
       return;
@@ -2523,14 +2527,28 @@ export default function ChatDetailScreen() {
                 </TouchableOpacity>
               </>
             ) : null}
-            <TouchableOpacity style={styles.headerIcon} onPress={() => { void handleOpenPinnedList(); }}>
-              <Ionicons name="list-outline" size={30} color="#FFFFFF" />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
-              <Ionicons name="information-circle-outline" size={28} color="#FFFFFF" />
+              <Ionicons name="list-outline" size={30} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
+
+        {latestPinnedMessage ? (
+          <View style={styles.pinnedBannerWrap}>
+            <View style={styles.pinnedBanner}>
+              <Ionicons name="pin-outline" size={14} color="#C9D1DE" />
+              <Text style={styles.pinnedBannerText} numberOfLines={1}>
+                {latestPinnedMessage.content || t('chat.empty_message', 'Tin nhắn trống')}
+              </Text>
+              <TouchableOpacity
+                style={styles.pinnedBannerAction}
+                onPress={() => setIsPinnedListVisible(true)}
+              >
+                <Ionicons name="chevron-down" size={16} color="#DCE3EE" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
         {/* Messages List */}
         <FlatList
@@ -3953,6 +3971,36 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  pinnedBannerWrap: {
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 2,
+    backgroundColor: '#2F87F2',
+  },
+  pinnedBanner: {
+    minHeight: 34,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pinnedBannerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+    color: '#EEF3FA',
+  },
+  pinnedBannerAction: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   messagesList: {
     paddingHorizontal: 10,
