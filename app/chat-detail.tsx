@@ -52,8 +52,12 @@ interface Message {
   senderName?: string;
   senderAvatarUrl?: string;
   messageType?: string;
+  systemActionType?: 'PIN' | 'UNPIN' | 'JOIN' | 'LEAVE' | 'INFO';
+  systemTargetMessageId?: string;
+  systemActorName?: string;
   isEdited?: boolean;
   isRecalled?: boolean;
+  updatedAt?: string;
   reactions?: ChatUiReaction[];
   fileName?: string;
   fileSize?: number;
@@ -1988,7 +1992,21 @@ export default function ChatDetailScreen() {
       || (currentDate.getTime() - prevDate.getTime() > 15 * 60 * 1000);
   };
 
+  const SystemMessageBubble = React.memo(({ content }: { content: string }) => {
+    return (
+      <View style={styles.systemMessageRow}>
+        <View style={styles.systemMessageBubble}>
+          <Text style={styles.systemMessageText}>{content}</Text>
+        </View>
+      </View>
+    );
+  });
+
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
+    if ((item.messageType || '').toUpperCase() === 'SYSTEM') {
+      return <SystemMessageBubble content={item.content || ''} />;
+    }
+
     const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
     const prevMessage = index > 0 ? messages[index - 1] : undefined;
     const nextMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
@@ -4040,6 +4058,27 @@ const styles = StyleSheet.create({
   timestampRight: {
     marginRight: 4,
     alignSelf: 'flex-end',
+  },
+  systemMessageRow: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 6,
+    paddingHorizontal: 20,
+  },
+  systemMessageBubble: {
+    maxWidth: '88%',
+    backgroundColor: 'rgba(120, 128, 140, 0.14)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  systemMessageText: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#6C7584',
+    textAlign: 'center',
+    fontWeight: '500',
   },
   recalledText: {
     fontSize: 12,
