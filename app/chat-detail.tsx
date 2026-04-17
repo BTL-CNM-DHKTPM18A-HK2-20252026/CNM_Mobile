@@ -1,18 +1,18 @@
 import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { useChatSocket } from '@/hooks/useChatSocket';
-import { chatService } from '@/services/chatService';
 import { chatFileService, type PickedMedia } from '@/services/chatFileService';
+import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
+import { Audio, ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { Video, ResizeMode, Audio } from 'expo-av';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -40,8 +40,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   mapChatPayloadListToUiMessages,
   mapChatPayloadToUiMessage,
-  type ChatUiReaction,
   type ChatUiMessage,
+  type ChatUiReaction,
 } from '../services/chatMessageAdapter';
 
 interface Message {
@@ -129,16 +129,34 @@ const buildReactionSummary = (reactions?: ChatUiReaction[]) => {
   return Array.from(counter.entries()).map(([emoji, count]) => ({ emoji, count }));
 };
 
-const toLocalIsoLike = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+const pad2 = (value: number) => String(value).padStart(2, '0');
 
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+// Hàm tạo chuỗi giờ địa phương chuẩn (Dùng cho tin nhắn vừa bấm gửi)
+const toLocalIsoString = (date: Date) => {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+};
+
+const parseMessageDate = (createdAt?: string) => {
+  if (!createdAt) return null;
+  let raw = String(createdAt).trim();
+  if (!raw) return null;
+
+  // QUAN TRỌNG: Cắt bỏ đuôi múi giờ (Z, +00:00, +07:00)
+  // Để ép Javascript hiểu chuỗi này là giờ địa phương thiết bị
+  raw = raw.replace(/(Z|[+-]\d{2}:?\d{2})$/i, '');
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  const epoch = Number(raw);
+  if (!Number.isNaN(epoch)) {
+    const fallback = new Date(epoch);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+  }
+
+  return null;
 };
 
 const getMessageMillis = (createdAt?: string) => {
@@ -147,9 +165,9 @@ const getMessageMillis = (createdAt?: string) => {
   const raw = String(createdAt).trim();
   if (!raw) return NaN;
 
-  const parsed = new Date(raw).getTime();
-  if (!Number.isNaN(parsed)) {
-    return parsed;
+  const parsed = parseMessageDate(raw);
+  if (parsed) {
+    return parsed.getTime();
   }
 
   const epoch = Number(raw);
@@ -353,8 +371,8 @@ export default function ChatDetailScreen() {
 
   const sortMessages = useCallback((msgs: Message[]): Message[] => {
     return [...msgs].sort((a, b) => {
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
+      const timeA = parseMessageDate(a.createdAt)?.getTime() ?? Number.NaN;
+      const timeB = parseMessageDate(b.createdAt)?.getTime() ?? Number.NaN;
       return timeA - timeB; // ascending: cũ → mới
     });
   }, []);
@@ -373,12 +391,34 @@ export default function ChatDetailScreen() {
     return sortMessages(Array.from(mergedById.values()));
   }, [sortMessages]);
 
+  const isSameMessageList = useCallback((prev: Message[], next: Message[]) => {
+    if (prev.length !== next.length) {
+      return false;
+    }
+
+    for (let i = 0; i < prev.length; i += 1) {
+      const prevMsg = prev[i];
+      const nextMsg = next[i];
+
+      if (String(prevMsg.messageId) !== String(nextMsg.messageId)) return false;
+      if (prevMsg.content !== nextMsg.content) return false;
+      if (prevMsg.createdAt !== nextMsg.createdAt) return false;
+      if (prevMsg.updatedAt !== nextMsg.updatedAt) return false;
+      if (prevMsg.isRecalled !== nextMsg.isRecalled) return false;
+      if (prevMsg.isEdited !== nextMsg.isEdited) return false;
+      if ((prevMsg.reactions?.length || 0) !== (nextMsg.reactions?.length || 0)) return false;
+    }
+
+    return true;
+  }, []);
+
   const appendOrUpdateMessage = useCallback((message: ChatUiMessage) => {
     logChatDebug('appendOrUpdateMessage', message);
     setMessages((prev) => {
-      return mergeUniqueMessages(prev, [message]);
+      const merged = mergeUniqueMessages(prev, [message]);
+      return isSameMessageList(prev, merged) ? prev : merged;
     });
-  }, [logChatDebug, mergeUniqueMessages]);
+  }, [isSameMessageList, logChatDebug, mergeUniqueMessages]);
 
   const unwrapApiPayload = useCallback((raw: unknown): unknown => {
     if (!raw || typeof raw !== 'object') {
@@ -448,14 +488,9 @@ export default function ChatDetailScreen() {
   }, []);
 
   const formatMessageTime = useCallback((createdAt?: string) => {
-    const raw = String(createdAt || '').trim();
-    // Backend gửi LocalDateTime không có timezone (VD: "2026-04-13T14:35:00")
-    // Hermes parse nó như UTC → sai +7. Đọc HH:mm thẳng từ chuỗi ISO.
-    const isoMatch = raw.match(/T(\d{2}):(\d{2})/);
-    if (isoMatch) return `${isoMatch[1]}:${isoMatch[2]}`;
-    // fallback: giờ hiện tại của thiết bị
-    const now = new Date();
-    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const date = parseMessageDate(createdAt);
+    if (!date) return '';
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
   }, []);
 
   const getReplySnippet = useCallback((msg: Message): string => {
@@ -652,7 +687,7 @@ export default function ChatDetailScreen() {
           // Remove optimistic temp messages whose content already exists from server
           const serverIds = new Set(nextMessages.map((m) => String(m.messageId)));
           if (serverIds.size === 0) return merged;
-          return merged.filter((m) => {
+          const filtered = merged.filter((m) => {
             if (!String(m.messageId).startsWith('temp-')) return true;
             const isTempMedia = String(m.messageId).startsWith('temp-media-');
             return !nextMessages.some((s) => {
@@ -666,9 +701,11 @@ export default function ChatDetailScreen() {
               return false;
             });
           });
+
+          return isSameMessageList(prev, filtered) ? prev : filtered;
         });
       } else {
-        setMessages(nextMessages);
+        setMessages((prev) => (isSameMessageList(prev, nextMessages) ? prev : nextMessages));
         setHasMoreOlder(nextHasMoreOlder);
         shouldScrollToLatestRef.current = true;
       }
@@ -682,7 +719,7 @@ export default function ChatDetailScreen() {
         console.error('Failed to load messages:', error);
       }
     }
-  }, [canUseRealtimeIndicators, conversationId, logChatDebug, mergeUniqueMessages, parsePageResult, sendReadReceipt, sortMessages]);
+  }, [canUseRealtimeIndicators, conversationId, isSameMessageList, logChatDebug, mergeUniqueMessages, parsePageResult, sendReadReceipt, sortMessages]);
 
   useEffect(() => {
     const initialize = async () => {
@@ -729,7 +766,10 @@ export default function ChatDetailScreen() {
       });
 
       if (sortedMessages.length > 0) {
-        setMessages((prev) => mergeUniqueMessages(prev, sortedMessages));
+        setMessages((prev) => {
+          const merged = mergeUniqueMessages(prev, sortedMessages);
+          return isSameMessageList(prev, merged) ? prev : merged;
+        });
       }
 
       setHasMoreOlder(hasMore && sortedMessages.length > 0);
@@ -739,7 +779,7 @@ export default function ChatDetailScreen() {
       loadingOlderRef.current = false;
       setIsLoadingOlder(false);
     }
-  }, [conversationId, hasMoreOlder, isLoadingOlder, logChatDebug, mergeUniqueMessages, messages, parsePageResult, sortMessages]);
+  }, [conversationId, hasMoreOlder, isLoadingOlder, isSameMessageList, logChatDebug, mergeUniqueMessages, messages, parsePageResult, sortMessages]);
 
   // Load conversations when forward modal opens
   useEffect(() => {
@@ -874,7 +914,7 @@ export default function ChatDetailScreen() {
       content: messageContent,
       senderId: currentUserId ?? 'local-user',
       senderName: 'Me',
-      createdAt: toLocalIsoLike(now),
+      createdAt: toLocalIsoString(now),
     };
 
     setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
@@ -911,7 +951,7 @@ export default function ChatDetailScreen() {
           const fallbackAiText = locale.startsWith('en')
             ? 'AI response is empty. Please try again.'
             : 'AI chưa có phản hồi. Bạn thử lại nhé.';
-          const nowIso = toLocalIsoLike(new Date());
+          const nowIso = toLocalIsoString(new Date());
 
           setMessages((prev) => mergeUniqueMessages(prev, [{
             messageId: `ai-fallback-${Date.now()}`,
@@ -1097,7 +1137,7 @@ export default function ChatDetailScreen() {
       content: uri,
       senderId: currentUserId ?? 'local-user',
       senderName: 'Me',
-      createdAt: toLocalIsoLike(new Date()),
+      createdAt: toLocalIsoString(new Date()),
       messageType: 'VOICE',
       voiceDuration: duration,
     };
@@ -1244,7 +1284,7 @@ export default function ChatDetailScreen() {
         content: '',
         senderId: currentUserId ?? 'local-user',
         senderName: 'Me',
-        createdAt: toLocalIsoLike(now),
+        createdAt: toLocalIsoString(now),
         messageType: 'IMAGE_GROUP',
         caption: caption || undefined,
         attachments: mediaItems.map((m) => ({ url: m.uri })),
@@ -1307,7 +1347,7 @@ export default function ChatDetailScreen() {
         content: media.uri,
         senderId: currentUserId ?? 'local-user',
         senderName: 'Me',
-        createdAt: toLocalIsoLike(now),
+        createdAt: toLocalIsoString(now),
         messageType: media.mediaType,
         fileName: media.fileName,
         fileSize: media.fileSize,
@@ -1918,37 +1958,32 @@ export default function ChatDetailScreen() {
     return nextMs - currentMs > BLOCK_GAP_MS;
   };
 
-  const formatDateSeparator = (createdAt?: string) => {
-    const raw = String(createdAt || '').trim();
-    if (!raw) return null;
-    const date = new Date(raw);
-    if (Number.isNaN(date.getTime())) return null;
+  const formatDateSeparator = useCallback((createdAt?: string) => {
+    const date = parseMessageDate(createdAt);
+    if (!date) return null;
+
     const now = new Date();
     const isToday = date.toDateString() === now.toDateString();
+
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const isYesterday = date.toDateString() === yesterday.toDateString();
-    // Đọc HH:mm thẳng từ chuỗi ISO để tránh Hermes parse UTC sai +7
-    const isoTimeMatch = raw.match(/T(\d{2}):(\d{2})/);
-    const time = isoTimeMatch
-      ? `${isoTimeMatch[1]}:${isoTimeMatch[2]}`
-      : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-    if (isToday) return `${time} Hôm nay`;
-    if (isYesterday) return `${time} Hôm qua`;
-    // Đọc ngày tháng thẳng từ chuỗi ISO
-    const isoDateMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoDateMatch) return `${time} ${isoDateMatch[3]}/${isoDateMatch[2]}/${isoDateMatch[1]}`;
+
+    const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     const dd = String(date.getDate()).padStart(2, '0');
     const mo = String(date.getMonth() + 1).padStart(2, '0');
     const yyyy = date.getFullYear();
+
+    if (isToday) return `${time} Hôm nay`;
+    if (isYesterday) return `${time} Hôm qua`;
     return `${time} ${dd}/${mo}/${yyyy}`;
-  };
+  }, []);
 
   const shouldShowDateSeparator = (current: Message, prev?: Message) => {
     if (!prev) return true;
-    const currentDate = new Date(current.createdAt);
-    const prevDate = new Date(prev.createdAt);
-    if (Number.isNaN(currentDate.getTime()) || Number.isNaN(prevDate.getTime())) return false;
+    const currentDate = parseMessageDate(current.createdAt);
+    const prevDate = parseMessageDate(prev.createdAt);
+    if (!currentDate || !prevDate) return false;
     return currentDate.toDateString() !== prevDate.toDateString()
       || (currentDate.getTime() - prevDate.getTime() > 15 * 60 * 1000);
   };
@@ -2490,7 +2525,14 @@ export default function ChatDetailScreen() {
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={renderOlderMessagesLoading}
           onScroll={handleMessageListScroll}
-          scrollEventThrottle={120}
+          scrollEventThrottle={16}
+          removeClippedSubviews={Platform.OS === 'android'}
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          maintainVisibleContentPosition={{
+            minIndexForVisible: 0,
+          }}
           onScrollToIndexFailed={(info) => {
             flatListRef.current?.scrollToOffset({
               offset: info.averageItemLength * info.index,
