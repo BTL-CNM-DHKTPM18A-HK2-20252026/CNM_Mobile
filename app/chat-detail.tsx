@@ -87,8 +87,19 @@ interface PinnedMessageItem {
   content: string;
   messageType?: string;
   contentUrl?: string;
+  thumbnailUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  caption?: string;
+  attachments?: { url: string; fileName?: string; fileSize?: number; thumbnailUrl?: string }[];
   senderName?: string;
   pinnedAt?: string;
+}
+
+interface ForwardConversationItem {
+  id: string;
+  name: string;
+  avatarUrl?: string;
 }
 
 interface MessagePageResponse {
@@ -297,7 +308,7 @@ export default function ChatDetailScreen() {
   const [forwardingMsg, setForwardingMsg] = useState<Message | null>(null);
   const [isShareContactVisible, setIsShareContactVisible] = useState(false);
   // Forward modal state
-  const [fwdConversations, setFwdConversations] = useState<any[]>([]);
+  const [fwdConversations, setFwdConversations] = useState<ForwardConversationItem[]>([]);
   const [fwdSearch, setFwdSearch] = useState('');
   const [fwdSelected, setFwdSelected] = useState<Set<string>>(new Set());
   const [fwdLoading, setFwdLoading] = useState(false);
@@ -524,19 +535,179 @@ export default function ChatDetailScreen() {
     return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
   }, []);
 
+  const isLikelyUrl = useCallback((value?: string) => {
+    const text = String(value ?? '').trim();
+    return /^https?:\/\//i.test(text) || /^file:\/\//i.test(text) || /^content:\/\//i.test(text);
+  }, []);
+
+  const getDisplayFileNameFromValue = useCallback((value?: string) => {
+    const raw = String(value ?? '').trim();
+    if (!raw) {
+      return '';
+    }
+
+    try {
+      const clean = raw.split('?')[0];
+      const decoded = decodeURIComponent(clean);
+      const lastPart = decoded.split('/').pop() ?? '';
+      const withoutPrefix = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart;
+      return withoutPrefix || lastPart || raw;
+    } catch {
+      const clean = raw.split('?')[0];
+      const lastPart = clean.split('/').pop() ?? '';
+      return lastPart || raw;
+    }
+  }, []);
+
   const getReplySnippet = useCallback((msg: Message): string => {
     if (msg.isRecalled) return 'Tin nhắn đã được thu hồi';
     const mType = (msg.messageType || 'TEXT').toUpperCase();
     if (mType === 'IMAGE') return '📷 Hình ảnh';
+    if (mType === 'IMAGE_GROUP') {
+      const imageCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0;
+      return imageCount > 0 ? `📷 ${imageCount} hình ảnh` : '📷 Album ảnh';
+    }
     if (mType === 'VIDEO') return '🎬 Video';
     if (mType === 'VOICE') return '🎤 Tin nhắn thoại';
-    if (mType === 'FILE' || mType === 'MEDIA') return '📎 Tệp đính kèm';
+    if (mType === 'FILE' || mType === 'MEDIA') {
+      const fileName = msg.fileName || getDisplayFileNameFromValue(msg.content);
+      return fileName ? `📎 ${fileName}` : '📎 Tệp đính kèm';
+    }
     if (mType === 'SHARE_CONTACT') {
       try { const c = JSON.parse(msg.content || '{}'); return `📇 ${c.fullName || 'Danh thiếp'}`; } catch { return '📇 Danh thiếp'; }
     }
     const text = msg.content || '';
     return text.length > 80 ? `${text.slice(0, 80)}...` : text;
-  }, []);
+  }, [getDisplayFileNameFromValue]);
+
+  const getForwardAttachmentUrls = useCallback((msg: Message) => {
+    const urls = Array.isArray(msg.attachments)
+      ? msg.attachments
+        .map((att) => String(att?.url ?? '').trim())
+        .filter((url) => url.length > 0)
+      : [];
+
+    if (urls.length > 0) {
+      return urls;
+    }
+
+    const fallback = String(msg.content ?? '').trim();
+    return isLikelyUrl(fallback) ? [fallback] : [];
+  }, [isLikelyUrl]);
+
+  const getForwardPreviewText = useCallback((msg: Message) => {
+    const mType = String(msg.messageType ?? 'TEXT').toUpperCase();
+    if (mType === 'IMAGE') return 'Ảnh';
+    if (mType === 'IMAGE_GROUP') {
+      const count = getForwardAttachmentUrls(msg).length;
+      return count > 0 ? `${count} hình ảnh` : 'Album ảnh';
+    }
+    if (mType === 'VIDEO') return 'Video';
+    if (mType === 'VOICE') return 'Tin nhắn thoại';
+    if (mType === 'FILE' || mType === 'MEDIA') {
+      const fileName = msg.fileName || getDisplayFileNameFromValue(msg.content);
+      return fileName || 'Tệp đính kèm';
+    }
+    if (mType === 'SHARE_CONTACT') {
+      try {
+        const parsed = JSON.parse(msg.content || '{}');
+        return parsed.fullName || 'Danh thiếp';
+      } catch {
+        return 'Danh thiếp';
+      }
+    }
+
+    const content = String(msg.content ?? '').trim();
+    if (!content) {
+      return t('chat.empty_message', 'Tin nhắn trống');
+    }
+
+    return content.length > 120 ? `${content.slice(0, 120)}...` : content;
+  }, [getDisplayFileNameFromValue, getForwardAttachmentUrls, t]);
+
+  const buildForwardPayload = useCallback((msg: Message) => {
+    const mType = String(msg.messageType ?? 'TEXT').toUpperCase();
+
+    if (mType === 'IMAGE_GROUP') {
+      const mediaUrls = getForwardAttachmentUrls(msg);
+      return {
+        content: mediaUrls[0] || String(msg.content ?? ''),
+        messageType: 'IMAGE_GROUP',
+        mediaUrls,
+        caption: msg.caption,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'FILE' || mType === 'MEDIA') {
+      const fileName = msg.fileName || getDisplayFileNameFromValue(msg.content);
+      return {
+        content: String(msg.content ?? ''),
+        messageType: mType,
+        fileName: fileName || undefined,
+        fileSize: msg.fileSize,
+        caption: msg.caption,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'VIDEO') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'VIDEO',
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+        caption: msg.caption,
+        videoDuration: msg.videoDuration,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'IMAGE') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'IMAGE',
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+        caption: msg.caption,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'VOICE') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'VOICE',
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+        voiceDuration: msg.voiceDuration,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'SHARE_CONTACT') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'SHARE_CONTACT',
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    return {
+      content: String(msg.content ?? ''),
+      messageType: 'TEXT',
+      forwardedFromMessageId: msg.messageId,
+    };
+  }, [getDisplayFileNameFromValue, getForwardAttachmentUrls]);
+
+  const filteredFwdConversations = useMemo(() => {
+    const keyword = fwdSearch.trim().toLowerCase();
+    if (!keyword) {
+      return fwdConversations;
+    }
+
+    return fwdConversations.filter((conversation) => conversation.name.toLowerCase().includes(keyword));
+  }, [fwdConversations, fwdSearch]);
 
   const stripAiMarkdownMarkers = useCallback((content: string | null | undefined) => {
     if (!content) return '';
@@ -650,6 +821,25 @@ export default function ChatDetailScreen() {
           contentUrl: item.contentUrl
             ? String(item.contentUrl)
             : (item.mediaUrl ? String(item.mediaUrl) : undefined),
+          thumbnailUrl: item.thumbnailUrl ? String(item.thumbnailUrl) : undefined,
+          fileName: item.fileName ? String(item.fileName) : undefined,
+          fileSize: typeof item.fileSize === 'number' ? item.fileSize : undefined,
+          caption: item.caption ? String(item.caption) : undefined,
+          attachments: Array.isArray(item.attachments)
+            ? item.attachments
+              .map((att: any) => ({
+                url: String(att?.url ?? att?.content ?? att?.mediaUrl ?? att?.fileUrl ?? '').trim(),
+                fileName: att?.fileName ? String(att.fileName) : undefined,
+                fileSize: typeof att?.fileSize === 'number' ? att.fileSize : undefined,
+                thumbnailUrl: att?.thumbnailUrl ? String(att.thumbnailUrl) : undefined,
+              }))
+              .filter((att: any) => att.url)
+            : (Array.isArray(item.mediaUrls)
+              ? item.mediaUrls
+                .map((url: any) => String(url ?? '').trim())
+                .filter((url: string) => url)
+                .map((url: string) => ({ url }))
+              : undefined),
           senderName: item.senderName ? String(item.senderName) : undefined,
           pinnedAt: item.pinnedAt ? String(item.pinnedAt) : undefined,
         }))
@@ -704,14 +894,37 @@ export default function ChatDetailScreen() {
     ? pinnedMessages[pinnedMessages.length - 1]
     : null;
   const latestPinnedType = (latestPinnedMessage?.messageType || '').toUpperCase();
-  const latestPinnedIsImage = latestPinnedType === 'IMAGE';
-  const latestPinnedThumbUrl = latestPinnedIsImage
-    ? (latestPinnedMessage?.contentUrl || latestPinnedMessage?.content || '')
+  const latestPinnedIsImage = latestPinnedType === 'IMAGE' || latestPinnedType === 'IMAGE_GROUP';
+  const latestPinnedThumbUrl = latestPinnedMessage
+    ? (() => {
+      if (latestPinnedType === 'IMAGE') {
+        const candidate = String(latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
+        return isLikelyUrl(candidate) ? candidate : '';
+      }
+
+      if (latestPinnedType === 'IMAGE_GROUP') {
+        const firstAttachment = latestPinnedMessage.attachments?.[0]?.url;
+        const candidate = String(firstAttachment || latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
+        return isLikelyUrl(candidate) ? candidate : '';
+      }
+
+      return '';
+    })()
     : '';
   const latestPinnedLabel = latestPinnedMessage
     ? (() => {
       const text = (latestPinnedMessage.content || '').trim();
-      if (latestPinnedIsImage) return '[Hình ảnh]';
+      if (latestPinnedType === 'IMAGE') return '[Hình ảnh]';
+      if (latestPinnedType === 'IMAGE_GROUP') {
+        const imageCount = latestPinnedMessage.attachments?.length ?? 0;
+        return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
+      }
+      if (latestPinnedType === 'VIDEO') return '[Video]';
+      if (latestPinnedType === 'VOICE') return '[Tin nhắn thoại]';
+      if (latestPinnedType === 'FILE' || latestPinnedType === 'MEDIA') {
+        const fileName = latestPinnedMessage.fileName || getDisplayFileNameFromValue(latestPinnedMessage.contentUrl || latestPinnedMessage.content);
+        return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
+      }
       return text || t('chat.empty_message', 'Tin nhắn trống');
     })()
     : '';
@@ -722,15 +935,51 @@ export default function ChatDetailScreen() {
       return '[Hình ảnh]';
     }
 
+    if (pinnedType === 'IMAGE_GROUP') {
+      const imageCount = item.attachments?.length ?? 0;
+      return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
+    }
+
+    if (pinnedType === 'VIDEO') {
+      return '[Video]';
+    }
+
+    if (pinnedType === 'VOICE') {
+      return '[Tin nhắn thoại]';
+    }
+
+    if (pinnedType === 'FILE' || pinnedType === 'MEDIA') {
+      const fileName = item.fileName || getDisplayFileNameFromValue(item.contentUrl || item.content);
+      return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
+    }
+
     const text = (item.content || '').trim();
-    return text || t('chat.empty_message', 'Tin nhắn trống');
-  }, [t]);
+    if (!text) {
+      return t('chat.empty_message', 'Tin nhắn trống');
+    }
+
+    if (isLikelyUrl(text)) {
+      return '[Nội dung media]';
+    }
+
+    return text;
+  }, [getDisplayFileNameFromValue, isLikelyUrl, t]);
 
   const getPinnedPreviewThumb = useCallback((item: PinnedMessageItem) => {
     const pinnedType = (item.messageType || '').toUpperCase();
-    if (pinnedType !== 'IMAGE') return '';
-    return item.contentUrl || item.content || '';
-  }, []);
+    if (pinnedType === 'IMAGE') {
+      const candidate = String(item.contentUrl || item.content || '').trim();
+      return isLikelyUrl(candidate) ? candidate : '';
+    }
+
+    if (pinnedType === 'IMAGE_GROUP') {
+      const firstAttachment = item.attachments?.[0]?.url;
+      const candidate = String(firstAttachment || item.contentUrl || item.content || '').trim();
+      return isLikelyUrl(candidate) ? candidate : '';
+    }
+
+    return '';
+  }, [isLikelyUrl]);
 
   useEffect(() => {
     return () => {
@@ -904,21 +1153,94 @@ export default function ChatDetailScreen() {
     }
   }, [conversationId, hasMoreOlder, isLoadingOlder, isSameMessageList, logChatDebug, mergeUniqueMessages, messages, parsePageResult, sortMessages]);
 
+  const extractForwardConversationItems = useCallback((raw: any): ForwardConversationItem[] => {
+    const payload = chatService.unwrapApiPayload<any>(raw);
+    const rawList = Array.isArray(payload)
+      ? payload
+      : (Array.isArray(payload?.content)
+        ? payload.content
+        : (Array.isArray(payload?.conversations)
+          ? payload.conversations
+          : (Array.isArray(payload?.items)
+            ? payload.items
+            : (Array.isArray(payload?.data) ? payload.data : []))));
+
+    const normalizedCurrentUserId = String(currentUserId ?? '').trim();
+
+    return rawList
+      .map((item: any, index: number): ForwardConversationItem | null => {
+        const id = String(item?.conversationId ?? item?.id ?? '').trim();
+        if (!id || id === String(conversationId ?? '').trim()) {
+          return null;
+        }
+
+        const members = Array.isArray(item?.members) ? item.members : [];
+        const conversationTypeRaw = String(item?.conversationType ?? item?.type ?? item?.kind ?? '').toUpperCase();
+        const otherMember = conversationTypeRaw === 'PRIVATE'
+          ? members.find((member: any) => {
+              const memberId = String(member?.userId ?? member?.user_id ?? member?.id ?? '').trim();
+              if (!memberId) {
+                return false;
+              }
+
+              return normalizedCurrentUserId ? memberId !== normalizedCurrentUserId : true;
+            }) ?? members[0] ?? null
+          : null;
+
+        const rawName = String(
+          (conversationTypeRaw === 'PRIVATE'
+            ? (otherMember?.displayName ?? otherMember?.display_name ?? otherMember?.fullName ?? otherMember?.full_name)
+            : undefined)
+            ?? item?.conversationName
+            ?? item?.name
+            ?? members?.[0]?.displayName
+            ?? members?.[0]?.fullName
+            ?? ''
+        ).trim();
+
+        const avatarUrl = String(
+          (conversationTypeRaw === 'PRIVATE'
+            ? (otherMember?.avatarUrl ?? otherMember?.avatar_url ?? otherMember?.avatar)
+            : undefined)
+            ?? item?.conversationAvatarUrl
+            ?? item?.conversation_avatar_url
+            ?? item?.avatarUrl
+            ?? item?.avatar_url
+            ?? item?.avatar
+            ?? members?.[0]?.avatarUrl
+            ?? members?.[0]?.avatar_url
+            ?? ''
+        ).trim();
+
+        return {
+          id,
+          name: rawName || `Cuộc trò chuyện ${index + 1}`,
+          avatarUrl: avatarUrl || undefined,
+        };
+      })
+          .filter((item: ForwardConversationItem | null): item is ForwardConversationItem => item !== null);
+  }, [conversationId, currentUserId]);
+
+  const loadForwardConversations = useCallback(async (keyword?: string) => {
+    setFwdLoading(true);
+    try {
+      const response = await chatService.getConversations(0, 60, keyword?.trim() || undefined);
+      setFwdConversations(extractForwardConversationItems(response));
+    } catch {
+      setFwdConversations([]);
+    } finally {
+      setFwdLoading(false);
+    }
+  }, [extractForwardConversationItems]);
+
   // Load conversations when forward modal opens
   useEffect(() => {
     if (!forwardingMsg) return;
     setFwdConversations([]);
     setFwdSearch('');
     setFwdSelected(new Set());
-    setFwdLoading(true);
-    chatService.getConversations()
-      .then((res: any) => {
-        const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
-        setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
-      })
-      .catch(() => { })
-      .finally(() => setFwdLoading(false));
-  }, [forwardingMsg, conversationId]);
+    void loadForwardConversations();
+  }, [forwardingMsg, loadForwardConversations]);
 
   // Load friends when share contact modal opens
   useEffect(() => {
@@ -1798,7 +2120,14 @@ export default function ChatDetailScreen() {
       if (messageType === 'IMAGE_GROUP' && Array.isArray(item?.attachments)) {
         const baseMessageId = String(item?.messageId ?? item?.id ?? `media-group-${index}`);
         item.attachments.forEach((attachment: any, attachmentIndex: number) => {
-          const url = String(attachment?.url ?? '').trim();
+          const url = String(
+            attachment?.url
+            ?? attachment?.content
+            ?? attachment?.mediaUrl
+            ?? attachment?.fileUrl
+            ?? attachment?.path
+            ?? (typeof attachment === 'string' ? attachment : '')
+          ).trim();
           if (!url) {
             return;
           }
@@ -1818,6 +2147,30 @@ export default function ChatDetailScreen() {
     return normalized;
   }, []);
 
+  const getInfoMediaSortMillis = useCallback((item: any) => {
+    const primary = getMessageMillis(item?.updatedAt ?? item?.createdAt);
+    if (!Number.isNaN(primary)) {
+      return primary;
+    }
+
+    const fallback = Number(item?.createdAt ?? item?.updatedAt ?? 0);
+    return Number.isNaN(fallback) ? 0 : fallback;
+  }, []);
+
+  const sortInfoMediaItems = useCallback((items: any[]) => {
+    return [...items].sort((a, b) => {
+      const timeA = getInfoMediaSortMillis(a);
+      const timeB = getInfoMediaSortMillis(b);
+      if (timeA !== timeB) {
+        return timeB - timeA;
+      }
+
+      const idA = String(a?.messageId ?? a?.id ?? '');
+      const idB = String(b?.messageId ?? b?.id ?? '');
+      return idB.localeCompare(idA);
+    });
+  }, [getInfoMediaSortMillis]);
+
   const fetchInfoMedia = useCallback(async () => {
     if (!conversationId || isAiConversation) return;
     try {
@@ -1825,10 +2178,10 @@ export default function ChatDetailScreen() {
         await chatService.getConversationMedia(conversationId)
       );
       const items = Array.isArray(res) ? res : [];
-      setInfoMediaItems(normalizeInfoMediaItems(items));
+      setInfoMediaItems(sortInfoMediaItems(normalizeInfoMediaItems(items)));
       setInfoFileItems(items.filter((m: any) => m.messageType === 'MEDIA'));
     } catch { setInfoMediaItems([]); setInfoFileItems([]); }
-  }, [conversationId, isAiConversation, normalizeInfoMediaItems]);
+  }, [conversationId, isAiConversation, normalizeInfoMediaItems, sortInfoMediaItems]);
 
   const fetchInfoStorageStats = useCallback(async () => {
     if (!isCloudConversation) return;
@@ -1868,8 +2221,8 @@ export default function ChatDetailScreen() {
         return true;
       }
 
-      const requested = await MediaLibrary.requestPermissionsAsync(false, ['photo', 'video']);
-      return requested.granted;
+      const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo', 'video']);
+      return status === 'granted';
     }
 
     const existing = await MediaLibrary.getPermissionsAsync();
@@ -1877,8 +2230,8 @@ export default function ChatDetailScreen() {
       return true;
     }
 
-    const requested = await MediaLibrary.requestPermissionsAsync();
-    return requested.granted;
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    return status === 'granted';
   }, []);
 
   const closeInfoMediaGallery = useCallback(() => {
@@ -2010,8 +2363,18 @@ export default function ChatDetailScreen() {
     setInfoMediaItems((prev) => {
       const merged = new Map<string, any>();
       const buildKey = (item: any, idx: number) => String(item?.id ?? item?.messageId ?? `live-${idx}`);
+      const liveMessageIds = new Set(
+        liveItems
+          .map((item: any) => String(item?.messageId ?? '').trim())
+          .filter((id: string) => id.length > 0)
+      );
 
       prev.forEach((item, idx) => {
+        const prevMessageId = String(item?.messageId ?? '').trim();
+        if (prevMessageId && liveMessageIds.has(prevMessageId)) {
+          return;
+        }
+
         merged.set(buildKey(item, idx), item);
       });
 
@@ -2022,13 +2385,9 @@ export default function ChatDetailScreen() {
         });
       });
 
-      return Array.from(merged.values()).sort((a, b) => {
-        const timeA = getMessageMillis(a?.createdAt);
-        const timeB = getMessageMillis(b?.createdAt);
-        return (Number.isNaN(timeB) ? 0 : timeB) - (Number.isNaN(timeA) ? 0 : timeA);
-      });
+      return sortInfoMediaItems(Array.from(merged.values()));
     });
-  }, [isInfoMediaBrowserVisible, isInfoPanelVisible, messages, normalizeInfoMediaItems]);
+  }, [isInfoMediaBrowserVisible, isInfoPanelVisible, messages, normalizeInfoMediaItems, sortInfoMediaItems]);
 
   useEffect(() => {
     if (!isInfoPanelVisible || !conversationId || isAiConversation) {
@@ -2046,6 +2405,8 @@ export default function ChatDetailScreen() {
       return mediaType === 'VIDEO';
     });
   }, [getInfoMediaType, infoMediaBrowserFilter, infoMediaItems]);
+
+  const infoMediaPreviewItems = useMemo(() => infoMediaItems.slice(0, 4), [infoMediaItems]);
 
   const handleViewOriginalMessageFromGallery = useCallback(() => {
     const currentItem = infoMediaItems[infoMediaGalleryIndex];
@@ -3612,10 +3973,77 @@ export default function ChatDetailScreen() {
               {/* Message preview */}
               {forwardingMsg ? (
                 <View style={[styles.fwdPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <Ionicons name="return-up-forward-outline" size={14} color={colors.textSecondary} />
-                  <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {getReplySnippet(forwardingMsg)}
-                  </Text>
+                  {(() => {
+                    const forwardType = String(forwardingMsg.messageType || 'TEXT').toUpperCase();
+                    const imageUrls = getForwardAttachmentUrls(forwardingMsg);
+                    const isImage = forwardType === 'IMAGE';
+                    const isImageGroup = forwardType === 'IMAGE_GROUP';
+                    const isVideo = forwardType === 'VIDEO';
+                    const isFile = forwardType === 'FILE' || forwardType === 'MEDIA';
+                    const videoThumb = String(
+                      forwardingMsg.thumbnailUrl
+                      ?? videoThumbnailsByMessageId[String(forwardingMsg.messageId)]
+                      ?? ''
+                    ).trim();
+
+                    if (isImage || isImageGroup) {
+                      return (
+                        <>
+                          <View style={styles.fwdPreviewImageWrap}>
+                            {imageUrls.slice(0, 3).map((url, index) => (
+                              <Image
+                                key={`${url}-${index}`}
+                                source={{ uri: url }}
+                                style={styles.fwdPreviewImageThumb}
+                                resizeMode="cover"
+                              />
+                            ))}
+                          </View>
+                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                            {getForwardPreviewText(forwardingMsg)}
+                          </Text>
+                        </>
+                      );
+                    }
+
+                    if (isVideo) {
+                      return (
+                        <>
+                          <View style={styles.fwdPreviewVideoWrap}>
+                            {videoThumb ? <Image source={{ uri: videoThumb }} style={styles.fwdPreviewVideoThumb} resizeMode="cover" /> : null}
+                            <View style={styles.fwdPreviewVideoOverlay}>
+                              <Ionicons name="play" size={14} color="#FFFFFF" />
+                            </View>
+                          </View>
+                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                            {getForwardPreviewText(forwardingMsg)}
+                          </Text>
+                        </>
+                      );
+                    }
+
+                    if (isFile) {
+                      return (
+                        <>
+                          <View style={styles.fwdPreviewFileIcon}>
+                            <Ionicons name="document-text-outline" size={16} color="#0068FF" />
+                          </View>
+                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                            {getForwardPreviewText(forwardingMsg)}
+                          </Text>
+                        </>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <Ionicons name="return-up-forward-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                          {getForwardPreviewText(forwardingMsg)}
+                        </Text>
+                      </>
+                    );
+                  })()}
                 </View>
               ) : null}
               {/* Search */}
@@ -3629,14 +4057,7 @@ export default function ChatDetailScreen() {
                   onChangeText={setFwdSearch}
                   onFocus={() => {
                     if (fwdConversations.length === 0 && !fwdLoading) {
-                      setFwdLoading(true);
-                      chatService.getConversations?.()
-                        .then((res: any) => {
-                          const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
-                          setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
-                        })
-                        .catch(() => { })
-                        .finally(() => setFwdLoading(false));
+                      void loadForwardConversations(fwdSearch);
                     }
                   }}
                 />
@@ -3646,14 +4067,7 @@ export default function ChatDetailScreen() {
                 <TouchableOpacity
                   style={{ paddingVertical: 8, alignItems: 'center' }}
                   onPress={() => {
-                    setFwdLoading(true);
-                    chatService.getConversations?.()
-                      .then((res: any) => {
-                        const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
-                        setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
-                      })
-                      .catch(() => { })
-                      .finally(() => setFwdLoading(false));
+                    void loadForwardConversations(fwdSearch);
                   }}
                 >
                   <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh sách</Text>
@@ -3664,14 +4078,10 @@ export default function ChatDetailScreen() {
                 {fwdLoading ? (
                   <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
                 ) : (
-                  fwdConversations
-                    .filter((c: any) => {
-                      const name: string = c.conversationName || c.name || '';
-                      return name.toLowerCase().includes(fwdSearch.toLowerCase());
-                    })
-                    .map((c: any) => {
-                      const cId: string = c.conversationId || c.id;
-                      const cName: string = c.conversationName || c.name || 'Cuộc trò chuyện';
+                  filteredFwdConversations
+                    .map((c) => {
+                      const cId = c.id;
+                      const cName = c.name || 'Cuộc trò chuyện';
                       const isSelected = fwdSelected.has(cId);
                       return (
                         <TouchableOpacity
@@ -3686,7 +4096,11 @@ export default function ChatDetailScreen() {
                           }}
                         >
                           <View style={styles.fwdItemAvatar}>
-                            <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
+                            {c.avatarUrl ? (
+                              <Image source={{ uri: c.avatarUrl }} style={styles.fwdItemAvatarImage} resizeMode="cover" />
+                            ) : (
+                              <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
+                            )}
                           </View>
                           <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{cName}</Text>
                           <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
@@ -3711,12 +4125,7 @@ export default function ChatDetailScreen() {
                     if (!forwardingMsg || fwdSelected.size === 0) return;
                     setFwdSending(true);
                     const sendPromises = Array.from(fwdSelected).map((cId) =>
-                      chatService.sendMessage(cId, {
-                        content: forwardingMsg.content || '',
-                        messageType: forwardingMsg.messageType || 'TEXT',
-                        attachments: [],
-                        forwardedFromMessageId: forwardingMsg.messageId,
-                      }).catch(() => { })
+                      chatService.sendMessage(cId, buildForwardPayload(forwardingMsg)).catch(() => { })
                     );
                     await Promise.all(sendPromises);
                     setFwdSending(false);
@@ -4285,7 +4694,12 @@ export default function ChatDetailScreen() {
                           </View>
                           <View style={styles.infoPanelPinnedContent}>
                             <Text style={[styles.infoPanelPinnedSender, { color: '#0068FF' }]} numberOfLines={1}>{pin.senderName}</Text>
-                            <Text style={[styles.infoPanelPinnedText, { color: colors.text }]} numberOfLines={2}>{pin.content}</Text>
+                            <View style={styles.infoPanelPinnedPreviewRow}>
+                              <Text style={[styles.infoPanelPinnedText, { color: colors.text }]} numberOfLines={2}>{getPinnedPreviewText(pin)}</Text>
+                              {getPinnedPreviewThumb(pin) ? (
+                                <Image source={{ uri: getPinnedPreviewThumb(pin) }} style={styles.infoPanelPinnedThumb} resizeMode="cover" />
+                              ) : null}
+                            </View>
                           </View>
                           <TouchableOpacity onPress={() => { void handleUnpinFromPinnedList(pin.messageId); }}>
                             <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
@@ -4317,14 +4731,15 @@ export default function ChatDetailScreen() {
                       <>
                         <View style={styles.infoPanelMediaGridHeader}>
                           <Text style={[styles.infoPanelMediaGridHint, { color: colors.textSecondary }]}>Tổng {infoMediaItems.length} ảnh/video</Text>
-                          <TouchableOpacity onPress={openInfoMediaBrowser}>
-                            <Text style={styles.infoPanelMediaViewAll}>Xem tất cả</Text>
+                          <TouchableOpacity style={styles.infoPanelMediaExpandBtn} onPress={openInfoMediaBrowser}>
+                            <Text style={styles.infoPanelMediaExpandBtnText}>Chi tiết</Text>
+                            <Ionicons name="arrow-forward" size={14} color="#0068FF" />
                           </TouchableOpacity>
                         </View>
                         <View style={styles.infoPanelMediaGrid}>
-                          {infoMediaItems.slice(0, 9).map((m: any, i: number) => (
+                          {infoMediaPreviewItems.map((m: any, i: number) => (
                           <TouchableOpacity
-                            key={m.id || i}
+                            key={`${getInfoMediaId(m, i)}-${m?.content ?? ''}-${i}`}
                             style={styles.infoPanelMediaThumb}
                             onPress={() => handleOpenInfoMediaGallery(i)}
                           >
@@ -4343,7 +4758,7 @@ export default function ChatDetailScreen() {
                                   return <Image source={{ uri: thumbUri }} style={styles.infoPanelMediaThumbImg} resizeMode="cover" />;
                                 })()}
                                 <View style={styles.infoPanelMediaPlayOverlay}>
-                                  <Text style={styles.infoPanelMediaPlayText}>Play</Text>
+                                  <Ionicons name="play" size={14} color="#FFFFFF" />
                                 </View>
                               </View>
                             )}
@@ -5617,6 +6032,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     flex: 1,
   },
+  fwdPreviewImageWrap: {
+    flexDirection: 'row',
+    gap: 4,
+    flexShrink: 0,
+  },
+  fwdPreviewImageThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+  },
+  fwdPreviewVideoWrap: {
+    width: 44,
+    height: 36,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#1F2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  fwdPreviewVideoThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  fwdPreviewVideoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fwdPreviewFileIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,104,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   fwdSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -5658,6 +6112,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  fwdItemAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
   },
   fwdItemName: {
     flex: 1,
@@ -6388,6 +6847,19 @@ const styles = StyleSheet.create({
   infoPanelPinnedText: {
     fontSize: 13,
     marginTop: 2,
+    flex: 1,
+  },
+  infoPanelPinnedPreviewRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoPanelPinnedThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    flexShrink: 0,
   },
   infoPanelMediaGrid: {
     flexDirection: 'row',
@@ -6405,13 +6877,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
-  infoPanelMediaViewAll: {
+  infoPanelMediaExpandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  infoPanelMediaExpandBtnText: {
     color: '#0068FF',
     fontSize: 12,
     fontWeight: '700',
   },
   infoPanelMediaThumb: {
-    width: '31.5%',
+    width: '23%',
     aspectRatio: 1,
     borderRadius: 6,
     overflow: 'hidden',
@@ -6425,11 +6902,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.26)',
-  },
-  infoPanelMediaPlayText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
   infoMediaGalleryBackdrop: {
     flex: 1,
