@@ -11,6 +11,7 @@ import { Audio, ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -62,6 +63,7 @@ interface Message {
   fileName?: string;
   fileSize?: number;
   caption?: string;
+  thumbnailUrl?: string;
   videoDuration?: number;
   voiceDuration?: number;
   // Reply
@@ -245,6 +247,7 @@ export default function ChatDetailScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCurrentIndex, setUploadCurrentIndex] = useState(0);
+  const [videoThumbnailsByMessageId, setVideoThumbnailsByMessageId] = useState<Record<string, string>>({});
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
   const [fullscreenVideoUrl, setFullscreenVideoUrl] = useState<string | null>(null);
 
@@ -306,6 +309,7 @@ export default function ChatDetailScreen() {
   const appStateRef = useRef(AppState.currentState);
   const loadingOlderRef = useRef(false);
   const shouldScrollToLatestRef = useRef(false);
+  const generatingVideoThumbRef = useRef<Set<string>>(new Set());
   const peerAvatarSource = useMemo(() => getAvatarSource(conversationAvatarUrl), [conversationAvatarUrl]);
   const normalizedName = String(conversationDisplayName ?? '').trim().toLowerCase();
   const normalizedType = String(type ?? '').trim().toUpperCase();
@@ -541,6 +545,54 @@ export default function ChatDetailScreen() {
     setIsMessageActionVisible(false);
     setSelectedMessage(null);
   }, []);
+
+  const generateVideoThumbnail = useCallback(async (videoUri: string): Promise<string | undefined> => {
+    if (!videoUri) {
+      return undefined;
+    }
+
+    try {
+      const result = await VideoThumbnails.getThumbnailAsync(videoUri, {
+        time: 800,
+        quality: 0.6,
+      });
+      return result.uri;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const ensureVideoThumbnailForMessage = useCallback(async (messageId: string, videoUri?: string) => {
+    const normalizedId = String(messageId || '');
+    if (!normalizedId || !videoUri) {
+      return;
+    }
+
+    if (generatingVideoThumbRef.current.has(normalizedId)) {
+      return;
+    }
+
+    generatingVideoThumbRef.current.add(normalizedId);
+    try {
+      const thumbUri = await generateVideoThumbnail(videoUri);
+      if (!thumbUri) {
+        return;
+      }
+
+      setVideoThumbnailsByMessageId((prev) => {
+        if (prev[normalizedId] === thumbUri) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [normalizedId]: thumbUri,
+        };
+      });
+    } finally {
+      generatingVideoThumbRef.current.delete(normalizedId);
+    }
+  }, [generateVideoThumbnail]);
 
   const openMessageActionMenu = useCallback((message: Message) => {
     if (!canUseMessageInteractions) {
@@ -871,6 +923,25 @@ export default function ChatDetailScreen() {
       scrollToLatest(false);
     }
   }, [messages.length, scrollToLatest]);
+
+  useEffect(() => {
+    messages.forEach((message) => {
+      const isVideoMessage = (message.messageType || '').toUpperCase() === 'VIDEO';
+      if (!isVideoMessage || message.isRecalled) {
+        return;
+      }
+
+      if (message.thumbnailUrl || videoThumbnailsByMessageId[String(message.messageId)]) {
+        return;
+      }
+
+      if (!message.content) {
+        return;
+      }
+
+      void ensureVideoThumbnailForMessage(String(message.messageId), message.content);
+    });
+  }, [ensureVideoThumbnailForMessage, messages, videoThumbnailsByMessageId]);
 
   useEffect(() => {
     if (!conversationId || !currentUserId) {
@@ -1390,6 +1461,9 @@ export default function ChatDetailScreen() {
       const media = mediaItems[i];
       const tempMessageId = `temp-media-${Date.now()}-${i}`;
       const now = new Date();
+      const videoThumbnail = media.mediaType === 'VIDEO'
+        ? await generateVideoThumbnail(media.uri)
+        : undefined;
 
       setUploadCurrentIndex(i);
 
@@ -1404,6 +1478,7 @@ export default function ChatDetailScreen() {
         fileName: media.fileName,
         fileSize: media.fileSize,
         caption: i === 0 ? caption : undefined,
+        thumbnailUrl: videoThumbnail,
       };
 
       setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
@@ -1415,7 +1490,7 @@ export default function ChatDetailScreen() {
         });
 
         setMessages((prev) =>
-          prev.map((m) => m.messageId === tempMessageId ? { ...m, content: s3Url } : m)
+          prev.map((m) => m.messageId === tempMessageId ? { ...m, content: s3Url, thumbnailUrl: m.thumbnailUrl || videoThumbnail } : m)
         );
 
         const response = await chatService.sendMessage(conversationId, {
@@ -1429,10 +1504,21 @@ export default function ChatDetailScreen() {
 
         const mappedMessage = mapAnyPayloadToUiMessage(response);
         if (mappedMessage) {
+          const messageWithThumb: Message = {
+            ...mappedMessage,
+            thumbnailUrl: mappedMessage.messageType === 'VIDEO'
+              ? (videoThumbnail || videoThumbnailsByMessageId[String(mappedMessage.messageId)])
+              : undefined,
+          };
+
           setMessages((prev) => {
             const withoutTemp = prev.filter((m) => m.messageId !== tempMessageId);
-            return mergeUniqueMessages(withoutTemp, [mappedMessage]);
+            return mergeUniqueMessages(withoutTemp, [messageWithThumb]);
           });
+
+          if (messageWithThumb.messageType === 'VIDEO' && !messageWithThumb.thumbnailUrl) {
+            void ensureVideoThumbnailForMessage(String(messageWithThumb.messageId), messageWithThumb.content);
+          }
         }
       } catch (error: any) {
         const errorMsg = error?.response?.data?.message || error?.message || 'Unknown error';
@@ -1446,7 +1532,7 @@ export default function ChatDetailScreen() {
     setUploadProgress(0);
     setUploadCurrentIndex(0);
     requestScrollToLatest(true);
-  }, [pendingMediaList, conversationId, isUploading, inputText, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
+  }, [pendingMediaList, conversationId, isUploading, inputText, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage, ensureVideoThumbnailForMessage, generateVideoThumbnail, videoThumbnailsByMessageId]);
 
   const handleReactWithEmoji = useCallback(async (emoji: string) => {
     if (!selectedMessage) {
@@ -2320,6 +2406,8 @@ export default function ChatDetailScreen() {
 
       if (isVideoMsg) {
         const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
+        const thumbUri = item.thumbnailUrl || videoThumbnailsByMessageId[String(item.messageId)];
+        const showUploadOverlay = isLocalUri && isUploading;
         return (
           <>
             {replyBlock}
@@ -2334,9 +2422,18 @@ export default function ChatDetailScreen() {
               delayLongPress={220}
             >
               <View style={styles.videoContainer}>
+                {thumbUri ? (
+                  <Image source={{ uri: thumbUri }} style={styles.videoThumbnailImage} resizeMode="cover" />
+                ) : null}
                 <View style={styles.videoPlayOverlay}>
                   <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
                 </View>
+                {showUploadOverlay ? (
+                  <View style={styles.mediaUploadingOverlay}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.mediaUploadingText}>{`${uploadProgress}%`}</Text>
+                  </View>
+                ) : null}
                 {item.videoDuration ? (
                   <View style={styles.videoDurationBadge}>
                     <Text style={styles.videoDurationText}>
@@ -4533,6 +4630,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden' as const,
+  },
+  videoThumbnailImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
   },
   videoPlayOverlay: {
     alignItems: 'center',
