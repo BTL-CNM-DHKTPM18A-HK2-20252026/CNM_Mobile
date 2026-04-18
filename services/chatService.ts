@@ -93,6 +93,10 @@ export const chatService = {
     return await api.get(`/messages/conversation/${conversationId}?${params.toString()}`);
   },
 
+  getMessagesAround: async (conversationId: string, messageId: string, size = 40) => {
+    return await api.get(`/messages/conversation/${conversationId}/around/${encodeURIComponent(messageId)}?size=${size}`);
+  },
+
   sendMessage: async (
     conversationId: string,
     payload: {

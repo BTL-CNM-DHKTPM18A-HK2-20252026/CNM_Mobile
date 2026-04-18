@@ -40,6 +40,14 @@
           }
         }
       ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Cho phép ứng dụng truy cập ảnh và video để tải xuống media.",
+          "savePhotosPermission": "Cho phép ứng dụng lưu ảnh và video vào thư viện.",
+          "granularPermissions": ["photo", "video"]
+        }
+      ],
       "expo-secure-store"
     ],
     "experiments": {
