@@ -103,7 +103,24 @@ const getSenderName = (payload: ChatPayload) => {
     return directSenderName;
   }
 
+  const altDirectName = toStringOrEmpty(
+    payload.senderDisplayName ?? payload.displayName ?? payload.fullName
+  );
+  if (altDirectName) {
+    return altDirectName;
+  }
+
   const sender = payload.sender as ChatPayload | undefined;
+  const displayName = sender ? toStringOrEmpty(sender.displayName ?? sender.display_name) : '';
+  if (displayName) {
+    return displayName;
+  }
+
+  const fullName = sender ? toStringOrEmpty(sender.fullName ?? sender.full_name) : '';
+  if (fullName) {
+    return fullName;
+  }
+
   const username = sender ? toStringOrEmpty(sender.username) : '';
   if (username) {
     return username;
@@ -146,6 +163,9 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
   }
 
   const createdAt = normalizeDate(payload.createdAt ?? payload.timestamp ?? payload.sentAt);
+  const senderAvatarUrl =
+    toStringOrEmpty(payload.senderAvatarUrl ?? payload.sender_avatar_url) ||
+    toStringOrEmpty(sender?.avatarUrl ?? sender?.avatar_url ?? sender?.avatar);
 
   return {
     messageId,
@@ -153,7 +173,7 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
     senderId,
     createdAt,
     senderName: getSenderName(payload),
-    senderAvatarUrl: toStringOrEmpty(payload.senderAvatarUrl),
+    senderAvatarUrl: senderAvatarUrl || undefined,
     messageType,
     isEdited,
     isRecalled,

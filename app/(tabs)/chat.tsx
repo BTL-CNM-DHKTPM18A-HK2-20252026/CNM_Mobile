@@ -27,7 +27,11 @@ interface ChatItem {
   title: string;
   lastMessage: string;
   avatarUrl?: string | null;
+  groupAvatarUrl?: string | null;
+  firstMemberAvatarUrl?: string | null;
   secondAvatarUrl?: string | null;
+  thirdAvatarUrl?: string | null;
+  groupMemberCount?: number;
   timeText: string;
   unreadCount: number;
   pinned: boolean;
@@ -64,7 +68,11 @@ const FALLBACK_ITEMS: ChatItem[] = [
     title: 'CNM - Nhóm 10',
     lastMessage: 'Trần Hồng Nhiên: kê huy',
     avatarUrl: '/default/image3.jpg',
+    groupAvatarUrl: null,
+    firstMemberAvatarUrl: '/default/image3.jpg',
     secondAvatarUrl: '/default/image4.jpg',
+    thirdAvatarUrl: '/default/image5.jpg',
+    groupMemberCount: 5,
     timeText: '35 phút',
     unreadCount: 0,
     pinned: false,
@@ -75,7 +83,11 @@ const FALLBACK_ITEMS: ChatItem[] = [
     title: 'Phòng trọ 3H',
     lastMessage: 'Hoàng Đẹp Trai: oke',
     avatarUrl: '/default/image4.jpg',
+    groupAvatarUrl: null,
+    firstMemberAvatarUrl: '/default/image4.jpg',
     secondAvatarUrl: '/default/image5.jpg',
+    thirdAvatarUrl: '/default/image3.jpg',
+    groupMemberCount: 4,
     timeText: '3 giờ',
     unreadCount: 0,
     pinned: false,
@@ -124,6 +136,8 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
     const members = Array.isArray(item.members) ? item.members : [];
     const primaryMember = members[0] ?? null;
     const secondMember = members[1] ?? null;
+    const thirdMember = members[2] ?? null;
+    const groupMemberCount = Number(item.memberCount ?? item.totalMembers ?? members.length ?? 0);
 
     const conversationTypeRaw = String(
       item.conversationType ?? item.type ?? item.kind ?? 'PRIVATE'
@@ -132,7 +146,7 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
     const normalizedCurrentUserId = currentUserId ? String(currentUserId) : '';
     const getMemberId = (member: any) => String(member?.userId ?? member?.user_id ?? member?.id ?? '');
     const otherMember = conversationTypeRaw === 'PRIVATE'
-      ? members.find((member) => {
+      ? members.find((member: any) => {
           const memberId = getMemberId(member);
           if (!memberId) {
             return false;
@@ -194,9 +208,20 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
         item.avatar_url ??
         primaryMember?.avatarUrl ??
         primaryMember?.avatar_url ??
-        '/default/image1.jpg',
+        (conversationType === 'GROUP' ? null : '/default/image1.jpg'),
+      groupAvatarUrl:
+        conversationType === 'GROUP'
+          ? (item.conversationAvatarUrl ?? item.conversation_avatar_url ?? item.avatarUrl ?? item.avatar_url ?? null)
+          : null,
+      firstMemberAvatarUrl:
+        conversationType === 'GROUP'
+          ? (primaryMember?.avatarUrl ?? primaryMember?.avatar_url ?? null)
+          : null,
       secondAvatarUrl:
         conversationType === 'GROUP' ? secondMember?.avatarUrl ?? null : null,
+      thirdAvatarUrl:
+        conversationType === 'GROUP' ? thirdMember?.avatarUrl ?? thirdMember?.avatar_url ?? null : null,
+      groupMemberCount: conversationType === 'GROUP' ? groupMemberCount : undefined,
       timeText: toTimeText(item.lastMessageTime ?? item.updatedAt ?? item.lastUpdated ?? item.time),
       unreadCount: Number(item.unreadCount ?? item.unread ?? 0),
       pinned: Boolean(item.isPinned ?? item.pinned),
@@ -398,14 +423,28 @@ export default function ChatScreen() {
       );
     }
 
-    if (item.secondAvatarUrl) {
+    if (item.type === 'GROUP') {
+      const hasGroupAvatar = Boolean(item.groupAvatarUrl && !String(item.groupAvatarUrl).includes('/default/'));
+      const avatarUrls = [item.firstMemberAvatarUrl, item.secondAvatarUrl, item.thirdAvatarUrl].filter(Boolean) as string[];
+      const memberBadgeCount = Math.max(item.groupMemberCount ?? avatarUrls.length, 0);
+
+      if (hasGroupAvatar) {
+        return (
+          <View style={styles.groupAvatarWrap}>
+            <Image source={getAvatarSource(item.groupAvatarUrl)} style={styles.groupAvatarSingle} />
+          </View>
+        );
+      }
+
       return (
         <View style={styles.groupAvatarWrap}>
-          <Image source={getAvatarSource(item.avatarUrl)} style={styles.groupAvatarPrimary} />
-          <Image source={getAvatarSource(item.secondAvatarUrl)} style={styles.groupAvatarSecondary} />
-          {item.unreadCount > 0 ? (
+          {avatarUrls[0] ? <Image source={getAvatarSource(avatarUrls[0])} style={styles.groupAvatarPrimary} /> : null}
+          {avatarUrls[1] ? <Image source={getAvatarSource(avatarUrls[1])} style={styles.groupAvatarSecondary} /> : null}
+          {avatarUrls[2] ? <Image source={getAvatarSource(avatarUrls[2])} style={styles.groupAvatarTertiary} /> : null}
+
+          {memberBadgeCount > 0 ? (
             <View style={styles.unreadDotOnAvatar}>
-              <Text style={styles.unreadDotText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
+              <Text style={styles.unreadDotText}>{memberBadgeCount > 99 ? '99+' : memberBadgeCount}</Text>
             </View>
           ) : null}
         </View>
@@ -575,7 +614,7 @@ const styles = StyleSheet.create({
   singleAvatar: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 50,
     backgroundColor: '#E9EEF5',
   },
   groupAvatarWrap: {
@@ -594,6 +633,14 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
     backgroundColor: '#E9EEF5',
   },
+  groupAvatarSingle: {
+    width: 60,
+    height: 60,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#E9EEF5',
+  },
   groupAvatarSecondary: {
     position: 'absolute',
     right: 2,
@@ -601,6 +648,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#E9EEF5',
+  },
+  groupAvatarTertiary: {
+    position: 'absolute',
+    left: 10,
+    top: 20,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     backgroundColor: '#E9EEF5',

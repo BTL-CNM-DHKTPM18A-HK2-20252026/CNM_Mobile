@@ -60,6 +60,7 @@ function RootLayoutContent() {
         <Stack.Screen name="qr-scan" />
         <Stack.Screen name="search" />
         <Stack.Screen name="friend-requests" />
+        <Stack.Screen name="create-group" />
       </Stack>
       <StatusBar style={isDark ? "light" : "dark"} />
     </NavigationProvider>

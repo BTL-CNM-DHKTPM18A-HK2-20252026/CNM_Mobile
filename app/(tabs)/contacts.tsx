@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import GroupTab from '@/components/GroupTab';
 
 // Định nghĩa Interface dựa trên UserResponse.java
 interface UserResponse {
@@ -236,10 +237,12 @@ export default function ContactsScreen() {
         ))}
       </View>
 
-      {activeTab === 'Bạn bè' ? renderFriendsContent() : (
+      {activeTab === 'Bạn bè' ? renderFriendsContent() : activeTab === 'Nhóm' ? (
+        <GroupTab />
+      ) : (
         <View style={styles.emptyContainer}>
           <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-            {activeTab === 'Nhóm' ? 'Tính năng Nhóm đang phát triển' : 'Tính năng OA đang phát triển'}
+            Tính năng OA đang phát triển
           </Text>
         </View>
       )}
