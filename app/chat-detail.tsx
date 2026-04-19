@@ -100,6 +100,7 @@ interface ForwardConversationItem {
   id: string;
   name: string;
   avatarUrl?: string;
+  type?: 'AI' | 'CLOUD' | 'GROUP' | 'PRIVATE' | 'OTHER';
 }
 
 interface MessagePageResponse {
@@ -1176,9 +1177,48 @@ export default function ChatDetailScreen() {
 
         const members = Array.isArray(item?.members) ? item.members : [];
         const conversationTypeRaw = String(item?.conversationType ?? item?.type ?? item?.kind ?? '').toUpperCase();
-        const otherMember = conversationTypeRaw === 'PRIVATE'
+        const isDirectConversation = ['PRIVATE', 'DIRECT', 'ONE_TO_ONE'].includes(conversationTypeRaw);
+        const getMemberId = (member: any) => String(
+          member?.userId ??
+          member?.user_id ??
+          member?.id ??
+          member?.memberId ??
+          member?.member_id ??
+          member?.user?.userId ??
+          member?.user?.user_id ??
+          member?.user?.id ??
+          ''
+        ).trim();
+        const getMemberName = (member: any) => String(
+          member?.displayName ??
+          member?.display_name ??
+          member?.fullName ??
+          member?.full_name ??
+          member?.name ??
+          member?.user?.displayName ??
+          member?.user?.display_name ??
+          member?.user?.fullName ??
+          member?.user?.full_name ??
+          member?.user?.name ??
+          ''
+        ).trim();
+        const getMemberAvatar = (member: any) => String(
+          member?.avatarUrl ??
+          member?.avatar_url ??
+          member?.avatar ??
+          member?.profilePicture ??
+          member?.profile_picture ??
+          member?.user?.avatarUrl ??
+          member?.user?.avatar_url ??
+          member?.user?.avatar ??
+          member?.user?.profilePicture ??
+          member?.user?.profile_picture ??
+          ''
+        ).trim();
+
+        const otherMember = isDirectConversation
           ? members.find((member: any) => {
-              const memberId = String(member?.userId ?? member?.user_id ?? member?.id ?? '').trim();
+              const memberId = getMemberId(member);
               if (!memberId) {
                 return false;
               }
@@ -1187,28 +1227,33 @@ export default function ChatDetailScreen() {
             }) ?? members[0] ?? null
           : null;
 
+        const rawConversationName = String(item?.conversationName ?? item?.name ?? '').trim();
+        const normalizedRawName = rawConversationName.toLowerCase();
+        const isSelfConversation = conversationTypeRaw === 'SELF';
+        const isAiConversation = isSelfConversation && (normalizedRawName === 'fruvia ai' || normalizedRawName === 'fruvia chat ai');
+        const isCloudConversation = isSelfConversation && !isAiConversation;
+
         const rawName = String(
-          (conversationTypeRaw === 'PRIVATE'
-            ? (otherMember?.displayName ?? otherMember?.display_name ?? otherMember?.fullName ?? otherMember?.full_name)
+          (isDirectConversation
+            ? getMemberName(otherMember)
             : undefined)
+            ?? (isAiConversation ? 'Fruvia AI' : (isCloudConversation ? 'Cloud của tôi' : undefined))
             ?? item?.conversationName
             ?? item?.name
-            ?? members?.[0]?.displayName
-            ?? members?.[0]?.fullName
+            ?? getMemberName(members?.[0])
             ?? ''
         ).trim();
 
         const avatarUrl = String(
-          (conversationTypeRaw === 'PRIVATE'
-            ? (otherMember?.avatarUrl ?? otherMember?.avatar_url ?? otherMember?.avatar)
+          (isDirectConversation
+            ? getMemberAvatar(otherMember)
             : undefined)
             ?? item?.conversationAvatarUrl
             ?? item?.conversation_avatar_url
             ?? item?.avatarUrl
             ?? item?.avatar_url
             ?? item?.avatar
-            ?? members?.[0]?.avatarUrl
-            ?? members?.[0]?.avatar_url
+            ?? getMemberAvatar(members?.[0])
             ?? ''
         ).trim();
 
@@ -1216,6 +1261,15 @@ export default function ChatDetailScreen() {
           id,
           name: rawName || `Cuộc trò chuyện ${index + 1}`,
           avatarUrl: avatarUrl || undefined,
+          type: isAiConversation
+            ? 'AI'
+            : isCloudConversation
+            ? 'CLOUD'
+            : conversationTypeRaw === 'GROUP'
+            ? 'GROUP'
+            : isDirectConversation
+            ? 'PRIVATE'
+            : 'OTHER',
         };
       })
           .filter((item: ForwardConversationItem | null): item is ForwardConversationItem => item !== null);
@@ -4096,8 +4150,16 @@ export default function ChatDetailScreen() {
                           }}
                         >
                           <View style={styles.fwdItemAvatar}>
-                            {c.avatarUrl ? (
-                              <Image source={{ uri: c.avatarUrl }} style={styles.fwdItemAvatarImage} resizeMode="cover" />
+                            {c.type === 'AI' ? (
+                              <View style={[styles.fwdSpecialAvatar, styles.fwdAiAvatar]}>
+                                <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                              </View>
+                            ) : c.type === 'CLOUD' ? (
+                              <View style={[styles.fwdSpecialAvatar, styles.fwdCloudAvatar]}>
+                                <Ionicons name="folder-open" size={16} color="#FFFFFF" />
+                              </View>
+                            ) : c.avatarUrl ? (
+                              <Image source={getAvatarSource(c.avatarUrl)} style={styles.fwdItemAvatarImage} resizeMode="cover" />
                             ) : (
                               <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
                             )}
@@ -6107,6 +6169,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+  fwdSpecialAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fwdAiAvatar: {
+    backgroundColor: '#0068FF',
+  },
+  fwdCloudAvatar: {
+    backgroundColor: '#00A86B',
   },
   fwdItemAvatarText: {
     fontSize: 15,
