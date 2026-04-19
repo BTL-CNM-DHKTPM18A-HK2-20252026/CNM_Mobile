@@ -10,7 +10,11 @@ import type { AxiosError } from 'axios';
 import { Audio, ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
+import { File, Paths } from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,6 +23,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -62,6 +67,7 @@ interface Message {
   fileName?: string;
   fileSize?: number;
   caption?: string;
+  thumbnailUrl?: string;
   videoDuration?: number;
   voiceDuration?: number;
   // Reply
@@ -81,8 +87,20 @@ interface PinnedMessageItem {
   content: string;
   messageType?: string;
   contentUrl?: string;
+  thumbnailUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  caption?: string;
+  attachments?: { url: string; fileName?: string; fileSize?: number; thumbnailUrl?: string }[];
   senderName?: string;
   pinnedAt?: string;
+}
+
+interface ForwardConversationItem {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  type?: 'AI' | 'CLOUD' | 'GROUP' | 'PRIVATE' | 'OTHER';
 }
 
 interface MessagePageResponse {
@@ -103,6 +121,8 @@ const DEBUG_CHAT_MESSAGES = __DEV__;
 const AI_TYPING_USER_ID = 'FRUVIA_AI_ASSISTANT';
 const BLOCK_GAP_MS = 5 * 60 * 1000;
 const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 const emojiToReactionType = (emoji: string): 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY' => {
   switch (emoji) {
@@ -245,6 +265,7 @@ export default function ChatDetailScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCurrentIndex, setUploadCurrentIndex] = useState(0);
+  const [videoThumbnailsByMessageId, setVideoThumbnailsByMessageId] = useState<Record<string, string>>({});
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
   const [fullscreenVideoUrl, setFullscreenVideoUrl] = useState<string | null>(null);
 
@@ -266,7 +287,18 @@ export default function ChatDetailScreen() {
   const [infoMemberMenuId, setInfoMemberMenuId] = useState<string | null>(null);
   const [infoShowTransferModal, setInfoShowTransferModal] = useState(false);
   const [infoTransferReason, setInfoTransferReason] = useState<'transfer' | 'leave'>('transfer');
-  const [infoSelectedImage, setInfoSelectedImage] = useState<string | null>(null);
+  const [isInfoMediaGalleryVisible, setIsInfoMediaGalleryVisible] = useState(false);
+  const [infoMediaGalleryStartIndex, setInfoMediaGalleryStartIndex] = useState(0);
+  const [infoMediaGalleryIndex, setInfoMediaGalleryIndex] = useState(0);
+  const [isInfoGalleryMenuVisible, setIsInfoGalleryMenuVisible] = useState(false);
+  const [infoGalleryPlayingMediaId, setInfoGalleryPlayingMediaId] = useState<string | null>(null);
+  const [isInfoGalleryVideoLoading, setIsInfoGalleryVideoLoading] = useState(false);
+  const [infoVideoThumbnailsByMediaId, setInfoVideoThumbnailsByMediaId] = useState<Record<string, string>>({});
+  const [isJumpingToMessage, setIsJumpingToMessage] = useState(false);
+  const [isDownloadingInfoMedia, setIsDownloadingInfoMedia] = useState(false);
+  const [infoDownloadProgress, setInfoDownloadProgress] = useState(0);
+  const [isInfoMediaBrowserVisible, setIsInfoMediaBrowserVisible] = useState(false);
+  const [infoMediaBrowserFilter, setInfoMediaBrowserFilter] = useState<'ALL' | 'IMAGE' | 'VIDEO'>('ALL');
   const [infoEditNameVisible, setInfoEditNameVisible] = useState(false);
   const [infoEditNameValue, setInfoEditNameValue] = useState('');
   const [infoUpdatingGroupName, setInfoUpdatingGroupName] = useState(false);
@@ -277,7 +309,7 @@ export default function ChatDetailScreen() {
   const [forwardingMsg, setForwardingMsg] = useState<Message | null>(null);
   const [isShareContactVisible, setIsShareContactVisible] = useState(false);
   // Forward modal state
-  const [fwdConversations, setFwdConversations] = useState<any[]>([]);
+  const [fwdConversations, setFwdConversations] = useState<ForwardConversationItem[]>([]);
   const [fwdSearch, setFwdSearch] = useState('');
   const [fwdSelected, setFwdSelected] = useState<Set<string>>(new Set());
   const [fwdLoading, setFwdLoading] = useState(false);
@@ -306,6 +338,9 @@ export default function ChatDetailScreen() {
   const appStateRef = useRef(AppState.currentState);
   const loadingOlderRef = useRef(false);
   const shouldScrollToLatestRef = useRef(false);
+  const generatingVideoThumbRef = useRef<Set<string>>(new Set());
+  const infoMediaGalleryRef = useRef<FlatList>(null);
+  const infoVideoThumbGeneratingRef = useRef<Set<string>>(new Set());
   const peerAvatarSource = useMemo(() => getAvatarSource(conversationAvatarUrl), [conversationAvatarUrl]);
   const normalizedName = String(conversationDisplayName ?? '').trim().toLowerCase();
   const normalizedType = String(type ?? '').trim().toUpperCase();
@@ -501,19 +536,179 @@ export default function ChatDetailScreen() {
     return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
   }, []);
 
+  const isLikelyUrl = useCallback((value?: string) => {
+    const text = String(value ?? '').trim();
+    return /^https?:\/\//i.test(text) || /^file:\/\//i.test(text) || /^content:\/\//i.test(text);
+  }, []);
+
+  const getDisplayFileNameFromValue = useCallback((value?: string) => {
+    const raw = String(value ?? '').trim();
+    if (!raw) {
+      return '';
+    }
+
+    try {
+      const clean = raw.split('?')[0];
+      const decoded = decodeURIComponent(clean);
+      const lastPart = decoded.split('/').pop() ?? '';
+      const withoutPrefix = lastPart.includes('_') ? lastPart.split('_').slice(1).join('_') : lastPart;
+      return withoutPrefix || lastPart || raw;
+    } catch {
+      const clean = raw.split('?')[0];
+      const lastPart = clean.split('/').pop() ?? '';
+      return lastPart || raw;
+    }
+  }, []);
+
   const getReplySnippet = useCallback((msg: Message): string => {
     if (msg.isRecalled) return 'Tin nhắn đã được thu hồi';
     const mType = (msg.messageType || 'TEXT').toUpperCase();
     if (mType === 'IMAGE') return '📷 Hình ảnh';
+    if (mType === 'IMAGE_GROUP') {
+      const imageCount = Array.isArray(msg.attachments) ? msg.attachments.length : 0;
+      return imageCount > 0 ? `📷 ${imageCount} hình ảnh` : '📷 Album ảnh';
+    }
     if (mType === 'VIDEO') return '🎬 Video';
     if (mType === 'VOICE') return '🎤 Tin nhắn thoại';
-    if (mType === 'FILE' || mType === 'MEDIA') return '📎 Tệp đính kèm';
+    if (mType === 'FILE' || mType === 'MEDIA') {
+      const fileName = msg.fileName || getDisplayFileNameFromValue(msg.content);
+      return fileName ? `📎 ${fileName}` : '📎 Tệp đính kèm';
+    }
     if (mType === 'SHARE_CONTACT') {
       try { const c = JSON.parse(msg.content || '{}'); return `📇 ${c.fullName || 'Danh thiếp'}`; } catch { return '📇 Danh thiếp'; }
     }
     const text = msg.content || '';
     return text.length > 80 ? `${text.slice(0, 80)}...` : text;
-  }, []);
+  }, [getDisplayFileNameFromValue]);
+
+  const getForwardAttachmentUrls = useCallback((msg: Message) => {
+    const urls = Array.isArray(msg.attachments)
+      ? msg.attachments
+        .map((att) => String(att?.url ?? '').trim())
+        .filter((url) => url.length > 0)
+      : [];
+
+    if (urls.length > 0) {
+      return urls;
+    }
+
+    const fallback = String(msg.content ?? '').trim();
+    return isLikelyUrl(fallback) ? [fallback] : [];
+  }, [isLikelyUrl]);
+
+  const getForwardPreviewText = useCallback((msg: Message) => {
+    const mType = String(msg.messageType ?? 'TEXT').toUpperCase();
+    if (mType === 'IMAGE') return 'Ảnh';
+    if (mType === 'IMAGE_GROUP') {
+      const count = getForwardAttachmentUrls(msg).length;
+      return count > 0 ? `${count} hình ảnh` : 'Album ảnh';
+    }
+    if (mType === 'VIDEO') return 'Video';
+    if (mType === 'VOICE') return 'Tin nhắn thoại';
+    if (mType === 'FILE' || mType === 'MEDIA') {
+      const fileName = msg.fileName || getDisplayFileNameFromValue(msg.content);
+      return fileName || 'Tệp đính kèm';
+    }
+    if (mType === 'SHARE_CONTACT') {
+      try {
+        const parsed = JSON.parse(msg.content || '{}');
+        return parsed.fullName || 'Danh thiếp';
+      } catch {
+        return 'Danh thiếp';
+      }
+    }
+
+    const content = String(msg.content ?? '').trim();
+    if (!content) {
+      return t('chat.empty_message', 'Tin nhắn trống');
+    }
+
+    return content.length > 120 ? `${content.slice(0, 120)}...` : content;
+  }, [getDisplayFileNameFromValue, getForwardAttachmentUrls, t]);
+
+  const buildForwardPayload = useCallback((msg: Message) => {
+    const mType = String(msg.messageType ?? 'TEXT').toUpperCase();
+
+    if (mType === 'IMAGE_GROUP') {
+      const mediaUrls = getForwardAttachmentUrls(msg);
+      return {
+        content: mediaUrls[0] || String(msg.content ?? ''),
+        messageType: 'IMAGE_GROUP',
+        mediaUrls,
+        caption: msg.caption,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'FILE' || mType === 'MEDIA') {
+      const fileName = msg.fileName || getDisplayFileNameFromValue(msg.content);
+      return {
+        content: String(msg.content ?? ''),
+        messageType: mType,
+        fileName: fileName || undefined,
+        fileSize: msg.fileSize,
+        caption: msg.caption,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'VIDEO') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'VIDEO',
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+        caption: msg.caption,
+        videoDuration: msg.videoDuration,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'IMAGE') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'IMAGE',
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+        caption: msg.caption,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'VOICE') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'VOICE',
+        fileName: msg.fileName,
+        fileSize: msg.fileSize,
+        voiceDuration: msg.voiceDuration,
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    if (mType === 'SHARE_CONTACT') {
+      return {
+        content: String(msg.content ?? ''),
+        messageType: 'SHARE_CONTACT',
+        forwardedFromMessageId: msg.messageId,
+      };
+    }
+
+    return {
+      content: String(msg.content ?? ''),
+      messageType: 'TEXT',
+      forwardedFromMessageId: msg.messageId,
+    };
+  }, [getDisplayFileNameFromValue, getForwardAttachmentUrls]);
+
+  const filteredFwdConversations = useMemo(() => {
+    const keyword = fwdSearch.trim().toLowerCase();
+    if (!keyword) {
+      return fwdConversations;
+    }
+
+    return fwdConversations.filter((conversation) => conversation.name.toLowerCase().includes(keyword));
+  }, [fwdConversations, fwdSearch]);
 
   const stripAiMarkdownMarkers = useCallback((content: string | null | undefined) => {
     if (!content) return '';
@@ -541,6 +736,54 @@ export default function ChatDetailScreen() {
     setIsMessageActionVisible(false);
     setSelectedMessage(null);
   }, []);
+
+  const generateVideoThumbnail = useCallback(async (videoUri: string): Promise<string | undefined> => {
+    if (!videoUri) {
+      return undefined;
+    }
+
+    try {
+      const result = await VideoThumbnails.getThumbnailAsync(videoUri, {
+        time: 800,
+        quality: 0.6,
+      });
+      return result.uri;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const ensureVideoThumbnailForMessage = useCallback(async (messageId: string, videoUri?: string) => {
+    const normalizedId = String(messageId || '');
+    if (!normalizedId || !videoUri) {
+      return;
+    }
+
+    if (generatingVideoThumbRef.current.has(normalizedId)) {
+      return;
+    }
+
+    generatingVideoThumbRef.current.add(normalizedId);
+    try {
+      const thumbUri = await generateVideoThumbnail(videoUri);
+      if (!thumbUri) {
+        return;
+      }
+
+      setVideoThumbnailsByMessageId((prev) => {
+        if (prev[normalizedId] === thumbUri) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [normalizedId]: thumbUri,
+        };
+      });
+    } finally {
+      generatingVideoThumbRef.current.delete(normalizedId);
+    }
+  }, [generateVideoThumbnail]);
 
   const openMessageActionMenu = useCallback((message: Message) => {
     if (!canUseMessageInteractions) {
@@ -579,6 +822,25 @@ export default function ChatDetailScreen() {
           contentUrl: item.contentUrl
             ? String(item.contentUrl)
             : (item.mediaUrl ? String(item.mediaUrl) : undefined),
+          thumbnailUrl: item.thumbnailUrl ? String(item.thumbnailUrl) : undefined,
+          fileName: item.fileName ? String(item.fileName) : undefined,
+          fileSize: typeof item.fileSize === 'number' ? item.fileSize : undefined,
+          caption: item.caption ? String(item.caption) : undefined,
+          attachments: Array.isArray(item.attachments)
+            ? item.attachments
+              .map((att: any) => ({
+                url: String(att?.url ?? att?.content ?? att?.mediaUrl ?? att?.fileUrl ?? '').trim(),
+                fileName: att?.fileName ? String(att.fileName) : undefined,
+                fileSize: typeof att?.fileSize === 'number' ? att.fileSize : undefined,
+                thumbnailUrl: att?.thumbnailUrl ? String(att.thumbnailUrl) : undefined,
+              }))
+              .filter((att: any) => att.url)
+            : (Array.isArray(item.mediaUrls)
+              ? item.mediaUrls
+                .map((url: any) => String(url ?? '').trim())
+                .filter((url: string) => url)
+                .map((url: string) => ({ url }))
+              : undefined),
           senderName: item.senderName ? String(item.senderName) : undefined,
           pinnedAt: item.pinnedAt ? String(item.pinnedAt) : undefined,
         }))
@@ -633,14 +895,37 @@ export default function ChatDetailScreen() {
     ? pinnedMessages[pinnedMessages.length - 1]
     : null;
   const latestPinnedType = (latestPinnedMessage?.messageType || '').toUpperCase();
-  const latestPinnedIsImage = latestPinnedType === 'IMAGE';
-  const latestPinnedThumbUrl = latestPinnedIsImage
-    ? (latestPinnedMessage?.contentUrl || latestPinnedMessage?.content || '')
+  const latestPinnedIsImage = latestPinnedType === 'IMAGE' || latestPinnedType === 'IMAGE_GROUP';
+  const latestPinnedThumbUrl = latestPinnedMessage
+    ? (() => {
+      if (latestPinnedType === 'IMAGE') {
+        const candidate = String(latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
+        return isLikelyUrl(candidate) ? candidate : '';
+      }
+
+      if (latestPinnedType === 'IMAGE_GROUP') {
+        const firstAttachment = latestPinnedMessage.attachments?.[0]?.url;
+        const candidate = String(firstAttachment || latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
+        return isLikelyUrl(candidate) ? candidate : '';
+      }
+
+      return '';
+    })()
     : '';
   const latestPinnedLabel = latestPinnedMessage
     ? (() => {
       const text = (latestPinnedMessage.content || '').trim();
-      if (latestPinnedIsImage) return '[Hình ảnh]';
+      if (latestPinnedType === 'IMAGE') return '[Hình ảnh]';
+      if (latestPinnedType === 'IMAGE_GROUP') {
+        const imageCount = latestPinnedMessage.attachments?.length ?? 0;
+        return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
+      }
+      if (latestPinnedType === 'VIDEO') return '[Video]';
+      if (latestPinnedType === 'VOICE') return '[Tin nhắn thoại]';
+      if (latestPinnedType === 'FILE' || latestPinnedType === 'MEDIA') {
+        const fileName = latestPinnedMessage.fileName || getDisplayFileNameFromValue(latestPinnedMessage.contentUrl || latestPinnedMessage.content);
+        return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
+      }
       return text || t('chat.empty_message', 'Tin nhắn trống');
     })()
     : '';
@@ -651,15 +936,51 @@ export default function ChatDetailScreen() {
       return '[Hình ảnh]';
     }
 
+    if (pinnedType === 'IMAGE_GROUP') {
+      const imageCount = item.attachments?.length ?? 0;
+      return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
+    }
+
+    if (pinnedType === 'VIDEO') {
+      return '[Video]';
+    }
+
+    if (pinnedType === 'VOICE') {
+      return '[Tin nhắn thoại]';
+    }
+
+    if (pinnedType === 'FILE' || pinnedType === 'MEDIA') {
+      const fileName = item.fileName || getDisplayFileNameFromValue(item.contentUrl || item.content);
+      return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
+    }
+
     const text = (item.content || '').trim();
-    return text || t('chat.empty_message', 'Tin nhắn trống');
-  }, [t]);
+    if (!text) {
+      return t('chat.empty_message', 'Tin nhắn trống');
+    }
+
+    if (isLikelyUrl(text)) {
+      return '[Nội dung media]';
+    }
+
+    return text;
+  }, [getDisplayFileNameFromValue, isLikelyUrl, t]);
 
   const getPinnedPreviewThumb = useCallback((item: PinnedMessageItem) => {
     const pinnedType = (item.messageType || '').toUpperCase();
-    if (pinnedType !== 'IMAGE') return '';
-    return item.contentUrl || item.content || '';
-  }, []);
+    if (pinnedType === 'IMAGE') {
+      const candidate = String(item.contentUrl || item.content || '').trim();
+      return isLikelyUrl(candidate) ? candidate : '';
+    }
+
+    if (pinnedType === 'IMAGE_GROUP') {
+      const firstAttachment = item.attachments?.[0]?.url;
+      const candidate = String(firstAttachment || item.contentUrl || item.content || '').trim();
+      return isLikelyUrl(candidate) ? candidate : '';
+    }
+
+    return '';
+  }, [isLikelyUrl]);
 
   useEffect(() => {
     return () => {
@@ -833,21 +1154,147 @@ export default function ChatDetailScreen() {
     }
   }, [conversationId, hasMoreOlder, isLoadingOlder, isSameMessageList, logChatDebug, mergeUniqueMessages, messages, parsePageResult, sortMessages]);
 
+  const extractForwardConversationItems = useCallback((raw: any): ForwardConversationItem[] => {
+    const payload = chatService.unwrapApiPayload<any>(raw);
+    const rawList = Array.isArray(payload)
+      ? payload
+      : (Array.isArray(payload?.content)
+        ? payload.content
+        : (Array.isArray(payload?.conversations)
+          ? payload.conversations
+          : (Array.isArray(payload?.items)
+            ? payload.items
+            : (Array.isArray(payload?.data) ? payload.data : []))));
+
+    const normalizedCurrentUserId = String(currentUserId ?? '').trim();
+
+    return rawList
+      .map((item: any, index: number): ForwardConversationItem | null => {
+        const id = String(item?.conversationId ?? item?.id ?? '').trim();
+        if (!id || id === String(conversationId ?? '').trim()) {
+          return null;
+        }
+
+        const members = Array.isArray(item?.members) ? item.members : [];
+        const conversationTypeRaw = String(item?.conversationType ?? item?.type ?? item?.kind ?? '').toUpperCase();
+        const isDirectConversation = ['PRIVATE', 'DIRECT', 'ONE_TO_ONE'].includes(conversationTypeRaw);
+        const getMemberId = (member: any) => String(
+          member?.userId ??
+          member?.user_id ??
+          member?.id ??
+          member?.memberId ??
+          member?.member_id ??
+          member?.user?.userId ??
+          member?.user?.user_id ??
+          member?.user?.id ??
+          ''
+        ).trim();
+        const getMemberName = (member: any) => String(
+          member?.displayName ??
+          member?.display_name ??
+          member?.fullName ??
+          member?.full_name ??
+          member?.name ??
+          member?.user?.displayName ??
+          member?.user?.display_name ??
+          member?.user?.fullName ??
+          member?.user?.full_name ??
+          member?.user?.name ??
+          ''
+        ).trim();
+        const getMemberAvatar = (member: any) => String(
+          member?.avatarUrl ??
+          member?.avatar_url ??
+          member?.avatar ??
+          member?.profilePicture ??
+          member?.profile_picture ??
+          member?.user?.avatarUrl ??
+          member?.user?.avatar_url ??
+          member?.user?.avatar ??
+          member?.user?.profilePicture ??
+          member?.user?.profile_picture ??
+          ''
+        ).trim();
+
+        const otherMember = isDirectConversation
+          ? members.find((member: any) => {
+              const memberId = getMemberId(member);
+              if (!memberId) {
+                return false;
+              }
+
+              return normalizedCurrentUserId ? memberId !== normalizedCurrentUserId : true;
+            }) ?? members[0] ?? null
+          : null;
+
+        const rawConversationName = String(item?.conversationName ?? item?.name ?? '').trim();
+        const normalizedRawName = rawConversationName.toLowerCase();
+        const isSelfConversation = conversationTypeRaw === 'SELF';
+        const isAiConversation = isSelfConversation && (normalizedRawName === 'fruvia ai' || normalizedRawName === 'fruvia chat ai');
+        const isCloudConversation = isSelfConversation && !isAiConversation;
+
+        const rawName = String(
+          (isDirectConversation
+            ? getMemberName(otherMember)
+            : undefined)
+            ?? (isAiConversation ? 'Fruvia AI' : (isCloudConversation ? 'Cloud của tôi' : undefined))
+            ?? item?.conversationName
+            ?? item?.name
+            ?? getMemberName(members?.[0])
+            ?? ''
+        ).trim();
+
+        const avatarUrl = String(
+          (isDirectConversation
+            ? getMemberAvatar(otherMember)
+            : undefined)
+            ?? item?.conversationAvatarUrl
+            ?? item?.conversation_avatar_url
+            ?? item?.avatarUrl
+            ?? item?.avatar_url
+            ?? item?.avatar
+            ?? getMemberAvatar(members?.[0])
+            ?? ''
+        ).trim();
+
+        return {
+          id,
+          name: rawName || `Cuộc trò chuyện ${index + 1}`,
+          avatarUrl: avatarUrl || undefined,
+          type: isAiConversation
+            ? 'AI'
+            : isCloudConversation
+            ? 'CLOUD'
+            : conversationTypeRaw === 'GROUP'
+            ? 'GROUP'
+            : isDirectConversation
+            ? 'PRIVATE'
+            : 'OTHER',
+        };
+      })
+          .filter((item: ForwardConversationItem | null): item is ForwardConversationItem => item !== null);
+  }, [conversationId, currentUserId]);
+
+  const loadForwardConversations = useCallback(async (keyword?: string) => {
+    setFwdLoading(true);
+    try {
+      const response = await chatService.getConversations(0, 60, keyword?.trim() || undefined);
+      setFwdConversations(extractForwardConversationItems(response));
+    } catch {
+      setFwdConversations([]);
+    } finally {
+      setFwdLoading(false);
+    }
+  }, [extractForwardConversationItems]);
+
   // Load conversations when forward modal opens
   useEffect(() => {
     if (!forwardingMsg) return;
     setFwdConversations([]);
     setFwdSearch('');
     setFwdSelected(new Set());
-    setFwdLoading(true);
-    chatService.getConversations()
-      .then((res: any) => {
-        const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
-        setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
-      })
-      .catch(() => { })
-      .finally(() => setFwdLoading(false));
-  }, [forwardingMsg, conversationId]);
+    void loadForwardConversations();
+  }, [forwardingMsg, loadForwardConversations]);
 
   // Load friends when share contact modal opens
   useEffect(() => {
@@ -871,6 +1318,25 @@ export default function ChatDetailScreen() {
       scrollToLatest(false);
     }
   }, [messages.length, scrollToLatest]);
+
+  useEffect(() => {
+    messages.forEach((message) => {
+      const isVideoMessage = (message.messageType || '').toUpperCase() === 'VIDEO';
+      if (!isVideoMessage || message.isRecalled) {
+        return;
+      }
+
+      if (message.thumbnailUrl || videoThumbnailsByMessageId[String(message.messageId)]) {
+        return;
+      }
+
+      if (!message.content) {
+        return;
+      }
+
+      void ensureVideoThumbnailForMessage(String(message.messageId), message.content);
+    });
+  }, [ensureVideoThumbnailForMessage, messages, videoThumbnailsByMessageId]);
 
   useEffect(() => {
     if (!conversationId || !currentUserId) {
@@ -1390,6 +1856,9 @@ export default function ChatDetailScreen() {
       const media = mediaItems[i];
       const tempMessageId = `temp-media-${Date.now()}-${i}`;
       const now = new Date();
+      const videoThumbnail = media.mediaType === 'VIDEO'
+        ? await generateVideoThumbnail(media.uri)
+        : undefined;
 
       setUploadCurrentIndex(i);
 
@@ -1404,6 +1873,7 @@ export default function ChatDetailScreen() {
         fileName: media.fileName,
         fileSize: media.fileSize,
         caption: i === 0 ? caption : undefined,
+        thumbnailUrl: videoThumbnail,
       };
 
       setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
@@ -1415,7 +1885,7 @@ export default function ChatDetailScreen() {
         });
 
         setMessages((prev) =>
-          prev.map((m) => m.messageId === tempMessageId ? { ...m, content: s3Url } : m)
+          prev.map((m) => m.messageId === tempMessageId ? { ...m, content: s3Url, thumbnailUrl: m.thumbnailUrl || videoThumbnail } : m)
         );
 
         const response = await chatService.sendMessage(conversationId, {
@@ -1429,10 +1899,21 @@ export default function ChatDetailScreen() {
 
         const mappedMessage = mapAnyPayloadToUiMessage(response);
         if (mappedMessage) {
+          const messageWithThumb: Message = {
+            ...mappedMessage,
+            thumbnailUrl: mappedMessage.messageType === 'VIDEO'
+              ? (videoThumbnail || videoThumbnailsByMessageId[String(mappedMessage.messageId)])
+              : undefined,
+          };
+
           setMessages((prev) => {
             const withoutTemp = prev.filter((m) => m.messageId !== tempMessageId);
-            return mergeUniqueMessages(withoutTemp, [mappedMessage]);
+            return mergeUniqueMessages(withoutTemp, [messageWithThumb]);
           });
+
+          if (messageWithThumb.messageType === 'VIDEO' && !messageWithThumb.thumbnailUrl) {
+            void ensureVideoThumbnailForMessage(String(messageWithThumb.messageId), messageWithThumb.content);
+          }
         }
       } catch (error: any) {
         const errorMsg = error?.response?.data?.message || error?.message || 'Unknown error';
@@ -1446,7 +1927,7 @@ export default function ChatDetailScreen() {
     setUploadProgress(0);
     setUploadCurrentIndex(0);
     requestScrollToLatest(true);
-  }, [pendingMediaList, conversationId, isUploading, inputText, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
+  }, [pendingMediaList, conversationId, isUploading, inputText, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage, ensureVideoThumbnailForMessage, generateVideoThumbnail, videoThumbnailsByMessageId]);
 
   const handleReactWithEmoji = useCallback(async (emoji: string) => {
     if (!selectedMessage) {
@@ -1497,7 +1978,23 @@ export default function ChatDetailScreen() {
               await loadInitialMessages(currentUserId, true);
             } catch (error) {
               console.error('Failed to recall message:', error);
-              Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn');
+              const axiosError = error as AxiosError<{
+                message?: string;
+                error?: { message?: string };
+              }>;
+              const backendMessage =
+                axiosError.response?.data?.message ||
+                axiosError.response?.data?.error?.message ||
+                axiosError.message ||
+                '';
+              const normalizedMessage = backendMessage.toLowerCase();
+              const isRecallTimeLimitError = normalizedMessage.includes('recall time limit')
+
+              if (isRecallTimeLimitError) {
+                Alert.alert('Lỗi', 'Bạn chỉ có thể thu hồi tin nhắn trong 60 phút sau khi gửi');
+              } else {
+                Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn');
+              }
             }
           },
         },
@@ -1555,23 +2052,108 @@ export default function ChatDetailScreen() {
     setIsPinnedListVisible(true);
   }, [fetchPinnedMessages]);
 
-  const handleJumpToPinnedMessage = useCallback((messageId: string) => {
-    const targetIndex = messages.findIndex((message) => String(message.messageId) === String(messageId));
-    if (targetIndex >= 0) {
-      flatListRef.current?.scrollToIndex({ index: targetIndex, animated: true, viewPosition: 0.5 });
-      setHighlightedMessageId(String(messageId));
+  const highlightMessage = useCallback((messageId: string) => {
+    setHighlightedMessageId(String(messageId));
 
-      if (highlightTimerRef.current) {
-        clearTimeout(highlightTimerRef.current);
-      }
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
 
-      highlightTimerRef.current = setTimeout(() => {
-        setHighlightedMessageId((prev) => (prev === String(messageId) ? null : prev));
-      }, 1800);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedMessageId((prev) => (prev === String(messageId) ? null : prev));
+    }, 1800);
+  }, []);
+
+  const handleJumpToPinnedMessage = useCallback(async (messageId: string) => {
+    const normalizedMessageId = String(messageId || '').trim();
+    if (!normalizedMessageId) {
+      return;
     }
 
     setIsPinnedListVisible(false);
-  }, [messages]);
+
+    const localTargetIndex = messages.findIndex((message) => String(message.messageId) === normalizedMessageId);
+    if (localTargetIndex >= 0) {
+      flatListRef.current?.scrollToIndex({ index: localTargetIndex, animated: true, viewPosition: 0.5 });
+      highlightMessage(normalizedMessageId);
+      return;
+    }
+
+    if (!conversationId) {
+      return;
+    }
+
+    setIsJumpingToMessage(true);
+    try {
+      const fetchAroundCandidates = async () => {
+        const aroundSizes = [40, 80, 120];
+
+        for (const aroundSize of aroundSizes) {
+          const aroundResponse = await chatService.getMessagesAround(conversationId, normalizedMessageId, aroundSize);
+          const aroundRaw = chatService.unwrapApiPayload<any>(aroundResponse);
+          const aroundPayload = Array.isArray(aroundRaw)
+            ? aroundRaw
+            : (Array.isArray(aroundRaw?.content) ? aroundRaw.content : []);
+
+          const aroundMapped = sortMessages(mapChatPayloadListToUiMessages(aroundPayload));
+          if (aroundMapped.some((message) => String(message.messageId) === normalizedMessageId)) {
+            return aroundMapped;
+          }
+        }
+
+        // Fallback: walk backward pages from latest in case around endpoint is delayed.
+        const firstPageResponse = await chatService.getMessages(conversationId, 0, 40);
+        const firstPageParsed = parsePageResult(firstPageResponse, 40);
+        let fallbackMessages = sortMessages(mapChatPayloadListToUiMessages(firstPageParsed.payload));
+
+        if (fallbackMessages.some((message) => String(message.messageId) === normalizedMessageId)) {
+          return fallbackMessages;
+        }
+
+        let cursorId = fallbackMessages[0]?.messageId;
+        for (let page = 0; page < 8 && cursorId; page += 1) {
+          const olderResponse = await chatService.getMessagesBefore(conversationId, cursorId, 40);
+          const olderParsed = parsePageResult(olderResponse, 40);
+          const olderMessages = sortMessages(mapChatPayloadListToUiMessages(olderParsed.payload));
+
+          if (olderMessages.length === 0) {
+            break;
+          }
+
+          fallbackMessages = mergeUniqueMessages(fallbackMessages, olderMessages);
+          if (fallbackMessages.some((message) => String(message.messageId) === normalizedMessageId)) {
+            return fallbackMessages;
+          }
+
+          cursorId = fallbackMessages[0]?.messageId;
+        }
+
+        return [] as Message[];
+      };
+
+      const aroundMessages = await fetchAroundCandidates();
+      if (aroundMessages.length === 0) {
+        Alert.alert('Thông báo', 'Không tìm thấy đoạn hội thoại chứa tin nhắn này.');
+        return;
+      }
+
+      const aroundTargetIndex = aroundMessages.findIndex((message) => String(message.messageId) === normalizedMessageId);
+      setMessages(aroundMessages);
+      setHasMoreOlder(true);
+
+      if (aroundTargetIndex >= 0) {
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToIndex({ index: aroundTargetIndex, animated: true, viewPosition: 0.5 });
+          highlightMessage(normalizedMessageId);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to jump to historical message:', error);
+      Alert.alert('Lỗi', 'Không thể tải đoạn hội thoại chứa tin nhắn này');
+    } finally {
+      setIsJumpingToMessage(false);
+    }
+  }, [conversationId, highlightMessage, mergeUniqueMessages, messages, parsePageResult, sortMessages]);
 
   const handleUnpinFromPinnedList = useCallback(async (messageId: string) => {
     try {
@@ -1594,6 +2176,80 @@ export default function ChatDetailScreen() {
     } catch { setInfoMembers([]); }
   }, [conversationId, isGroupConversation]);
 
+  const normalizeInfoMediaItems = useCallback((source: any[]) => {
+    const items = Array.isArray(source) ? source : [];
+    const normalized: any[] = [];
+
+    items.forEach((item: any, index: number) => {
+      if (item?.isRecalled) {
+        return;
+      }
+
+      const messageType = String(item?.messageType ?? '').toUpperCase();
+      if (messageType === 'IMAGE' || messageType === 'VIDEO') {
+        const mediaUrl = String(item?.content ?? item?.mediaUrl ?? item?.url ?? '').trim();
+        if (!mediaUrl) {
+          return;
+        }
+
+        normalized.push(item);
+        return;
+      }
+
+      if (messageType === 'IMAGE_GROUP' && Array.isArray(item?.attachments)) {
+        const baseMessageId = String(item?.messageId ?? item?.id ?? `media-group-${index}`);
+        item.attachments.forEach((attachment: any, attachmentIndex: number) => {
+          const url = String(
+            attachment?.url
+            ?? attachment?.content
+            ?? attachment?.mediaUrl
+            ?? attachment?.fileUrl
+            ?? attachment?.path
+            ?? (typeof attachment === 'string' ? attachment : '')
+          ).trim();
+          if (!url) {
+            return;
+          }
+
+          normalized.push({
+            ...item,
+            id: `${baseMessageId}-attachment-${attachmentIndex}`,
+            messageType: 'IMAGE',
+            content: url,
+            thumbnailUrl: attachment?.thumbnailUrl ?? item?.thumbnailUrl,
+            parentMessageId: baseMessageId,
+          });
+        });
+      }
+    });
+
+    return normalized;
+  }, []);
+
+  const getInfoMediaSortMillis = useCallback((item: any) => {
+    const primary = getMessageMillis(item?.updatedAt ?? item?.createdAt);
+    if (!Number.isNaN(primary)) {
+      return primary;
+    }
+
+    const fallback = Number(item?.createdAt ?? item?.updatedAt ?? 0);
+    return Number.isNaN(fallback) ? 0 : fallback;
+  }, []);
+
+  const sortInfoMediaItems = useCallback((items: any[]) => {
+    return [...items].sort((a, b) => {
+      const timeA = getInfoMediaSortMillis(a);
+      const timeB = getInfoMediaSortMillis(b);
+      if (timeA !== timeB) {
+        return timeB - timeA;
+      }
+
+      const idA = String(a?.messageId ?? a?.id ?? '');
+      const idB = String(b?.messageId ?? b?.id ?? '');
+      return idB.localeCompare(idA);
+    });
+  }, [getInfoMediaSortMillis]);
+
   const fetchInfoMedia = useCallback(async () => {
     if (!conversationId || isAiConversation) return;
     try {
@@ -1601,10 +2257,10 @@ export default function ChatDetailScreen() {
         await chatService.getConversationMedia(conversationId)
       );
       const items = Array.isArray(res) ? res : [];
-      setInfoMediaItems(items.filter((m: any) => m.messageType === 'IMAGE' || m.messageType === 'VIDEO'));
+      setInfoMediaItems(sortInfoMediaItems(normalizeInfoMediaItems(items)));
       setInfoFileItems(items.filter((m: any) => m.messageType === 'MEDIA'));
     } catch { setInfoMediaItems([]); setInfoFileItems([]); }
-  }, [conversationId, isAiConversation]);
+  }, [conversationId, isAiConversation, normalizeInfoMediaItems, sortInfoMediaItems]);
 
   const fetchInfoStorageStats = useCallback(async () => {
     if (!isCloudConversation) return;
@@ -1623,6 +2279,248 @@ export default function ChatDetailScreen() {
       fetchPinnedMessages(),
     ]);
   }, [fetchInfoMembers, fetchInfoMedia, fetchInfoStorageStats, fetchPinnedMessages]);
+
+  const getInfoMediaUrl = useCallback((item: any) => {
+    return String(item?.content ?? item?.mediaUrl ?? item?.url ?? '').trim();
+  }, []);
+
+  const getInfoMediaId = useCallback((item: any, index?: number) => {
+    const raw = item?.messageId ?? item?.id ?? `info-media-${index ?? 0}`;
+    return String(raw);
+  }, []);
+
+  const getInfoMediaType = useCallback((item: any) => {
+    return String(item?.messageType ?? '').toUpperCase();
+  }, []);
+
+  const requestMediaSavePermission = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      const existing = await MediaLibrary.getPermissionsAsync(false, ['photo', 'video']);
+      if (existing.granted) {
+        return true;
+      }
+
+      const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo', 'video']);
+      return status === 'granted';
+    }
+
+    const existing = await MediaLibrary.getPermissionsAsync();
+    if (existing.granted) {
+      return true;
+    }
+
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    return status === 'granted';
+  }, []);
+
+  const closeInfoMediaGallery = useCallback(() => {
+    setIsInfoMediaGalleryVisible(false);
+    setIsInfoGalleryMenuVisible(false);
+    setInfoGalleryPlayingMediaId(null);
+    setIsInfoGalleryVideoLoading(false);
+    setInfoDownloadProgress(0);
+  }, []);
+
+  const handleOpenInfoMediaGallery = useCallback((startIndex: number) => {
+    if (!Array.isArray(infoMediaItems) || infoMediaItems.length === 0) {
+      return;
+    }
+
+    const safeIndex = Math.max(0, Math.min(startIndex, infoMediaItems.length - 1));
+    setInfoMediaGalleryStartIndex(safeIndex);
+    setInfoMediaGalleryIndex(safeIndex);
+    setInfoGalleryPlayingMediaId(null);
+    setIsInfoGalleryVideoLoading(false);
+    setIsInfoGalleryMenuVisible(false);
+    setIsInfoMediaGalleryVisible(true);
+  }, [infoMediaItems]);
+
+  const handlePlayInfoGalleryVideo = useCallback((item: any, index: number) => {
+    const mediaId = getInfoMediaId(item, index);
+    setInfoGalleryPlayingMediaId(mediaId);
+    setIsInfoGalleryVideoLoading(true);
+  }, [getInfoMediaId]);
+
+  const handleDownloadInfoGalleryCurrent = useCallback(async () => {
+    const currentItem = infoMediaItems[infoMediaGalleryIndex];
+    if (!currentItem) {
+      return;
+    }
+
+    const mediaUrl = getInfoMediaUrl(currentItem);
+    if (!mediaUrl) {
+      Alert.alert('Lỗi', 'Không tìm thấy đường dẫn media');
+      return;
+    }
+
+    try {
+      setIsDownloadingInfoMedia(true);
+      setInfoDownloadProgress(0);
+
+      const hasPermission = await requestMediaSavePermission();
+      if (!hasPermission) {
+        Alert.alert('Quyền truy cập', 'Bạn cần cho phép quyền thư viện để lưu media');
+        return;
+      }
+
+      const mediaType = getInfoMediaType(currentItem);
+      let localUri = mediaUrl;
+
+      if (/^https?:\/\//i.test(mediaUrl)) {
+        const cleanUrl = mediaUrl.split('?')[0];
+        const ext = cleanUrl.includes('.')
+          ? `.${cleanUrl.split('.').pop()?.slice(0, 6) || ''}`
+          : (mediaType === 'VIDEO' ? '.mp4' : '.jpg');
+        const destinationFile = new File(Paths.cache, `fruvia_media_${Date.now()}${ext}`);
+        const resumable = FileSystemLegacy.createDownloadResumable(
+          mediaUrl,
+          destinationFile.uri,
+          {},
+          (progressData) => {
+            const total = progressData.totalBytesExpectedToWrite;
+            if (typeof total === 'number' && total > 0) {
+              const percent = Math.round((progressData.totalBytesWritten / total) * 100);
+              setInfoDownloadProgress(Math.max(0, Math.min(100, percent)));
+            }
+          }
+        );
+
+        const downloaded = await resumable.downloadAsync();
+        localUri = downloaded?.uri || destinationFile.uri;
+      } else {
+        setInfoDownloadProgress(100);
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(localUri);
+      const albumName = 'Fruvia';
+      const album = await MediaLibrary.getAlbumAsync(albumName);
+
+      if (album) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      }
+
+      Alert.alert('Thành công', 'Đã tải media về thiết bị');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error?.message || 'Không thể tải media');
+    } finally {
+      setIsDownloadingInfoMedia(false);
+      setTimeout(() => setInfoDownloadProgress(0), 200);
+    }
+  }, [getInfoMediaType, getInfoMediaUrl, infoMediaGalleryIndex, infoMediaItems, requestMediaSavePermission]);
+
+  const openInfoMediaBrowser = useCallback(() => {
+    setInfoMediaBrowserFilter('ALL');
+    setIsInfoMediaBrowserVisible(true);
+  }, []);
+
+  const liveMediaSignature = useMemo(() => {
+    return messages
+      .filter((message) => {
+        if (message.isRecalled) return false;
+        const type = String(message.messageType || 'TEXT').toUpperCase();
+        return type === 'IMAGE' || type === 'VIDEO' || type === 'IMAGE_GROUP';
+      })
+      .map((message) => {
+        const attachmentCount = Array.isArray(message.attachments) ? message.attachments.length : 0;
+        return `${message.messageId}:${message.updatedAt || message.createdAt}:${message.content}:${attachmentCount}`;
+      })
+      .join('|');
+  }, [messages]);
+
+  useEffect(() => {
+    if (!isInfoPanelVisible && !isInfoMediaBrowserVisible) {
+      return;
+    }
+
+    const liveItems = normalizeInfoMediaItems(messages);
+    const recalledMessageIds = new Set(
+      messages
+        .filter((message) => message.isRecalled)
+        .map((message) => String(message.messageId ?? '').trim())
+        .filter((id) => id.length > 0)
+    );
+
+    if (liveItems.length === 0) {
+      if (recalledMessageIds.size === 0) {
+        return;
+      }
+
+      setInfoMediaItems((prev) => prev.filter((item: any) => {
+        const messageId = String(item?.messageId ?? item?.parentMessageId ?? '').trim();
+        return !messageId || !recalledMessageIds.has(messageId);
+      }));
+      return;
+    }
+
+    setInfoMediaItems((prev) => {
+      const merged = new Map<string, any>();
+      const buildKey = (item: any, idx: number) => String(item?.id ?? item?.messageId ?? `live-${idx}`);
+      const liveMessageIds = new Set(
+        liveItems
+          .map((item: any) => String(item?.messageId ?? '').trim())
+          .filter((id: string) => id.length > 0)
+      );
+
+      prev.forEach((item, idx) => {
+        const prevMessageId = String(item?.messageId ?? '').trim();
+        if (prevMessageId && recalledMessageIds.has(prevMessageId)) {
+          return;
+        }
+
+        if (prevMessageId && liveMessageIds.has(prevMessageId)) {
+          return;
+        }
+
+        merged.set(buildKey(item, idx), item);
+      });
+
+      liveItems.forEach((item, idx) => {
+        merged.set(buildKey(item, idx), {
+          ...merged.get(buildKey(item, idx)),
+          ...item,
+        });
+      });
+
+      return sortInfoMediaItems(Array.from(merged.values()));
+    });
+  }, [isInfoMediaBrowserVisible, isInfoPanelVisible, messages, normalizeInfoMediaItems, sortInfoMediaItems]);
+
+  useEffect(() => {
+    if (!isInfoPanelVisible || !conversationId || isAiConversation) {
+      return;
+    }
+
+    void fetchInfoMedia();
+  }, [conversationId, fetchInfoMedia, isAiConversation, isInfoPanelVisible, liveMediaSignature]);
+
+  const infoMediaBrowserItems = useMemo(() => {
+    return infoMediaItems.filter((item: any) => {
+      const mediaType = getInfoMediaType(item);
+      if (infoMediaBrowserFilter === 'ALL') return true;
+      if (infoMediaBrowserFilter === 'IMAGE') return mediaType === 'IMAGE';
+      return mediaType === 'VIDEO';
+    });
+  }, [getInfoMediaType, infoMediaBrowserFilter, infoMediaItems]);
+
+  const infoMediaPreviewItems = useMemo(() => infoMediaItems.slice(0, 4), [infoMediaItems]);
+
+  const handleViewOriginalMessageFromGallery = useCallback(() => {
+    const currentItem = infoMediaItems[infoMediaGalleryIndex];
+    const targetMessageId = String(currentItem?.messageId ?? '').trim();
+
+    closeInfoMediaGallery();
+    setIsInfoPanelVisible(false);
+
+    if (!targetMessageId) {
+      return;
+    }
+
+    setTimeout(() => {
+      void handleJumpToPinnedMessage(targetMessageId);
+    }, 180);
+  }, [closeInfoMediaGallery, handleJumpToPinnedMessage, infoMediaGalleryIndex, infoMediaItems]);
 
   const infoCurrentUserRole = infoMembers.find((m) => m.userId === currentUserId)?.role;
   const infoIsAdmin = infoCurrentUserRole === 'ADMIN';
@@ -1979,6 +2877,67 @@ export default function ChatDetailScreen() {
     void fetchPinnedMessages();
   }, [fetchPinnedMessages]);
 
+  useEffect(() => {
+    infoMediaItems.forEach((item, index) => {
+      const mediaType = getInfoMediaType(item);
+      if (mediaType !== 'VIDEO') {
+        return;
+      }
+
+      const mediaId = getInfoMediaId(item, index);
+      if (infoVideoThumbnailsByMediaId[mediaId]) {
+        return;
+      }
+
+      const mediaUrl = getInfoMediaUrl(item);
+      if (!mediaUrl || mediaUrl.startsWith('data:')) {
+        return;
+      }
+
+      if (infoVideoThumbGeneratingRef.current.has(mediaId)) {
+        return;
+      }
+
+      infoVideoThumbGeneratingRef.current.add(mediaId);
+      void generateVideoThumbnail(mediaUrl)
+        .then((thumbUri) => {
+          if (!thumbUri) {
+            return;
+          }
+
+          setInfoVideoThumbnailsByMediaId((prev) => {
+            if (prev[mediaId] === thumbUri) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [mediaId]: thumbUri,
+            };
+          });
+        })
+        .finally(() => {
+          infoVideoThumbGeneratingRef.current.delete(mediaId);
+        });
+    });
+  }, [generateVideoThumbnail, getInfoMediaId, getInfoMediaType, getInfoMediaUrl, infoMediaItems, infoVideoThumbnailsByMediaId]);
+
+  useEffect(() => {
+    if (!isInfoMediaGalleryVisible || infoMediaItems.length === 0) {
+      return;
+    }
+
+    const safeIndex = Math.max(0, Math.min(infoMediaGalleryStartIndex, infoMediaItems.length - 1));
+    setInfoMediaGalleryIndex(safeIndex);
+
+    requestAnimationFrame(() => {
+      infoMediaGalleryRef.current?.scrollToIndex({
+        index: safeIndex,
+        animated: false,
+      });
+    });
+  }, [infoMediaGalleryStartIndex, infoMediaItems.length, isInfoMediaGalleryVisible]);
+
   const renderOlderMessagesLoading = () => {
     if (!hasMoreOlder) {
       return null;
@@ -2320,6 +3279,8 @@ export default function ChatDetailScreen() {
 
       if (isVideoMsg) {
         const isLocalUri = item.content.startsWith('file://') || item.content.startsWith('content://');
+        const thumbUri = item.thumbnailUrl || videoThumbnailsByMessageId[String(item.messageId)];
+        const showUploadOverlay = isLocalUri && isUploading;
         return (
           <>
             {replyBlock}
@@ -2334,9 +3295,18 @@ export default function ChatDetailScreen() {
               delayLongPress={220}
             >
               <View style={styles.videoContainer}>
+                {thumbUri ? (
+                  <Image source={{ uri: thumbUri }} style={styles.videoThumbnailImage} resizeMode="cover" />
+                ) : null}
                 <View style={styles.videoPlayOverlay}>
                   <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
                 </View>
+                {showUploadOverlay ? (
+                  <View style={styles.mediaUploadingOverlay}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.mediaUploadingText}>{`${uploadProgress}%`}</Text>
+                  </View>
+                ) : null}
                 {item.videoDuration ? (
                   <View style={styles.videoDurationBadge}>
                     <Text style={styles.videoDurationText}>
@@ -3101,10 +4071,77 @@ export default function ChatDetailScreen() {
               {/* Message preview */}
               {forwardingMsg ? (
                 <View style={[styles.fwdPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <Ionicons name="return-up-forward-outline" size={14} color={colors.textSecondary} />
-                  <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                    {getReplySnippet(forwardingMsg)}
-                  </Text>
+                  {(() => {
+                    const forwardType = String(forwardingMsg.messageType || 'TEXT').toUpperCase();
+                    const imageUrls = getForwardAttachmentUrls(forwardingMsg);
+                    const isImage = forwardType === 'IMAGE';
+                    const isImageGroup = forwardType === 'IMAGE_GROUP';
+                    const isVideo = forwardType === 'VIDEO';
+                    const isFile = forwardType === 'FILE' || forwardType === 'MEDIA';
+                    const videoThumb = String(
+                      forwardingMsg.thumbnailUrl
+                      ?? videoThumbnailsByMessageId[String(forwardingMsg.messageId)]
+                      ?? ''
+                    ).trim();
+
+                    if (isImage || isImageGroup) {
+                      return (
+                        <>
+                          <View style={styles.fwdPreviewImageWrap}>
+                            {imageUrls.slice(0, 3).map((url, index) => (
+                              <Image
+                                key={`${url}-${index}`}
+                                source={{ uri: url }}
+                                style={styles.fwdPreviewImageThumb}
+                                resizeMode="cover"
+                              />
+                            ))}
+                          </View>
+                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                            {getForwardPreviewText(forwardingMsg)}
+                          </Text>
+                        </>
+                      );
+                    }
+
+                    if (isVideo) {
+                      return (
+                        <>
+                          <View style={styles.fwdPreviewVideoWrap}>
+                            {videoThumb ? <Image source={{ uri: videoThumb }} style={styles.fwdPreviewVideoThumb} resizeMode="cover" /> : null}
+                            <View style={styles.fwdPreviewVideoOverlay}>
+                              <Ionicons name="play" size={14} color="#FFFFFF" />
+                            </View>
+                          </View>
+                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                            {getForwardPreviewText(forwardingMsg)}
+                          </Text>
+                        </>
+                      );
+                    }
+
+                    if (isFile) {
+                      return (
+                        <>
+                          <View style={styles.fwdPreviewFileIcon}>
+                            <Ionicons name="document-text-outline" size={16} color="#0068FF" />
+                          </View>
+                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                            {getForwardPreviewText(forwardingMsg)}
+                          </Text>
+                        </>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <Ionicons name="return-up-forward-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
+                          {getForwardPreviewText(forwardingMsg)}
+                        </Text>
+                      </>
+                    );
+                  })()}
                 </View>
               ) : null}
               {/* Search */}
@@ -3118,14 +4155,7 @@ export default function ChatDetailScreen() {
                   onChangeText={setFwdSearch}
                   onFocus={() => {
                     if (fwdConversations.length === 0 && !fwdLoading) {
-                      setFwdLoading(true);
-                      chatService.getConversations?.()
-                        .then((res: any) => {
-                          const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
-                          setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
-                        })
-                        .catch(() => { })
-                        .finally(() => setFwdLoading(false));
+                      void loadForwardConversations(fwdSearch);
                     }
                   }}
                 />
@@ -3135,14 +4165,7 @@ export default function ChatDetailScreen() {
                 <TouchableOpacity
                   style={{ paddingVertical: 8, alignItems: 'center' }}
                   onPress={() => {
-                    setFwdLoading(true);
-                    chatService.getConversations?.()
-                      .then((res: any) => {
-                        const list: any[] = Array.isArray(res) ? res : (res?.data ?? res?.content ?? []);
-                        setFwdConversations(list.filter((c: any) => (c.conversationId || c.id) !== conversationId));
-                      })
-                      .catch(() => { })
-                      .finally(() => setFwdLoading(false));
+                    void loadForwardConversations(fwdSearch);
                   }}
                 >
                   <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh sách</Text>
@@ -3153,14 +4176,10 @@ export default function ChatDetailScreen() {
                 {fwdLoading ? (
                   <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
                 ) : (
-                  fwdConversations
-                    .filter((c: any) => {
-                      const name: string = c.conversationName || c.name || '';
-                      return name.toLowerCase().includes(fwdSearch.toLowerCase());
-                    })
-                    .map((c: any) => {
-                      const cId: string = c.conversationId || c.id;
-                      const cName: string = c.conversationName || c.name || 'Cuộc trò chuyện';
+                  filteredFwdConversations
+                    .map((c) => {
+                      const cId = c.id;
+                      const cName = c.name || 'Cuộc trò chuyện';
                       const isSelected = fwdSelected.has(cId);
                       return (
                         <TouchableOpacity
@@ -3175,7 +4194,19 @@ export default function ChatDetailScreen() {
                           }}
                         >
                           <View style={styles.fwdItemAvatar}>
-                            <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
+                            {c.type === 'AI' ? (
+                              <View style={[styles.fwdSpecialAvatar, styles.fwdAiAvatar]}>
+                                <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                              </View>
+                            ) : c.type === 'CLOUD' ? (
+                              <View style={[styles.fwdSpecialAvatar, styles.fwdCloudAvatar]}>
+                                <Ionicons name="folder-open" size={16} color="#FFFFFF" />
+                              </View>
+                            ) : c.avatarUrl ? (
+                              <Image source={getAvatarSource(c.avatarUrl)} style={styles.fwdItemAvatarImage} resizeMode="cover" />
+                            ) : (
+                              <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
+                            )}
                           </View>
                           <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{cName}</Text>
                           <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
@@ -3200,12 +4231,7 @@ export default function ChatDetailScreen() {
                     if (!forwardingMsg || fwdSelected.size === 0) return;
                     setFwdSending(true);
                     const sendPromises = Array.from(fwdSelected).map((cId) =>
-                      chatService.sendMessage(cId, {
-                        content: forwardingMsg.content || '',
-                        messageType: forwardingMsg.messageType || 'TEXT',
-                        attachments: [],
-                        forwardedFromMessageId: forwardingMsg.messageId,
-                      }).catch(() => { })
+                      chatService.sendMessage(cId, buildForwardPayload(forwardingMsg)).catch(() => { })
                     );
                     await Promise.all(sendPromises);
                     setFwdSending(false);
@@ -3774,7 +4800,12 @@ export default function ChatDetailScreen() {
                           </View>
                           <View style={styles.infoPanelPinnedContent}>
                             <Text style={[styles.infoPanelPinnedSender, { color: '#0068FF' }]} numberOfLines={1}>{pin.senderName}</Text>
-                            <Text style={[styles.infoPanelPinnedText, { color: colors.text }]} numberOfLines={2}>{pin.content}</Text>
+                            <View style={styles.infoPanelPinnedPreviewRow}>
+                              <Text style={[styles.infoPanelPinnedText, { color: colors.text }]} numberOfLines={2}>{getPinnedPreviewText(pin)}</Text>
+                              {getPinnedPreviewThumb(pin) ? (
+                                <Image source={{ uri: getPinnedPreviewThumb(pin) }} style={styles.infoPanelPinnedThumb} resizeMode="cover" />
+                              ) : null}
+                            </View>
                           </View>
                           <TouchableOpacity onPress={() => { void handleUnpinFromPinnedList(pin.messageId); }}>
                             <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
@@ -3803,26 +4834,44 @@ export default function ChatDetailScreen() {
                     {infoMediaItems.length === 0 ? (
                       <Text style={[styles.infoPanelEmpty, { color: colors.textSecondary }]}>Chưa có ảnh hoặc video</Text>
                     ) : (
-                      <View style={styles.infoPanelMediaGrid}>
-                        {infoMediaItems.slice(0, 9).map((m: any, i: number) => (
+                      <>
+                        <View style={styles.infoPanelMediaGridHeader}>
+                          <Text style={[styles.infoPanelMediaGridHint, { color: colors.textSecondary }]}>Tổng {infoMediaItems.length} ảnh/video</Text>
+                          <TouchableOpacity style={styles.infoPanelMediaExpandBtn} onPress={openInfoMediaBrowser}>
+                            <Text style={styles.infoPanelMediaExpandBtnText}>Chi tiết</Text>
+                            <Ionicons name="arrow-forward" size={14} color="#0068FF" />
+                          </TouchableOpacity>
+                        </View>
+                        <View style={styles.infoPanelMediaGrid}>
+                          {infoMediaPreviewItems.map((m: any, i: number) => (
                           <TouchableOpacity
-                            key={m.id || i}
+                            key={`${getInfoMediaId(m, i)}-${m?.content ?? ''}-${i}`}
                             style={styles.infoPanelMediaThumb}
-                            onPress={() => {
-                              if (m.messageType === 'IMAGE') setInfoSelectedImage(m.content);
-                              else if (m.messageType === 'VIDEO') setInfoSelectedImage(null);
-                            }}
+                            onPress={() => handleOpenInfoMediaGallery(i)}
                           >
                             {m.messageType === 'IMAGE' ? (
                               <Image source={{ uri: m.content }} style={styles.infoPanelMediaThumbImg} resizeMode="cover" />
                             ) : (
-                              <View style={[styles.infoPanelMediaThumbImg, { backgroundColor: '#1A1A2E', justifyContent: 'center', alignItems: 'center' }]}>
-                                <Ionicons name="play-circle" size={28} color="rgba(255,255,255,0.7)" />
+                              <View style={[styles.infoPanelMediaThumbImg, { backgroundColor: '#101010', justifyContent: 'center', alignItems: 'center' }]}>
+                                {(() => {
+                                  const mediaId = getInfoMediaId(m, i);
+                                  const thumbUri = String(m?.thumbnailUrl ?? infoVideoThumbnailsByMediaId[mediaId] ?? '').trim();
+
+                                  if (!thumbUri) {
+                                    return null;
+                                  }
+
+                                  return <Image source={{ uri: thumbUri }} style={styles.infoPanelMediaThumbImg} resizeMode="cover" />;
+                                })()}
+                                <View style={styles.infoPanelMediaPlayOverlay}>
+                                  <Ionicons name="play" size={14} color="#FFFFFF" />
+                                </View>
                               </View>
                             )}
                           </TouchableOpacity>
-                        ))}
-                      </View>
+                          ))}
+                        </View>
+                      </>
                     )}
                   </View>
                 )}
@@ -3873,22 +4922,228 @@ export default function ChatDetailScreen() {
             </ScrollView>
           </SafeAreaView>
 
-          {/* Lightbox inside info panel */}
+          {/* Media gallery inside info panel */}
           <Modal
-            visible={!!infoSelectedImage}
+            visible={isInfoMediaGalleryVisible}
             transparent
             animationType="fade"
-            onRequestClose={() => setInfoSelectedImage(null)}
+            onRequestClose={closeInfoMediaGallery}
           >
-            <View style={styles.fullscreenImageBackdrop}>
-              <TouchableOpacity style={styles.fullscreenImageClose} onPress={() => setInfoSelectedImage(null)}>
-                <Ionicons name="close" size={30} color="#FFFFFF" />
-              </TouchableOpacity>
-              {infoSelectedImage ? (
-                <Image source={{ uri: infoSelectedImage }} style={styles.fullscreenImage} resizeMode="contain" />
-              ) : null}
+            <View style={styles.infoMediaGalleryBackdrop}>
+              <View style={styles.infoMediaGalleryTopBar}>
+                <TouchableOpacity onPress={closeInfoMediaGallery}>
+                  <Text style={styles.infoMediaGalleryCloseText}>X</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setIsInfoGalleryMenuVisible(true)}>
+                  <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              <FlatList
+                ref={infoMediaGalleryRef}
+                key={`info-gallery-${infoMediaGalleryStartIndex}-${infoMediaItems.length}`}
+                data={infoMediaItems}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                initialScrollIndex={Math.max(0, Math.min(infoMediaGalleryStartIndex, Math.max(infoMediaItems.length - 1, 0)))}
+                keyExtractor={(item: any, index) => String(item?.id ?? `${item?.messageId ?? 'media'}-${item?.content ?? ''}-${index}`)}
+                getItemLayout={(_, index) => ({
+                  length: SCREEN_WIDTH,
+                  offset: SCREEN_WIDTH * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(event) => {
+                  const nextIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                  if (!Number.isNaN(nextIndex)) {
+                    setInfoMediaGalleryIndex(Math.max(0, Math.min(nextIndex, infoMediaItems.length - 1)));
+                    setInfoGalleryPlayingMediaId(null);
+                    setIsInfoGalleryVideoLoading(false);
+                    setIsInfoGalleryMenuVisible(false);
+                  }
+                }}
+                onScrollToIndexFailed={(info) => {
+                  infoMediaGalleryRef.current?.scrollToOffset({
+                    offset: info.averageItemLength * info.index,
+                    animated: false,
+                  });
+                }}
+                renderItem={({ item, index }) => {
+                  const mediaType = getInfoMediaType(item);
+                  const mediaUrl = getInfoMediaUrl(item);
+                  const mediaId = getInfoMediaId(item, index);
+                  const isVideo = mediaType === 'VIDEO';
+                  const isPlayingVideo = infoGalleryPlayingMediaId === mediaId;
+                  const fallbackThumb = String(item?.thumbnailUrl ?? infoVideoThumbnailsByMediaId[mediaId] ?? '').trim();
+
+                  return (
+                    <View style={styles.infoMediaGalleryItem}>
+                      {isVideo ? (
+                        isPlayingVideo ? (
+                          <View style={styles.infoMediaGalleryVideoWrap}>
+                            <Video
+                              source={{ uri: mediaUrl }}
+                              style={styles.infoMediaGalleryVideo}
+                              useNativeControls
+                              shouldPlay
+                              resizeMode={ResizeMode.CONTAIN}
+                              onLoadStart={() => setIsInfoGalleryVideoLoading(true)}
+                              onReadyForDisplay={() => setIsInfoGalleryVideoLoading(false)}
+                              onError={() => setIsInfoGalleryVideoLoading(false)}
+                            />
+                            {isInfoGalleryVideoLoading ? (
+                              <View style={styles.infoMediaGalleryVideoLoadingOverlay}>
+                                <ActivityIndicator size="large" color="#FFFFFF" />
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            style={styles.infoMediaGalleryVideoPosterWrap}
+                            onPress={() => handlePlayInfoGalleryVideo(item, index)}
+                          >
+                            {fallbackThumb ? (
+                              <Image source={{ uri: fallbackThumb }} style={styles.infoMediaGalleryImage} resizeMode="contain" />
+                            ) : (
+                              <View style={styles.infoMediaGalleryVideoPlaceholder} />
+                            )}
+                            <View style={styles.infoMediaGalleryVideoPlayButton}>
+                              <Ionicons name="play" size={28} color="#FFFFFF" />
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      ) : (
+                        <Image source={{ uri: mediaUrl }} style={styles.infoMediaGalleryImage} resizeMode="contain" />
+                      )}
+                    </View>
+                  );
+                }}
+              />
+
+              <Modal
+                visible={isInfoGalleryMenuVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setIsInfoGalleryMenuVisible(false)}
+              >
+                <Pressable style={styles.infoMediaActionSheetBackdrop} onPress={() => setIsInfoGalleryMenuVisible(false)}>
+                  <Pressable style={styles.infoMediaActionSheet} onPress={(e) => e.stopPropagation()}>
+                    <TouchableOpacity
+                      style={styles.infoMediaActionSheetItem}
+                      onPress={() => {
+                        setIsInfoGalleryMenuVisible(false);
+                        void handleDownloadInfoGalleryCurrent();
+                      }}
+                    >
+                      <Text style={styles.infoMediaActionSheetItemText}>Tải về</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.infoMediaActionSheetItem}
+                      onPress={() => {
+                        setIsInfoGalleryMenuVisible(false);
+                        handleViewOriginalMessageFromGallery();
+                      }}
+                    >
+                      <Text style={styles.infoMediaActionSheetItemText}>Xem tin nhắn gốc</Text>
+                    </TouchableOpacity>
+                  </Pressable>
+                </Pressable>
+              </Modal>
             </View>
           </Modal>
+        </Modal>
+
+        <Modal visible={isJumpingToMessage || isDownloadingInfoMedia} transparent animationType="fade">
+          <View style={styles.globalBusyOverlay}>
+            <View style={styles.globalBusyCard}>
+              {isDownloadingInfoMedia ? (
+                <>
+                  <View style={styles.globalProgressTrack}>
+                    <View style={[styles.globalProgressFill, { width: `${Math.max(0, Math.min(100, infoDownloadProgress))}%` }]} />
+                  </View>
+                  <Text style={styles.globalBusyPercent}>{`${Math.max(0, Math.min(100, infoDownloadProgress))}%`}</Text>
+                </>
+              ) : (
+                <ActivityIndicator size="large" color="#FFFFFF" />
+              )}
+              <Text style={styles.globalBusyText}>
+                {isDownloadingInfoMedia ? 'Đang tải media...' : 'Đang tải đoạn hội thoại...'}
+              </Text>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={isInfoMediaBrowserVisible}
+          animationType="slide"
+          onRequestClose={() => setIsInfoMediaBrowserVisible(false)}
+        >
+          <SafeAreaView style={styles.infoMediaBrowserContainer}>
+            <View style={styles.infoMediaBrowserHeader}>
+              <TouchableOpacity onPress={() => setIsInfoMediaBrowserVisible(false)}>
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.infoMediaBrowserTitle}>Ảnh, video</Text>
+              <View style={{ width: 24 }} />
+            </View>
+
+            <View style={styles.infoMediaBrowserFilterRow}>
+              <TouchableOpacity
+                style={[styles.infoMediaBrowserFilterBtn, infoMediaBrowserFilter === 'ALL' && styles.infoMediaBrowserFilterBtnActive]}
+                onPress={() => setInfoMediaBrowserFilter('ALL')}
+              >
+                <Text style={[styles.infoMediaBrowserFilterText, infoMediaBrowserFilter === 'ALL' && styles.infoMediaBrowserFilterTextActive]}>Tất cả</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.infoMediaBrowserFilterBtn, infoMediaBrowserFilter === 'IMAGE' && styles.infoMediaBrowserFilterBtnActive]}
+                onPress={() => setInfoMediaBrowserFilter('IMAGE')}
+              >
+                <Text style={[styles.infoMediaBrowserFilterText, infoMediaBrowserFilter === 'IMAGE' && styles.infoMediaBrowserFilterTextActive]}>Ảnh</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.infoMediaBrowserFilterBtn, infoMediaBrowserFilter === 'VIDEO' && styles.infoMediaBrowserFilterBtnActive]}
+                onPress={() => setInfoMediaBrowserFilter('VIDEO')}
+              >
+                <Text style={[styles.infoMediaBrowserFilterText, infoMediaBrowserFilter === 'VIDEO' && styles.infoMediaBrowserFilterTextActive]}>Video</Text>
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={infoMediaBrowserItems}
+              keyExtractor={(item: any, index) => String(item?.id ?? `${item?.messageId ?? 'media'}-${item?.content ?? ''}-${index}`)}
+              numColumns={3}
+              contentContainerStyle={styles.infoMediaBrowserGrid}
+              columnWrapperStyle={styles.infoMediaBrowserRow}
+              renderItem={({ item, index }) => {
+                const mediaType = getInfoMediaType(item);
+                const mediaId = getInfoMediaId(item, index);
+                const thumbUri = String(item?.thumbnailUrl ?? infoVideoThumbnailsByMediaId[mediaId] ?? '').trim();
+                return (
+                  <TouchableOpacity
+                    style={styles.infoMediaBrowserThumb}
+                    onPress={() => {
+                      setIsInfoMediaBrowserVisible(false);
+                      const originalIndex = infoMediaItems.findIndex((m) => String(getInfoMediaId(m)) === String(getInfoMediaId(item, index)));
+                      handleOpenInfoMediaGallery(originalIndex >= 0 ? originalIndex : 0);
+                    }}
+                  >
+                    {mediaType === 'IMAGE' ? (
+                      <Image source={{ uri: getInfoMediaUrl(item) }} style={styles.infoMediaBrowserThumbImage} resizeMode="cover" />
+                    ) : (
+                      <>
+                        {thumbUri ? <Image source={{ uri: thumbUri }} style={styles.infoMediaBrowserThumbImage} resizeMode="cover" /> : null}
+                        <View style={styles.infoMediaBrowserThumbOverlay}>
+                          <Ionicons name="play" size={20} color="#FFFFFF" />
+                        </View>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={<Text style={styles.infoMediaBrowserEmpty}>Không có media</Text>}
+            />
+          </SafeAreaView>
         </Modal>
 
         <Modal
@@ -4534,6 +5789,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden' as const,
   },
+  videoThumbnailImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   videoPlayOverlay: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -4878,6 +6138,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     flex: 1,
   },
+  fwdPreviewImageWrap: {
+    flexDirection: 'row',
+    gap: 4,
+    flexShrink: 0,
+  },
+  fwdPreviewImageThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+  },
+  fwdPreviewVideoWrap: {
+    width: 44,
+    height: 36,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#1F2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  fwdPreviewVideoThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  fwdPreviewVideoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fwdPreviewFileIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,104,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   fwdSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4915,10 +6214,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
+  fwdSpecialAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fwdAiAvatar: {
+    backgroundColor: '#0068FF',
+  },
+  fwdCloudAvatar: {
+    backgroundColor: '#00A86B',
+  },
   fwdItemAvatarText: {
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  fwdItemAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
   },
   fwdItemName: {
     flex: 1,
@@ -5649,6 +6966,19 @@ const styles = StyleSheet.create({
   infoPanelPinnedText: {
     fontSize: 13,
     marginTop: 2,
+    flex: 1,
+  },
+  infoPanelPinnedPreviewRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoPanelPinnedThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    flexShrink: 0,
   },
   infoPanelMediaGrid: {
     flexDirection: 'row',
@@ -5656,8 +6986,28 @@ const styles = StyleSheet.create({
     gap: 3,
     marginTop: 8,
   },
+  infoPanelMediaGridHeader: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  infoPanelMediaGridHint: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  infoPanelMediaExpandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  infoPanelMediaExpandBtnText: {
+    color: '#0068FF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   infoPanelMediaThumb: {
-    width: '31.5%',
+    width: '23%',
     aspectRatio: 1,
     borderRadius: 6,
     overflow: 'hidden',
@@ -5665,6 +7015,219 @@ const styles = StyleSheet.create({
   infoPanelMediaThumbImg: {
     width: '100%',
     height: '100%',
+  },
+  infoPanelMediaPlayOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.26)',
+  },
+  infoMediaGalleryBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,1)',
+  },
+  infoMediaGalleryTopBar: {
+    position: 'absolute',
+    top: 54,
+    left: 16,
+    right: 16,
+    zIndex: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  infoMediaGalleryCloseText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    lineHeight: 24,
+    fontWeight: '700',
+  },
+  infoMediaGalleryItem: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoMediaGalleryVideoWrap: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  infoMediaGalleryImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  infoMediaGalleryVideo: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  infoMediaGalleryVideoLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  infoMediaGalleryVideoPosterWrap: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoMediaGalleryVideoPlaceholder: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: '#0F0F0F',
+  },
+  infoMediaGalleryVideoPlayButton: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  infoMediaGalleryVideoPlayButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoMediaActionSheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 92,
+    paddingRight: 16,
+  },
+  infoMediaActionSheet: {
+    width: 210,
+    borderRadius: 10,
+    backgroundColor: '#121212',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  infoMediaActionSheetItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+  infoMediaActionSheetItemText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  globalBusyOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  globalBusyCard: {
+    minWidth: 190,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center',
+    gap: 10,
+  },
+  globalProgressTrack: {
+    width: 180,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    overflow: 'hidden',
+  },
+  globalProgressFill: {
+    height: '100%',
+    backgroundColor: '#4DA3FF',
+  },
+  globalBusyPercent: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  globalBusyText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  infoMediaBrowserContainer: {
+    flex: 1,
+    backgroundColor: '#0B0D11',
+  },
+  infoMediaBrowserHeader: {
+    height: 56,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+  infoMediaBrowserTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  infoMediaBrowserFilterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  infoMediaBrowserFilterBtn: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  infoMediaBrowserFilterBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  infoMediaBrowserFilterText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  infoMediaBrowserFilterTextActive: {
+    color: '#FFFFFF',
+  },
+  infoMediaBrowserGrid: {
+    paddingHorizontal: 4,
+    paddingBottom: 20,
+  },
+  infoMediaBrowserRow: {
+    gap: 4,
+    marginBottom: 4,
+  },
+  infoMediaBrowserThumb: {
+    flex: 1,
+    aspectRatio: 1,
+    backgroundColor: '#12161E',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  infoMediaBrowserThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  infoMediaBrowserThumbOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+  },
+  infoMediaBrowserEmpty: {
+    color: 'rgba(255,255,255,0.75)',
+    textAlign: 'center',
+    marginTop: 24,
+    fontSize: 13,
   },
   infoPanelFileRow: {
     flexDirection: 'row',

@@ -1,5 +1,6 @@
 import { chatService } from '@/services/chatService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import { COLORS } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -9,6 +10,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  RefreshControl,
   StatusBar,
   StyleSheet,
   Text,
@@ -268,6 +270,7 @@ export default function ChatScreen() {
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ChatItem[]>(FALLBACK_ITEMS);
 
@@ -282,8 +285,11 @@ export default function ChatScreen() {
     );
   }, [items, query]);
 
-  const fetchConversations = async () => {
-    setLoading(true);
+  const fetchConversations = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -305,19 +311,30 @@ export default function ChatScreen() {
       setError('Không thể tải danh sách chat, đang hiển thị dữ liệu mẫu.');
       setItems(withDefaultConversations(FALLBACK_ITEMS));
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
-  };
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchConversations({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchConversations]);
 
   useEffect(() => {
-    fetchConversations();
-  }, []);
+    void fetchConversations();
+  }, [fetchConversations]);
 
   // Re-fetch khi quay lại tab (giống Web: luôn đồng bộ conversation list)
   useFocusEffect(
     useCallback(() => {
-      fetchConversations();
-    }, [])
+      void fetchConversations();
+    }, [fetchConversations])
   );
 
   // Subscribe STOMP friend-events → re-fetch khi có ACCEPTED (giống Web: ChatDashboardLegacy)
@@ -533,6 +550,14 @@ export default function ChatScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={COLORS.primary}
+                colors={[COLORS.primary]}
+              />
+            }
           />
         </>
       )}
