@@ -1978,7 +1978,23 @@ export default function ChatDetailScreen() {
               await loadInitialMessages(currentUserId, true);
             } catch (error) {
               console.error('Failed to recall message:', error);
-              Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn');
+              const axiosError = error as AxiosError<{
+                message?: string;
+                error?: { message?: string };
+              }>;
+              const backendMessage =
+                axiosError.response?.data?.message ||
+                axiosError.response?.data?.error?.message ||
+                axiosError.message ||
+                '';
+              const normalizedMessage = backendMessage.toLowerCase();
+              const isRecallTimeLimitError = normalizedMessage.includes('recall time limit')
+
+              if (isRecallTimeLimitError) {
+                Alert.alert('Lỗi', 'Bạn chỉ có thể thu hồi tin nhắn trong 60 phút sau khi gửi');
+              } else {
+                Alert.alert('Lỗi', 'Không thể thu hồi tin nhắn');
+              }
             }
           },
         },
@@ -2165,8 +2181,17 @@ export default function ChatDetailScreen() {
     const normalized: any[] = [];
 
     items.forEach((item: any, index: number) => {
+      if (item?.isRecalled) {
+        return;
+      }
+
       const messageType = String(item?.messageType ?? '').toUpperCase();
       if (messageType === 'IMAGE' || messageType === 'VIDEO') {
+        const mediaUrl = String(item?.content ?? item?.mediaUrl ?? item?.url ?? '').trim();
+        if (!mediaUrl) {
+          return;
+        }
+
         normalized.push(item);
         return;
       }
@@ -2410,7 +2435,22 @@ export default function ChatDetailScreen() {
     }
 
     const liveItems = normalizeInfoMediaItems(messages);
+    const recalledMessageIds = new Set(
+      messages
+        .filter((message) => message.isRecalled)
+        .map((message) => String(message.messageId ?? '').trim())
+        .filter((id) => id.length > 0)
+    );
+
     if (liveItems.length === 0) {
+      if (recalledMessageIds.size === 0) {
+        return;
+      }
+
+      setInfoMediaItems((prev) => prev.filter((item: any) => {
+        const messageId = String(item?.messageId ?? item?.parentMessageId ?? '').trim();
+        return !messageId || !recalledMessageIds.has(messageId);
+      }));
       return;
     }
 
@@ -2425,6 +2465,10 @@ export default function ChatDetailScreen() {
 
       prev.forEach((item, idx) => {
         const prevMessageId = String(item?.messageId ?? '').trim();
+        if (prevMessageId && recalledMessageIds.has(prevMessageId)) {
+          return;
+        }
+
         if (prevMessageId && liveMessageIds.has(prevMessageId)) {
           return;
         }
