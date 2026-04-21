@@ -44,6 +44,10 @@ interface UseChatSocketOptions {
   onTyping?: (event: TypingEvent) => void;
   onReadReceipt?: (event: ReadReceiptEvent) => void;
   onConnectionStateChange?: (state: ChatSocketConnectionState) => void;
+  onConversationEvent?: (event: Record<string, unknown>) => void;
+  onGroupEvent?: (event: Record<string, unknown>) => void;
+  onCallSignal?: (event: Record<string, unknown>) => void;
+  userId?: string | null;
   debug?: boolean;
 }
 
@@ -89,6 +93,10 @@ export function useChatSocket(options: UseChatSocketOptions) {
     onTyping,
     onReadReceipt,
     onConnectionStateChange,
+    onConversationEvent,
+    onGroupEvent,
+    onCallSignal,
+    userId,
     debug = false,
   } = options;
 
@@ -99,6 +107,13 @@ export function useChatSocket(options: UseChatSocketOptions) {
   const onTypingRef = useRef(onTyping);
   const onReadReceiptRef = useRef(onReadReceipt);
   const onConnectionStateChangeRef = useRef(onConnectionStateChange);
+  const onConversationEventRef = useRef(onConversationEvent);
+  const onGroupEventRef = useRef(onGroupEvent);
+  const onCallSignalRef = useRef(onCallSignal);
+
+  useEffect(() => { onConversationEventRef.current = onConversationEvent; }, [onConversationEvent]);
+  useEffect(() => { onGroupEventRef.current = onGroupEvent; }, [onGroupEvent]);
+  useEffect(() => { onCallSignalRef.current = onCallSignal; }, [onCallSignal]);
 
   const [connectionState, setConnectionState] = useState<ChatSocketConnectionState>('DISCONNECTED');
   const [lastError, setLastError] = useState<string | null>(null);
@@ -165,8 +180,35 @@ export function useChatSocket(options: UseChatSocketOptions) {
       }
     });
 
-    subscriptionsRef.current = [messageSub, typingSub, readSub];
-  }, [clearSubscriptions, conversationId]);
+    const subs: StompSubscription[] = [messageSub, typingSub, readSub];
+
+    // Subscribe to user-level conversation events (e.g. MESSAGE_LOCAL_DELETE from another device)
+    if (userId) {
+      const convEventSub = client.subscribe(`/topic/conversation-events/${userId}`, (message) => {
+        const payload = parseJsonBody<Record<string, unknown>>(message);
+        if (payload) {
+          onConversationEventRef.current?.(payload);
+        }
+      });
+
+      const groupEventSub = client.subscribe(`/topic/group-events/${userId}`, (message) => {
+        const payload = parseJsonBody<Record<string, unknown>>(message);
+        if (payload) {
+          onGroupEventRef.current?.(payload);
+        }
+      });
+
+      const callSignalSub = client.subscribe(`/user/queue/call-signal`, (message) => {
+        const payload = parseJsonBody<Record<string, unknown>>(message);
+        if (payload) {
+          onCallSignalRef.current?.(payload);
+        }
+      });
+      subs.push(convEventSub, groupEventSub, callSignalSub);
+    }
+
+    subscriptionsRef.current = subs;
+  }, [clearSubscriptions, conversationId, userId]);
 
   const resolveToken = useCallback(async (): Promise<string | null> => {
     if (token) {
@@ -323,6 +365,24 @@ export function useChatSocket(options: UseChatSocketOptions) {
 
   const isConnected = useMemo(() => connectionState === 'CONNECTED', [connectionState]);
 
+  const sendCallSignal = useCallback((payload: Record<string, unknown>) => {
+    const client = clientRef.current;
+    if (!client || !client.connected) {
+      return false;
+    }
+
+    try {
+      client.publish({
+        destination: '/app/call/signal',
+        body: JSON.stringify(payload),
+      });
+      return true;
+    } catch (error) {
+      console.error('[WebRTC] Failed to send call signal via STOMP:', error);
+      return false;
+    }
+  }, []);
+
   return {
     connectionState,
     isConnected,
@@ -331,5 +391,6 @@ export function useChatSocket(options: UseChatSocketOptions) {
     disconnect,
     sendTyping,
     sendReadReceipt,
+    sendCallSignal,
   };
 }

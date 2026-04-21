@@ -153,12 +153,22 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
 
   const messageId = toStringOrEmpty(rawMessageId) || `tmp-${Date.now()}`;
   const senderId = toStringOrEmpty(rawSenderId);
-  const content = toStringOrEmpty(payload.content ?? payload.message);
+  let content = toStringOrEmpty(payload.content ?? payload.message);
   const messageType = toStringOrEmpty(payload.messageType ?? payload.type ?? 'TEXT').toUpperCase();
   const isRecalled = toBoolean(payload.isRecalled);
   const isEdited = toBoolean(payload.isEdited);
 
-  if (!senderId || (!content && !isRecalled)) {
+  const MEDIA_TYPES = ['IMAGE', 'IMAGE_GROUP', 'VIDEO', 'FILE', 'MEDIA', 'VOICE', 'STICKER', 'SHARE_CONTACT', 'LINK'];
+  const hasMedia = MEDIA_TYPES.includes(messageType)
+    || (Array.isArray(payload.attachments) && (payload.attachments as unknown[]).length > 0)
+    || Boolean(payload.fileName);
+
+  // Fallback to s3Url or fileUrl for media types where content is empty
+  if (hasMedia && !content) {
+    content = toStringOrEmpty(payload.s3Url ?? payload.fileUrl ?? payload.mediaUrl);
+  }
+
+  if (!senderId || (!content && !isRecalled && !hasMedia)) {
     return null;
   }
 
@@ -190,12 +200,14 @@ export const mapChatPayloadToUiMessage = (input: unknown): ChatUiMessage | null 
     forwardedFromSenderName: toStringOrEmpty(payload.forwardedFromSenderName) || undefined,
     attachments: Array.isArray(payload.attachments)
       ? (payload.attachments as Array<Record<string, unknown>>).map((att) => ({
-          url: toStringOrEmpty(att.url),
+          url: toStringOrEmpty(att.url ?? att.content ?? att.mediaUrl ?? att.fileUrl),
           fileName: toStringOrEmpty(att.fileName) || undefined,
           fileSize: typeof att.fileSize === 'number' ? att.fileSize : undefined,
           thumbnailUrl: toStringOrEmpty(att.thumbnailUrl) || undefined,
-        }))
-      : undefined,
+        })).filter((att) => att.url)
+      : Array.isArray(payload.mediaUrls)
+        ? (payload.mediaUrls as string[]).map((url) => ({ url })).filter((att) => att.url)
+        : undefined,
   };
 };
 

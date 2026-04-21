@@ -1,7 +1,9 @@
 import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
+import { usePresence } from '@/context/PresenceContext';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import { chatFileService, type PickedMedia } from '@/services/chatFileService';
+import api from '@/services/api';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
@@ -48,6 +50,39 @@ import {
   type ChatUiMessage,
   type ChatUiReaction,
 } from '../services/chatMessageAdapter';
+import { webrtcService } from '../services/webrtcService';
+import { CallOverlay } from '../components/CallOverlay';
+
+// ── Local-delete persistence (mirrors Web's localStorage approach) ──────────
+const LOCAL_DELETED_STORAGE_KEY = 'fruvia.chat.deleted-local.v1';
+
+const getDeletedStorageKey = (conversationId: string, userId: string = 'anonymous'): string =>
+  `${LOCAL_DELETED_STORAGE_KEY}:${userId}:${conversationId}`;
+
+const readDeletedMessageIds = async (conversationId: string, userId?: string): Promise<Set<string>> => {
+  try {
+    const key = getDeletedStorageKey(conversationId, userId);
+    const raw = await SecureStore.getItemAsync(key);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return new Set(parsed.map((id: unknown) => String(id)).filter(Boolean));
+  } catch (error) {
+    console.warn('[LocalDelete] Failed to read:', error);
+  }
+  return new Set();
+};
+
+const addDeletedMessageId = async (conversationId: string, userId: string | undefined, messageId: string): Promise<Set<string>> => {
+  const next = await readDeletedMessageIds(conversationId, userId);
+  next.add(String(messageId));
+  try {
+    const key = getDeletedStorageKey(conversationId, userId);
+    await SecureStore.setItemAsync(key, JSON.stringify([...next]));
+  } catch (error) {
+    console.warn('[LocalDelete] Failed to write:', error);
+  }
+  return next;
+};
 
 interface Message {
   messageId: string;
@@ -245,6 +280,7 @@ export default function ChatDetailScreen() {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const [inputText, setInputText] = useState('');
+  const locallyDeletedMessageIdsRef = useRef<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState(String(id ?? ''));
   const [conversationDisplayName, setConversationDisplayName] = useState(String(name ?? ''));
@@ -261,8 +297,75 @@ export default function ChatDetailScreen() {
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [isSearchingLoading, setIsSearchingLoading] = useState(false);
+
+  const handleSearchMessages = useCallback(async (q: string) => {
+    if (!q.trim() || !conversationId) return;
+    setIsSearchingLoading(true);
+    try {
+      // API: /search/messages?q=...&conversationId=...
+      const res = await api.get(`/search/messages?q=${encodeURIComponent(q.trim())}&conversationId=${conversationId}`);
+      const resData = chatService.unwrapApiPayload<any>(res);
+      const content = resData?.content ?? (Array.isArray(resData) ? resData : null);
+      if (content && Array.isArray(content) && content.length > 0) {
+        // Map search results to UI message format
+        const mapped = content.map((item: any) => {
+          // Backend trả về SearchResult<MessageDocument> -> trường 'document'
+          const doc = item?.document ?? item;
+          return mapChatPayloadToUiMessage(doc);
+        });
+        setSearchResults(mapped.filter(Boolean));
+      } else {
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Search failed:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearchingLoading(false);
+    }
+  }, [conversationId]);
+
+  const handleJumpToMessage = useCallback(async (msgId: string) => {
+    if (!msgId || !conversationId) return;
+    
+    // 1. Try to find in the currently loaded list
+    const index = messages.findIndex(m => String(m.messageId) === String(msgId));
+    if (index !== -1) {
+      setIsSearching(false);
+      setSearchQuery('');
+      setSearchResults([]);
+      setHighlightedMessageId(msgId);
+      flatListRef.current?.scrollToIndex({ index, animated: true });
+      setTimeout(() => setHighlightedMessageId(null), 2500);
+      return;
+    }
+
+    // If not found, we might need a jump-to API or load more
+    // For now, let's just close search and show an alert if not found
+    alert('Tin nhắn nằm trong quá khứ xa, vui lòng cuộn lên để tìm.');
+  }, [messages]);
+
+  const toggleSearchMode = () => {
+    setIsSearching(!isSearching);
+    if (isSearching) {
+      setSearchQuery('');
+      setSearchResults([]);
+    }
+  };
+
   const [pendingMediaList, setPendingMediaList] = useState<PickedMedia[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  const filterDeletedMessages = useCallback((msgs: Message[]) => {
+    const deletedSet = locallyDeletedMessageIdsRef.current;
+    if (!deletedSet || deletedSet.size === 0) return msgs;
+    const filtered = msgs.filter((m) => !deletedSet.has(String(m.messageId)));
+    return filtered;
+  }, []);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCurrentIndex, setUploadCurrentIndex] = useState(0);
   const [videoThumbnailsByMessageId, setVideoThumbnailsByMessageId] = useState<Record<string, string>>({});
@@ -424,11 +527,15 @@ export default function ChatDetailScreen() {
     const mergedById = new Map<string, Message>();
 
     base.forEach((message) => {
-      mergedById.set(String(message.messageId), message);
+      if (!locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+        mergedById.set(String(message.messageId), message);
+      }
     });
 
     incoming.forEach((message) => {
-      mergedById.set(String(message.messageId), message);
+      if (!locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+        mergedById.set(String(message.messageId), message);
+      }
     });
 
     return sortMessages(Array.from(mergedById.values()));
@@ -457,6 +564,9 @@ export default function ChatDetailScreen() {
 
   const appendOrUpdateMessage = useCallback((message: ChatUiMessage) => {
     logChatDebug('appendOrUpdateMessage', message);
+    if (locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+      return;
+    }
     setMessages((prev) => {
       const merged = mergeUniqueMessages(prev, [message]);
       return isSameMessageList(prev, merged) ? prev : merged;
@@ -851,16 +961,27 @@ export default function ChatDetailScreen() {
     }
   }, [canUseMessageInteractions, conversationId]);
 
-  const { isConnected, sendTyping, sendReadReceipt } = useChatSocket({
+  const { statuses } = usePresence();
+  const { isConnected, sendTyping, sendReadReceipt, sendCallSignal } = useChatSocket({
     conversationId,
     brokerURL: BROKER_URL,
+    userId: currentUserId,
     onMessage: (event) => {
-      const mappedMessage = mapChatPayloadToUiMessage(event);
-      if (!mappedMessage) {
-        return;
+      const wrapped = chatService.unwrapApiPayload<any>(event);
+      const mappedMessage = mapAnyPayloadToUiMessage(wrapped);
+      
+      if (mappedMessage) {
+        // Nếu là tin nhắn hệ thống (thêm người, rời nhóm...), ta xử lý hiển thị
+        if (mappedMessage.messageType === 'SYSTEM') {
+          // Logic hiển thị thông báo hệ thống nếu cần xử lý riêng
+        }
+        appendOrUpdateMessage(mappedMessage);
+      } else {
+        void loadInitialMessages(currentUserId, true);
       }
-
-      appendOrUpdateMessage(mappedMessage);
+    },
+    onCallSignal: (event) => {
+      webrtcService.handleIncomingSignal(event as any);
     },
     onTyping: (event) => {
       if (!currentUserId || !canUseRealtimeIndicators) {
@@ -881,15 +1002,63 @@ export default function ChatDetailScreen() {
         // Placeholder: update read status in UI model when app has read indicator.
       }
     },
+    onConversationEvent: async (event) => {
+      if (event.type !== 'MESSAGE_LOCAL_DELETE') return;
+      const msgId = String(event.messageId);
+      const convId = String(event.conversationId);
+      // Persist to SecureStore so it stays hidden after reload
+      const nextSet = await addDeletedMessageId(convId, currentUserId || 'anonymous', msgId);
+      locallyDeletedMessageIdsRef.current = nextSet;
+      // Hide from current message list immediately
+      if (convId === conversationId) {
+        setMessages((prev) => prev.filter((m) => String(m.messageId) !== msgId));
+      }
+    },
+    onGroupEvent: async (event) => {
+      const eventType = String(event?.type ?? '').toUpperCase();
+      const eventConversationId = String(event?.conversationId ?? event?.id ?? '');
+
+      if (!eventConversationId || eventConversationId !== String(conversationId)) {
+        return;
+      }
+
+      if (eventType === 'REMOVED' || eventType === 'DISSOLVED') {
+        Alert.alert(
+          'Thông báo',
+          eventType === 'DISSOLVED'
+            ? 'Nhóm đã bị giải tán.'
+            : 'Bạn đã bị xóa khỏi nhóm.'
+        );
+        router.replace('/(tabs)/chat');
+        return;
+      }
+
+      if (isGroupConversation) {
+        await fetchInfoMembers();
+      }
+    },
   });
+
+  useEffect(() => {
+    webrtcService.setSignalSender((signal) => {
+      // Send strictly through useChatSocket connection callback
+      return sendCallSignal!(signal as any);
+    });
+  }, [sendCallSignal]);
+
+  const partnerId = isPrivateConversation && type !== 'CLOUD' ? conversationId.split('_').find(id => id !== currentUserId) : null;
+  const isPartnerOnline = partnerId ? statuses.get(partnerId)?.online : false;
+  const isPartnerTyping = isPartnerOnline && isTyping;
 
   const headerSubtitleText = isAiConversation
     ? (isSendingAi ? t('chat.typing', 'Đang nhập...') : t('chat.ai_subheading', 'Hỏi đáp với Fruvia AI'))
     : isCloudConversation
       ? t('chat.cloud_subheading', 'Truyền file giữa các thiết bị của bạn')
-      : isConnected
-        ? (isTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
-        : t('chat.offline_recent', 'Truy cập gần đây');
+      : isGroupConversation
+        ? `${infoMembers.length} thành viên`
+        : isPartnerOnline
+          ? (isPartnerTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
+          : t('chat.offline_recent', 'Truy cập gần đây');
 
   const latestPinnedMessage = pinnedMessages.length > 0
     ? pinnedMessages[pinnedMessages.length - 1]
@@ -996,6 +1165,10 @@ export default function ChatDetailScreen() {
     }
 
     try {
+      // 1. Load deleted IDs from storage first
+      const deletedSet = await readDeletedMessageIds(conversationId, uid || currentUserId || 'anonymous');
+      locallyDeletedMessageIdsRef.current = deletedSet;
+
       const response = await chatService.getMessages(conversationId, 0, PAGE_SIZE);
       const { payload, hasMore } = parsePageResult(response, PAGE_SIZE);
       logChatDebug('loadInitialMessages.response', response);
@@ -1010,9 +1183,12 @@ export default function ChatDetailScreen() {
       }
 
       const normalizedMessages = mapChatPayloadListToUiMessages(payload);
-      const sortedMessages = sortMessages(normalizedMessages);
+      // 2. Filter out locally deleted messages
+      const filteredMessages = filterDeletedMessages(normalizedMessages);
+      const sortedMessages = sortMessages(filteredMessages);
       logChatDebug('loadInitialMessages.normalized', {
         normalizedCount: normalizedMessages.length,
+        filteredCount: filteredMessages.length,
         sortedCount: sortedMessages.length,
         firstId: sortedMessages[0]?.messageId,
         lastId: sortedMessages[sortedMessages.length - 1]?.messageId,
@@ -1078,7 +1254,8 @@ export default function ChatDetailScreen() {
           return isSameMessageList(prev, filtered) ? prev : filtered;
         });
       } else {
-        setMessages((prev) => (isSameMessageList(prev, nextMessages) ? prev : nextMessages));
+        const filteredNext = nextMessages.filter(m => !locallyDeletedMessageIdsRef.current.has(String(m.messageId)));
+        setMessages((prev) => (isSameMessageList(prev, filteredNext) ? prev : filteredNext));
         setHasMoreOlder(nextHasMoreOlder);
         shouldScrollToLatestRef.current = true;
       }
@@ -1098,6 +1275,8 @@ export default function ChatDetailScreen() {
     const initialize = async () => {
       const uid = await SecureStore.getItemAsync('user_id');
       setCurrentUserId(uid);
+      // Load locally-deleted IDs BEFORE loading messages so they get filtered
+      locallyDeletedMessageIdsRef.current = await readDeletedMessageIds(conversationId, uid || 'anonymous');
       await loadInitialMessages(uid);
     };
     initialize();
@@ -1130,9 +1309,12 @@ export default function ChatDetailScreen() {
         payload,
       });
       const normalizedMessages = mapChatPayloadListToUiMessages(payload);
-      const sortedMessages = sortMessages(normalizedMessages);
+      // Filter out locally deleted messages
+      const filteredMessages = filterDeletedMessages(normalizedMessages);
+      const sortedMessages = sortMessages(filteredMessages);
       logChatDebug('loadOlderMessages.normalized', {
         normalizedCount: normalizedMessages.length,
+        filteredCount: filteredMessages.length,
         sortedCount: sortedMessages.length,
         firstId: sortedMessages[0]?.messageId,
         lastId: sortedMessages[sortedMessages.length - 1]?.messageId,
@@ -1975,7 +2157,13 @@ export default function ChatDetailScreen() {
           onPress: async () => {
             try {
               await chatService.recallMessage(selectedMessage.messageId);
-              await loadInitialMessages(currentUserId, true);
+              setMessages((prev) =>
+                prev.map((m) =>
+                  String(m.messageId) === String(selectedMessage.messageId)
+                    ? { ...m, isRecalled: true, messageType: 'TEXT', content: 'Tin nhắn đã được thu hồi' }
+                    : m
+                )
+              );
             } catch (error) {
               console.error('Failed to recall message:', error);
               const axiosError = error as AxiosError<{
@@ -2016,6 +2204,8 @@ export default function ChatDetailScreen() {
           onPress: async () => {
             try {
               await chatService.deleteMessageLocal(selectedMessage.messageId);
+              const nextSet = await addDeletedMessageId(conversationId, currentUserId || 'anonymous', selectedMessage.messageId);
+              locallyDeletedMessageIdsRef.current = nextSet;
               setMessages((prev) => prev.filter((m) => String(m.messageId) !== String(selectedMessage.messageId)));
             } catch (error) {
               console.error('Failed to delete local message:', error);
@@ -2025,7 +2215,7 @@ export default function ChatDetailScreen() {
         },
       ]
     );
-  }, [closeMessageActionMenu, selectedMessage]);
+  }, [closeMessageActionMenu, selectedMessage, conversationId, currentUserId]);
 
   const handleTogglePinSelectedMessage = useCallback(async () => {
     if (!selectedMessage) {
@@ -2442,45 +2632,28 @@ export default function ChatDetailScreen() {
         .filter((id) => id.length > 0)
     );
 
-    if (liveItems.length === 0) {
-      if (recalledMessageIds.size === 0) {
-        return;
-      }
-
-      setInfoMediaItems((prev) => prev.filter((item: any) => {
-        const messageId = String(item?.messageId ?? item?.parentMessageId ?? '').trim();
-        return !messageId || !recalledMessageIds.has(messageId);
-      }));
-      return;
-    }
-
     setInfoMediaItems((prev) => {
+      // Dùng Map để merge. Key ưu tiên ID cụ thể của tấm ảnh (cho ImageGroup)
       const merged = new Map<string, any>();
-      const buildKey = (item: any, idx: number) => String(item?.id ?? item?.messageId ?? `live-${idx}`);
-      const liveMessageIds = new Set(
-        liveItems
-          .map((item: any) => String(item?.messageId ?? '').trim())
-          .filter((id: string) => id.length > 0)
-      );
+      
+      const getStableKey = (item: any, idx: number) => {
+        // Nếu là ảnh trong group, dùng path baseId + url
+        if (item.parentMessageId) {
+          return `${item.parentMessageId}-${item.content}`;
+        }
+        return String(item?.messageId ?? item?.id ?? `idx-${idx}`);
+      };
 
+      // 1. Thêm các item cũ (từ API)
       prev.forEach((item, idx) => {
-        const prevMessageId = String(item?.messageId ?? '').trim();
-        if (prevMessageId && recalledMessageIds.has(prevMessageId)) {
-          return;
-        }
-
-        if (prevMessageId && liveMessageIds.has(prevMessageId)) {
-          return;
-        }
-
-        merged.set(buildKey(item, idx), item);
+        const msgId = String(item?.messageId ?? '').trim();
+        if (recalledMessageIds.has(msgId)) return;
+        merged.set(getStableKey(item, idx), item);
       });
 
+      // 2. Ghi đè bằng các item Live (vì tin nhắn trên màn hình luôn là mới nhất)
       liveItems.forEach((item, idx) => {
-        merged.set(buildKey(item, idx), {
-          ...merged.get(buildKey(item, idx)),
-          ...item,
-        });
+        merged.set(getStableKey(item, idx), item);
       });
 
       return sortInfoMediaItems(Array.from(merged.values()));
@@ -2662,14 +2835,31 @@ export default function ChatDetailScreen() {
     isGroupConversation,
   ]);
 
+  const getFriendId = useCallback((friend: any) => {
+    return String(friend?.user_id ?? friend?.userId ?? friend?.id ?? '').trim();
+  }, []);
+
+  const getFriendDisplayName = useCallback((friend: any) => {
+    return String(friend?.display_name ?? friend?.displayName ?? friend?.full_name ?? friend?.name ?? 'Unknown');
+  }, []);
+
+  const getFriendAvatar = useCallback((friend: any) => {
+    return friend?.avatar_url || friend?.avatarUrl || friend?.avatar;
+  }, []);
+
   const fetchInfoFriendsForAdd = useCallback(async () => {
     try {
       const res = chatService.unwrapApiPayload<any[]>(await friendService.getFriendsList());
       const list = Array.isArray(res) ? res : [];
-      const existingIds = infoMembers.map((m) => m.userId);
-      setInfoFriendsList(list.filter((f: any) => !existingIds.includes(f.user_id || f.id)));
+      const existingIds = new Set(infoMembers.map((m) => String(m.userId)));
+      setInfoFriendsList(
+        list.filter((f: any) => {
+          const friendId = getFriendId(f);
+          return Boolean(friendId) && !existingIds.has(friendId);
+        })
+      );
     } catch { setInfoFriendsList([]); }
-  }, [infoMembers]);
+  }, [getFriendId, infoMembers]);
 
   const filteredInfoFriendsList = useMemo(() => {
     const keyword = infoAddMemberSearch.trim().toLowerCase();
@@ -2679,20 +2869,25 @@ export default function ChatDetailScreen() {
     }
 
     return infoFriendsList.filter((friend: any) => {
-      const displayName = String(friend.display_name ?? friend.full_name ?? friend.name ?? '').toLowerCase();
+      const displayName = getFriendDisplayName(friend).toLowerCase();
       const email = String(friend.email ?? '').toLowerCase();
-      const phone = String(friend.phone ?? '').toLowerCase();
+      const phone = String(friend.phone ?? friend.phone_number ?? friend.phoneNumber ?? '').toLowerCase();
 
       return displayName.includes(keyword) || email.includes(keyword) || phone.includes(keyword);
     });
-  }, [infoAddMemberSearch, infoFriendsList]);
+  }, [getFriendDisplayName, infoAddMemberSearch, infoFriendsList]);
 
   const infoAddMemberListData = useMemo(() => {
     const output: Array<{ type: 'header'; id: string; letter: string } | { type: 'friend'; id: string; friend: any }> = [];
     let currentLetter = '';
 
     filteredInfoFriendsList.forEach((friend: any) => {
-      const displayName = String(friend.display_name ?? friend.full_name ?? friend.name ?? 'Unknown').trim();
+      const friendId = getFriendId(friend);
+      if (!friendId) {
+        return;
+      }
+
+      const displayName = getFriendDisplayName(friend).trim();
       const letter = displayName.charAt(0).toUpperCase() || '#';
 
       if (letter !== currentLetter) {
@@ -2700,11 +2895,11 @@ export default function ChatDetailScreen() {
         output.push({ type: 'header', id: `header-${letter}`, letter });
       }
 
-      output.push({ type: 'friend', id: `friend-${friend.user_id ?? friend.id}`, friend });
+      output.push({ type: 'friend', id: `friend-${friendId}`, friend });
     });
 
     return output;
-  }, [filteredInfoFriendsList]);
+  }, [filteredInfoFriendsList, getFriendDisplayName, getFriendId]);
 
   const handleOpenInfoAddMemberModal = useCallback(async () => {
     setInfoAddMemberVisible(true);
@@ -2720,14 +2915,21 @@ export default function ChatDetailScreen() {
   }, []);
 
   const handleInfoAddMembers = useCallback(async () => {
-    if (infoSelectedMembers.length === 0 || infoAddingMembers || !conversationId) return;
+    const validMemberIds = Array.from(new Set(infoSelectedMembers.map((id) => String(id).trim()).filter(Boolean)));
+    if (validMemberIds.length === 0 || infoAddingMembers || !conversationId) return;
+
     setInfoAddingMembers(true);
     try {
-      await chatService.addConversationMembers(conversationId, infoSelectedMembers);
+      await chatService.addConversationMembers(conversationId, validMemberIds);
       handleCloseInfoAddMemberModal();
       await fetchInfoMembers();
     } catch (err: any) {
-      Alert.alert('Lỗi', err?.message || 'Không thể thêm thành viên');
+      const backendMessage =
+        err?.response?.data?.message
+        || err?.response?.data?.error
+        || err?.response?.data?.data?.message
+        || err?.message;
+      Alert.alert('Lỗi', backendMessage || 'Không thể thêm thành viên');
     } finally { setInfoAddingMembers(false); }
   }, [conversationId, fetchInfoMembers, handleCloseInfoAddMemberModal, infoAddingMembers, infoSelectedMembers]);
 
@@ -3573,33 +3775,114 @@ export default function ChatDetailScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
-          </TouchableOpacity>
-          <View style={styles.headerInfo}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {conversationDisplayName}
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              {headerSubtitleText}
-            </Text>
-          </View>
-          <View style={styles.headerActions}>
-            {showCallActions ? (
-              <>
-                <TouchableOpacity style={styles.headerIcon}>
-                  <Ionicons name="call-outline" size={27} color="#FFFFFF" />
+          {!isSearching ? (
+            <>
+              <TouchableOpacity onPress={() => router.back()}>
+                <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
+              </TouchableOpacity>
+              <View style={styles.headerInfo}>
+                <Text style={styles.headerTitle} numberOfLines={1}>
+                  {conversationDisplayName}
+                </Text>
+                <Text style={styles.headerSubtitle}>
+                  {headerSubtitleText}
+                </Text>
+              </View>
+              <View style={styles.headerActions}>
+                <TouchableOpacity style={styles.headerIcon} onPress={toggleSearchMode}>
+                  <Ionicons name="search-outline" size={26} color="#FFFFFF" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.headerIcon}>
-                  <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
+                {showCallActions ? (
+                  <>
+                    <TouchableOpacity style={styles.headerIcon}>
+                      <Ionicons name="call-outline" size={27} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.headerIcon}
+                      onPress={() => {
+                        const peerName = isGroupConversation ? conversationName : chatHeaderName;
+                        const peerAvatar = isGroupConversation ? conversationAvatarUrl : partnerUser?.avatarUrl;
+                        webrtcService.startCall(
+                          currentUserId!,
+                          partnerId || '',
+                          peerName || 'Unknown',
+                          peerAvatar,
+                          conversationId,
+                          'Bạn',
+                          undefined
+                        );
+                      }}
+                    >
+                      <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </>
+                ) : null}
+                <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
+                  <Ionicons name="list-outline" size={30} color="#FFFFFF" />
                 </TouchableOpacity>
-              </>
-            ) : null}
-            <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
-              <Ionicons name="list-outline" size={30} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+              </View>
+            </>
+          ) : (
+            <View style={styles.searchBarHeader}>
+              <TouchableOpacity onPress={toggleSearchMode}>
+                <Ionicons name="arrow-back" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm tin nhắn..."
+                placeholderTextColor="rgba(255,255,255,0.7)"
+                value={searchQuery}
+                onChangeText={(txt) => {
+                  setSearchQuery(txt);
+                  if (txt.length > 0) {
+                    void handleSearchMessages(txt);
+                  } else {
+                    setSearchResults([]);
+                  }
+                }}
+                autoFocus
+                selectionColor="#FFF"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                  <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
+
+        {/* Search Results Overlay */}
+        {isSearching && searchQuery.length > 0 && (
+          <View style={[styles.searchResultsOverlay, { backgroundColor: colors.background }]}>
+            {isSearchingLoading ? (
+              <ActivityIndicator style={{ marginTop: 20 }} color="#2F87F2" />
+            ) : searchResults.length === 0 ? (
+              <Text style={[styles.searchEmptyText, { color: colors.textSecondary }]}>Không tìm thấy kết quả</Text>
+            ) : (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.messageId}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={[styles.searchResultItem, { borderBottomColor: colors.border }]}
+                    onPress={() => handleJumpToMessage(item.messageId)}
+                  >
+                    <View style={styles.searchResultHeader}>
+                      <Text style={[styles.searchResultSender, { color: colors.text }]} numberOfLines={1}>{item.senderName}</Text>
+                      <Text style={[styles.searchResultTime, { color: colors.textSecondary }]}>
+                        {parseMessageDate(item.createdAt)?.toLocaleDateString()}
+                      </Text>
+                    </View>
+                    <Text style={[styles.searchResultContent, { color: colors.textSecondary }]} numberOfLines={2}>
+                      {item.content}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        )}
 
         {latestPinnedMessage ? (
           <View style={styles.pinnedBannerWrap}>
@@ -3901,7 +4184,7 @@ export default function ChatDetailScreen() {
                   </TouchableOpacity>
                 ) : null}
 
-                {isSelectedMessageMine && !selectedMessage?.isRecalled ? (
+                {isSelectedMessageMine && !selectedMessage?.isRecalled && (Date.now() - getMessageMillis(selectedMessage?.createdAt) < 60 * 60 * 1000) ? (
                   <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleRecallSelectedMessage(); }}>
                     <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
                       <Ionicons name="refresh" size={22} color="#F0853A" />
@@ -3910,7 +4193,7 @@ export default function ChatDetailScreen() {
                   </TouchableOpacity>
                 ) : null}
 
-                {isSelectedMessageMine && !selectedMessage?.isRecalled ? (
+                {isSelectedMessageMine && !selectedMessage?.isRecalled && (Date.now() - getMessageMillis(selectedMessage?.createdAt) < 60 * 60 * 1000) ? (
                   <TouchableOpacity style={styles.actionGridItem} onPress={handleStartEditSelectedMessage}>
                     <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>
                       <Ionicons name="create-outline" size={22} color="#5B7FFF" />
@@ -5246,18 +5529,21 @@ export default function ChatDetailScreen() {
                   }
 
                   const friend = item.friend;
-                  const friendId = String(friend.user_id ?? friend.id ?? '');
-                  const friendName = String(friend.display_name ?? friend.full_name ?? friend.name ?? 'Unknown');
-                  const friendAvatar = friend.avatar_url || friend.avatarUrl || friend.avatar;
+                  const friendId = getFriendId(friend);
+                  const friendName = getFriendDisplayName(friend);
+                  const friendAvatar = getFriendAvatar(friend);
                   const selected = infoSelectedMembers.includes(friendId);
 
                   return (
                     <TouchableOpacity
                       style={[styles.addMemberFriendRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}
                       activeOpacity={0.7}
-                      onPress={() => setInfoSelectedMembers((prev) => (
-                        prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId]
-                      ))}
+                      onPress={() => {
+                        if (!friendId) return;
+                        setInfoSelectedMembers((prev) => (
+                          prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId]
+                        ));
+                      }}
                     >
                       {friendAvatar ? (
                         <Image source={getAvatarSource(friendAvatar)} style={styles.addMemberAvatar} />
@@ -5294,6 +5580,7 @@ export default function ChatDetailScreen() {
           </SafeAreaView>
         </Modal>
 
+        <CallOverlay currentUserId={currentUserId || ''} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -5328,6 +5615,52 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#CFE4FF',
     fontWeight: '500',
+  },
+  searchBarHeader: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 36,
+    color: '#FFF',
+    fontSize: 16,
+    paddingHorizontal: 0,
+  },
+  searchResultsOverlay: {
+    position: 'absolute',
+    top: 56, // below header
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100,
+  },
+  searchResultItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  searchResultHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  searchResultSender: {
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  searchResultTime: {
+    fontSize: 12,
+  },
+  searchResultContent: {
+    fontSize: 14,
+  },
+  searchEmptyText: {
+    textAlign: 'center',
+    marginTop: 40,
+    fontSize: 15,
   },
   headerActions: {
     flexDirection: 'row',
@@ -7260,4 +7593,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+
+
+
 

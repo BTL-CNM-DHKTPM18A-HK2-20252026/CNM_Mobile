@@ -1,4 +1,5 @@
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
+import { PresenceProvider } from '@/context/PresenceContext';
 import '@/i18n';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -70,7 +71,9 @@ function RootLayoutContent() {
 export default function RootLayout() {
   return (
     <ThemeProvider>
+      <PresenceProvider>
       <RootLayoutContent />
+          </PresenceProvider>
     </ThemeProvider>
   );
 }

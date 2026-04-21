@@ -2,6 +2,7 @@ import { chatService } from '@/services/chatService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { COLORS } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { usePresence } from '@/context/PresenceContext';
 import { router, useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -38,6 +39,7 @@ interface ChatItem {
   unreadCount: number;
   pinned: boolean;
   type: ConversationType;
+  otherUserId?: string;
 }
 
 const DEFAULT_CLOUD_ITEM: ChatItem = {
@@ -266,6 +268,7 @@ function buildStompBrokerUrl(): string {
 }
 
 export default function ChatScreen() {
+  const { isOnline } = usePresence();
   const insets = useSafeAreaInsets();
 
   const [query, setQuery] = useState('');
@@ -339,7 +342,7 @@ export default function ChatScreen() {
 
   // Subscribe STOMP friend-events → re-fetch khi có ACCEPTED (giống Web: ChatDashboardLegacy)
   const stompClientRef = useRef<Client | null>(null);
-  const stompSubRef = useRef<StompSubscription | null>(null);
+  const stompSubRefs = useRef<StompSubscription[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -361,12 +364,29 @@ export default function ChatScreen() {
         debug: () => {},
         onConnect: () => {
           if (cancelled) { client.deactivate(); return; }
-          const sub = client.subscribe(`/topic/friend-events/${userId}`, (msg) => {
+          const friendSub = client.subscribe(`/topic/friend-events/${userId}`, (msg) => {
             if (msg.body === 'ACCEPTED') {
-              fetchConversations();
+              void fetchConversations({ silent: true });
             }
           });
-          stompSubRef.current = sub;
+
+          const groupSub = client.subscribe(`/topic/group-events/${userId}`, (msg) => {
+            try {
+              const payload = JSON.parse(msg.body || '{}') as Record<string, unknown>;
+              const eventType = String(payload?.type ?? '').toUpperCase();
+              const eventConversationId = String(payload?.conversationId ?? payload?.id ?? '');
+
+              if ((eventType === 'REMOVED' || eventType === 'DISSOLVED') && eventConversationId) {
+                setItems((prev) => prev.filter((item) => String(item.id) !== eventConversationId));
+              }
+
+              void fetchConversations({ silent: true });
+            } catch {
+              void fetchConversations({ silent: true });
+            }
+          });
+
+          stompSubRefs.current = [friendSub, groupSub];
         },
         onStompError: () => {},
         onWebSocketError: () => {},
@@ -380,10 +400,17 @@ export default function ChatScreen() {
 
     return () => {
       cancelled = true;
-      stompSubRef.current?.unsubscribe();
+      stompSubRefs.current.forEach((sub) => {
+        try {
+          sub.unsubscribe();
+        } catch {
+          // Best-effort cleanup
+        }
+      });
+      stompSubRefs.current = [];
       stompClientRef.current?.deactivate();
     };
-  }, []);
+  }, [fetchConversations]);
 
   const resolveConversationIdForOpen = async (item: ChatItem): Promise<string> => {
     if (item.type === 'CLOUD') {

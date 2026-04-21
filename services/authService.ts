@@ -1,5 +1,30 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import api from './api';
+
+const storage = {
+  setItemAsync: async (key: string, value: string) => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  },
+  getItemAsync: async (key: string) => {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key) || null;
+    } else {
+      return await SecureStore.getItemAsync(key);
+    }
+  },
+  deleteItemAsync: async (key: string) => {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  }
+};
 
 export interface AuthenticationResponse {
   access_token: string;
@@ -28,7 +53,7 @@ const decodeUserIdFromToken = async (token: string) => {
     const userId = payload.sub;
 
     if (userId) {
-      await SecureStore.setItemAsync('user_id', String(userId));
+      await storage.setItemAsync('user_id', String(userId));
       return String(userId);
     }
   } catch (decodeError) {
@@ -52,11 +77,11 @@ export const authService = {
 
       if (response.success && response.data.access_token) {
         const token = response.data.access_token;
-        await SecureStore.setItemAsync('user_token', token);
+        await storage.setItemAsync('user_token', token);
         
         // Save refresh token for silent token renewal
         if (response.data.refresh_token) {
-          await SecureStore.setItemAsync('refresh_token', response.data.refresh_token);
+          await storage.setItemAsync('refresh_token', response.data.refresh_token);
         }
         
         await decodeUserIdFromToken(token);
@@ -73,19 +98,19 @@ export const authService = {
 
   logout: async () => {
     try {
-      const token = await SecureStore.getItemAsync('user_token');
+      const token = await storage.getItemAsync('user_token');
       if (token) {
         await api.post('/auth/logout', { accessToken: token });
       }
     } finally {
-      await SecureStore.deleteItemAsync('user_token');
-      await SecureStore.deleteItemAsync('refresh_token');
-      await SecureStore.deleteItemAsync('user_id');
+      await storage.deleteItemAsync('user_token');
+      await storage.deleteItemAsync('refresh_token');
+      await storage.deleteItemAsync('user_id');
     }
   },
 
   isAuthenticated: async () => {
-    const token = await SecureStore.getItemAsync('user_token');
+    const token = await storage.getItemAsync('user_token');
     return !!token;
   },
 
@@ -117,7 +142,7 @@ export const authService = {
 
   confirmQrLogin: async (uuid: string) => {
     try {
-      const token = await SecureStore.getItemAsync('user_token');
+      const token = await storage.getItemAsync('user_token');
       if (!token) throw new Error('You must be logged in to confirm QR');
 
       // Simple JWT decode to get userId (sub)
@@ -148,7 +173,7 @@ export const authService = {
 
   notifyQrScanned: async (uuid: string) => {
     try {
-      const token = await SecureStore.getItemAsync('user_token');
+      const token = await storage.getItemAsync('user_token');
       if (!token) return false;
 
       // Extract userId (sub)
