@@ -148,7 +148,7 @@ export default function TabLayout() {
             <CustomTabIcon 
               focused={focused} 
               color={color} 
-              iconName="clock-time-four" 
+              iconName="account-group" 
               iconType="mci"
               label={t('tabs.timeline')} 
               badge={<TabBadge count="N" type="n" />}

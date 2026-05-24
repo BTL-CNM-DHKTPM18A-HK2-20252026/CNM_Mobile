@@ -23,6 +23,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Client, type StompSubscription } from '@stomp/stompjs';
 import { TextDecoder as PolyfillTextDecoder, TextEncoder as PolyfillTextEncoder } from 'text-encoding';
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+}
+
 type ConversationType = 'PRIVATE' | 'GROUP' | 'CLOUD' | 'SYSTEM' | 'AI' | 'SELF';
 
 interface ChatItem {
@@ -191,12 +195,13 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
       `Đoạn chat ${index + 1}`;
 
     const senderPrefix = item.lastMessageSenderName ? `${item.lastMessageSenderName}: ` : '';
-    const lastMessage =
+    const rawLastMessage =
       item.lastMessageContent ??
       item.lastMessage ??
       item.preview ??
       item.snippet ??
       `${senderPrefix}Chưa có tin nhắn`;
+    const lastMessage = stripHtml(String(rawLastMessage));
 
     return {
       id: String(item.conversationId ?? item.id ?? item.userId ?? `conversation-${index}`),

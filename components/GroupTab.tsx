@@ -122,7 +122,7 @@ function normalizeGroupConversations(rawData: ConversationRaw[]): GroupItem[] {
 		.map((item, index) => {
 			const members = Array.isArray(item.members) ? item.members.slice(0, 3) : [];
 			const rawName = String(item.conversationName ?? item.name ?? '').trim();
-			const lastContent = String(item.lastMessageContent ?? item.lastMessage ?? item.preview ?? item.snippet ?? '').trim();
+			const lastContent = String(item.lastMessageContent ?? item.lastMessage ?? item.preview ?? item.snippet ?? '').trim().replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
 			const senderPrefix = item.lastMessageSenderName ? `${item.lastMessageSenderName}: ` : '';
 			const preview = lastContent ? `${senderPrefix}${lastContent}` : 'Chưa có tin nhắn';
 
