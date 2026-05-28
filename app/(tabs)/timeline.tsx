@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
 
@@ -34,6 +35,7 @@ const samplePosts: Post[] = [];
 export default function TimelineScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [posts, setPosts] = useState<Post[]>(samplePosts);
   // stories will be fetched later; for now start empty so we show Create-new only
   const [stories, setStories] = useState<any[]>([]);
@@ -176,7 +178,7 @@ export default function TimelineScreen() {
             <View style={styles.composerCard}>
               <View style={styles.composerTop}>
                 <Image source={{ uri: 'https://via.placeholder.com/80' }} style={styles.avatarSmall} />
-                <TouchableOpacity style={styles.composerInputMock}>
+                <TouchableOpacity style={styles.composerInputMock} onPress={() => router.push('/create-post')}>
                   <Text style={{ color: '#7f7f7f', fontSize: 15 }}>Hôm nay bạn thế nào?</Text>
                 </TouchableOpacity>
               </View>
