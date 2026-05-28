@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
 import { authService } from '@/services/authService';
 import { getAvatarSource } from '@/services/mediaUtils';
+// Story creator is a standalone page at /story-creator
 
 const { width } = Dimensions.get('window');
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -105,6 +106,8 @@ export default function TimelineScreen() {
       setRefreshing(false);
     }
   };
+
+  // story creation handled by `app/story-creator.tsx` via the `StoryCreator` component
 
   const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 
@@ -322,7 +325,7 @@ export default function TimelineScreen() {
           <>
             {/* Vùng Khoảnh khắc (Stories) đầu trang */}
             <View style={styles.storySection}>
-              <ScrollViewHorizontal stories={stories} />
+              <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} />
             </View>
 
             {/* Khung đăng bài "Hôm nay bạn thế nào?" */}
@@ -433,12 +436,14 @@ export default function TimelineScreen() {
         </View>
       </Modal>
       {/* bottom tab removed */}
+      
     </View>
   );
 }
 
 // Component phụ hiển thị danh sách Story (Tin 24h) nằm ngang đầu trang
-const ScrollViewHorizontal = ({ stories }: { stories?: any[] }) => {
+const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onPressCreate?: () => void }) => {
+  const router = useRouter();
   const data = (stories && stories.length > 0) ? stories : [null];
   return (
     <FlatList
@@ -454,9 +459,22 @@ const ScrollViewHorizontal = ({ stories }: { stories?: any[] }) => {
           />
           <View style={styles.storyOverlay} />
           {index === 0 ? (
-            <View style={styles.createStoryCircle}>
-              <Ionicons name="camera" size={20} color="#fff" />
-            </View>
+            <>
+              <TouchableOpacity
+                onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
+                style={{ position: 'absolute', left: 12, top: 75 }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <View style={styles.createStoryCircle}>
+                  <Ionicons name="camera" size={18} color="#fff" />
+                </View>
+              </TouchableOpacity>
+              {/* Full-card invisible overlay to ensure taps open creator */}
+              <TouchableOpacity
+                onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
+                style={StyleSheet.absoluteFillObject}
+              />
+            </>
           ) : (
             <Image source={{ uri: item?.avatar || 'https://via.placeholder.com/50' }} style={styles.storyAvatarBorder} />
           )}
