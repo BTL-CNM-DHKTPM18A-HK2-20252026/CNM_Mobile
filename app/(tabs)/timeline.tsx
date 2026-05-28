@@ -12,14 +12,13 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
 import { authService } from '@/services/authService';
 import { getAvatarSource } from '@/services/mediaUtils';
-// Story creator is a standalone page at /story-creator
 
 const { width } = Dimensions.get('window');
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -38,23 +37,25 @@ type Post = {
   reactions?: Array<{ type: string; count: number }>;
   isSponsored?: boolean;
 };
-// Minimal sample posts to avoid runtime undefined errors
+
 const samplePosts: Post[] = [];
+
 export default function TimelineScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>(samplePosts);
-  // stories will be fetched later; for now start empty so we show Create-new only
   const [stories, setStories] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [composer, setComposer] = useState('');
   const [loading, setLoading] = useState(false);
   const [reactionPickerPostId, setReactionPickerPostId] = useState<string | null>(null);
   const [commentModalPostId, setCommentModalPostId] = useState<string | null>(null);
   const [commentList, setCommentList] = useState<any[]>([]);
   const [commentInput, setCommentInput] = useState('');
+
+  // Trạng thái quản lý đóng/mở và id bài viết đang chọn cho Menu 3 chấm
+  const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -63,30 +64,57 @@ export default function TimelineScreen() {
 
   useEffect(() => {
     fetchPosts();
-    // load current user profile for avatar
     (async () => {
       const p = await authService.getProfile();
       if (p) setProfile(p);
     })();
+    fetchStories();
   }, []);
 
-  // Refresh posts when screen gains focus (after creating a post)
   useFocusEffect(
     useCallback(() => {
       fetchPosts();
+      fetchStories();
     }, [])
   );
+
+  const fetchStories = async () => {
+    try {
+      let userId = profile?.id || profile?.userId || profile?.user_id;
+      if (!userId) {
+        const p = await authService.getProfile();
+        if (p) {
+          setProfile(p);
+          userId = p.id || p.userId || p.user_id;
+        }
+      }
+      const res: any = await api.get('/stories/feed', { headers: userId ? { 'X-User-Id': String(userId) } : undefined });
+      const list = Array.isArray(res) ? res : res?.data || res || [];
+      const mapped = (list || []).map((s: any) => ({
+        id: s.storyId || s.id,
+        name: s.authorName || s.name || 'Bạn bè',
+        avatar: s.authorAvatarUrl || s.authorAvatar || s.avatar,
+        mediaUrl: s.mediaUrl || s.media || s.cover,
+        mediaType: s.mediaType || (s.mediaUrl && s.mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE'),
+        isViewed: s.isViewedByMe || false,
+      }));
+      setStories(mapped);
+    } catch (err) {
+      console.warn('Fetch stories error', err);
+    }
+  };
 
   const fetchPosts = async () => {
     setLoading(true);
     try {
       const res: any = await api.get(`/posts/feed?size=20`);
       const list = Array.isArray(res) ? res : res?.content || res?.data || [];
-
       const mapped: Post[] = (list || []).map((p: any) => ({
         id: String(p.id || p.postId || p._id || Date.now()),
         author: p.author?.displayName || p.authorName || p.createdBy || p.userName || 'Người dùng',
-        avatar: p.author?.avatar || p.avatar || p.profileImage || 'https://via.placeholder.com/80',
+        avatar:
+          p.avatarUrl ||
+          null,
         time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
         text: p.content || p.text || p.body || '',
         image: (p.media && p.media[0]?.url) || p.image || null,
@@ -97,7 +125,6 @@ export default function TimelineScreen() {
         comments: p.commentCount || p.comments || 0,
         isSponsored: p.isSponsored || false,
       }));
-
       setPosts([...samplePosts, ...mapped]);
     } catch (err) {
       console.warn('Fetch posts error', err);
@@ -107,24 +134,16 @@ export default function TimelineScreen() {
     }
   };
 
-  // story creation handled by `app/story-creator.tsx` via the `StoryCreator` component
-
   const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 
   const emojiToReactionType = (emoji: string): 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY' => {
     switch (emoji) {
-      case '❤️':
-        return 'LOVE';
-      case '😆':
-        return 'HAHA';
-      case '😮':
-        return 'WOW';
-      case '😭':
-        return 'SAD';
-      case '😡':
-        return 'ANGRY';
-      default:
-        return 'LIKE';
+      case '❤️': return 'LOVE';
+      case '😆': return 'HAHA';
+      case '😮': return 'WOW';
+      case '😭': return 'SAD';
+      case '😡': return 'ANGRY';
+      default: return 'LIKE';
     }
   };
 
@@ -156,7 +175,6 @@ export default function TimelineScreen() {
   const toggleLike = async (postId: string) => {
     try {
       const existing = posts.find(p => p.id === postId);
-      // optimistic update
       setPosts(prev => prev.map(p => {
         if (p.id !== postId) return p;
         if (p.isLikedByMe) {
@@ -180,18 +198,11 @@ export default function TimelineScreen() {
   const reactWith = async (postId: string, emoji: string) => {
     try {
       const reactionType = emojiToReactionType(emoji);
-      // optimistic update: set myReactionType and isLikedByMe
       setPosts(prev => prev.map(p => {
         if (p.id !== postId) return p;
         const alreadyLiked = !!p.isLikedByMe;
-        return {
-          ...p,
-          isLikedByMe: true,
-          myReactionType: reactionType,
-          likes: alreadyLiked ? p.likes : (p.likes || 0) + 1,
-        };
+        return { ...p, isLikedByMe: true, myReactionType: reactionType, likes: alreadyLiked ? p.likes : (p.likes || 0) + 1 };
       }));
-
       const res = await api.post(`/posts/${postId}/react/${reactionType}`);
       updatePostFromResponse(postId, res);
       setReactionPickerPostId(null);
@@ -215,22 +226,18 @@ export default function TimelineScreen() {
     try {
       const body = { content: commentInput.trim() };
       const res = await api.post(`/posts/${commentModalPostId}/comments`, body);
-      // increase comment count locally
       setPosts(prev => prev.map(p => p.id === commentModalPostId ? { ...p, comments: (p.comments || 0) + 1 } : p));
       setCommentInput('');
-      // prepend new comment to list
       setCommentList(prev => [res, ...prev]);
     } catch (err) {
       console.warn('Submit comment error', err);
     }
   };
 
-  // Render một bài đăng chuẩn Zalo
   const renderPost = ({ item }: { item: Post }) => (
     <View style={[styles.card, { backgroundColor: '#fff' }]}>
-      {/* Header bài viết */}
       <View style={styles.postHeader}>
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+        <Image source={getAvatarSource(item.avatar)} style={styles.avatar} />
         <View style={{ flex: 1 }}>
           <Text style={styles.author}>{item.author}</Text>
           <View style={styles.timeRow}>
@@ -241,19 +248,18 @@ export default function TimelineScreen() {
             )}
           </View>
         </View>
-        <TouchableOpacity style={styles.moreButton}>
+        
+        {/* Kết nối nút 3 chấm mở Bottom Sheet */}
+        <TouchableOpacity style={styles.moreButton} onPress={() => setActiveMenuPostId(item.id)}>
           <Ionicons name="ellipsis-horizontal" size={16} color="#727272" />
         </TouchableOpacity>
       </View>
 
-      {/* Nội dung chữ */}
       {item.text ? <Text style={styles.contentText}>{item.text}</Text> : null}
 
-      {/* Hình ảnh hiển thị full chiều ngang viền bo tròn nhẹ */}
       {item.image ? (
         <View style={styles.imageContainer}>
           <Image source={{ uri: item.image }} style={styles.postImage} resizeMode="cover" />
-          {/* Nút bật/tắt âm thanh giả lập nếu là video giống trong ảnh */}
           {!item.isSponsored && (
             <TouchableOpacity style={styles.muteButton}>
               <Ionicons name="volume-mute" size={16} color="#fff" />
@@ -262,7 +268,6 @@ export default function TimelineScreen() {
         </View>
       ) : null}
 
-      {/* Thanh tương tác dưới bài viết */}
       <View style={styles.actionsRow}>
         <View style={styles.leftActions}>
           <TouchableOpacity
@@ -289,7 +294,6 @@ export default function TimelineScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: '#ededed' }]}>
-      {/* Thanh Header màu xanh Zalo */}
       <View style={[styles.zaloHeader, { paddingTop: insets.top }]}>
         <View style={styles.headerTop}>
           <TextInput 
@@ -299,7 +303,6 @@ export default function TimelineScreen() {
           />
         </View>
 
-        {/* Cấu trúc Tab Nhật Ký và Zalo Video */}
         <View style={styles.tabBar}>
           <TouchableOpacity style={[styles.tabItem, styles.tabActive]}>
             <Text style={[styles.tabText, styles.tabTextActive]}>Nhật Ký</Text>
@@ -323,12 +326,10 @@ export default function TimelineScreen() {
         )}
         ListHeaderComponent={
           <>
-            {/* Vùng Khoảnh khắc (Stories) đầu trang */}
             <View style={styles.storySection}>
               <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} />
             </View>
 
-            {/* Khung đăng bài "Hôm nay bạn thế nào?" */}
             <View style={styles.composerCard}>
               <View style={styles.composerTop}>
                 <Image source={getAvatarSource(profile?.avatar_url || profile?.avatar || profile?.profile_picture)} style={styles.avatarSmall} />
@@ -348,7 +349,7 @@ export default function TimelineScreen() {
         }
       />
 
-      {/* Reaction picker modal (long-press heart) */}
+      {/* Reaction picker modal */}
       <Modal visible={!!reactionPickerPostId} transparent animationType="fade" onRequestClose={() => setReactionPickerPostId(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, flexDirection: 'row' }}>
@@ -361,28 +362,12 @@ export default function TimelineScreen() {
         </View>
       </Modal>
 
-      {/* Comment modal - Thiết kế dạng Bottom Sheet chiếm nửa màn hình */}
-      <Modal
-        visible={!!commentModalPostId}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setCommentModalPostId(null)}
-      >
-        {/* Vùng mờ phía trên: Bấm vào để đóng popup */}
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setCommentModalPostId(null)}
-        />
-
-        {/* Khung nội dung đẩy lên khi có bàn phím */}
+      {/* Comment modal */}
+      <Modal visible={!!commentModalPostId} transparent={true} animationType="slide" onRequestClose={() => setCommentModalPostId(null)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCommentModalPostId(null)} />
         <View style={styles.bottomSheetContainer}>
           <View style={styles.bottomSheetContent}>
-
-            {/* Thanh gạch nhỏ trang trí trên đầu đúng chuẩn Bottom Sheet */}
             <View style={styles.sheetHandle} />
-
-            {/* Tiêu đề vùng bình luận */}
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetHeaderTitle}>Bình luận</Text>
               <TouchableOpacity onPress={() => setCommentModalPostId(null)}>
@@ -390,7 +375,6 @@ export default function TimelineScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Danh sách bình luận chiếm không gian chính */}
             <View style={styles.commentListWrapper}>
               {commentList.length === 0 ? (
                 <View style={styles.emptyComments}>
@@ -410,7 +394,6 @@ export default function TimelineScreen() {
               )}
             </View>
 
-            {/* Thanh nhập liệu tích hợp tự động đẩy theo bàn phím */}
             <View style={styles.inputWrapper}>
               <TextInput
                 value={commentInput}
@@ -422,29 +405,90 @@ export default function TimelineScreen() {
               />
               <TouchableOpacity
                 onPress={submitComment}
-                style={[
-                  styles.sendButton,
-                  { backgroundColor: commentInput.trim() ? '#0082f6' : '#e0e0e0' }
-                ]}
+                style={[styles.sendButton, { backgroundColor: commentInput.trim() ? '#0082f6' : '#e0e0e0' }]}
                 disabled={!commentInput.trim()}
               >
                 <Ionicons name="send" size={16} color={commentInput.trim() ? '#fff' : '#999'} />
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* POPUP OPTIONS MENU (3 CHẤM) CHIẾM NỬA MÀN HÌNH CHUẨN UI TRONG ẢNH MẪU */}
+      <Modal
+        visible={!!activeMenuPostId}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setActiveMenuPostId(null)}
+      >
+        {/* Click ra ngoài để đóng menu */}
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setActiveMenuPostId(null)} 
+        />
+
+        {/* Khung Bottom Sheet chứa các chức năng tinh giản tên */}
+        <View style={[styles.menuBottomSheetContainer, { paddingBottom: insets.bottom || 16 }]}>
+          <View style={styles.sheetHandle} />
+          
+          <View style={styles.menuOptionsList}>
+            
+            {/* Chức năng 1: Xóa bài đăng */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => setActiveMenuPostId(null)}>
+              <Ionicons name="trash-outline" size={24} color="#555" style={styles.menuIcon} />
+              <View style={styles.menuTextContent}>
+                <Text style={styles.menuItemTitle}>Xóa bài đăng</Text>
+                <Text style={styles.menuItemSubtitle}>Bài đăng này sẽ ẩn khỏi nhật ký</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Chức năng 2: Ẩn hoạt động */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => setActiveMenuPostId(null)}>
+              <MaterialCommunityIcons name="eye-off-outline" size={24} color="#555" style={styles.menuIcon} />
+              <View style={styles.menuTextContent}>
+                <Text style={styles.menuItemTitle}>Ẩn hoạt động</Text>
+                <Text style={styles.menuItemSubtitle}>Bạn sẽ không thấy bài đăng và khoảnh khắc của người này</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Chức năng 3: Chặn xem nhật ký */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => setActiveMenuPostId(null)}>
+              <Ionicons name="ban-outline" size={24} color="#555" style={styles.menuIcon} />
+              <View style={styles.menuTextContent}>
+                <Text style={styles.menuItemTitle}>Chặn xem nhật ký của tôi</Text>
+                <Text style={styles.menuItemSubtitle}>Người này sẽ không xem được bài đăng và khoảnh khắc của bạn</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Chức năng 4: Báo xấu */}
+            <TouchableOpacity style={styles.menuItem} onPress={() => setActiveMenuPostId(null)}>
+              <Ionicons name="alert-circle-outline" size={24} color="#555" style={styles.menuIcon} />
+              <View style={styles.menuTextContent}>
+                <Text style={styles.menuItemTitle}>Báo xấu</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Chức năng 5: Xóa bạn */}
+            <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={() => setActiveMenuPostId(null)}>
+              <Ionicons name="person-remove-outline" size={24} color="#ff3b30" style={styles.menuIcon} />
+              <View style={styles.menuTextContent}>
+                <Text style={[styles.menuItemTitle, { color: '#ff3b30' }]}>Xóa bạn</Text>
+              </View>
+            </TouchableOpacity>
 
           </View>
         </View>
       </Modal>
-      {/* bottom tab removed */}
-      
+
     </View>
   );
 }
 
-// Component phụ hiển thị danh sách Story (Tin 24h) nằm ngang đầu trang
 const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onPressCreate?: () => void }) => {
   const router = useRouter();
-  const data = (stories && stories.length > 0) ? stories : [null];
+  const data = [null, ...(stories || [])];
   return (
     <FlatList
       data={data}
@@ -454,7 +498,7 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
       renderItem={({ item, index }) => (
         <View style={styles.storyCard}>
           <Image 
-            source={{ uri: index === 0 ? 'https://via.placeholder.com/150/333' : (item?.cover || 'https://via.placeholder.com/150/ffc107') }} 
+            source={{ uri: index === 0 ? 'https://via.placeholder.com/150/333' : (item?.mediaUrl || 'https://via.placeholder.com/150/ffc107') }} 
             style={styles.storyCover} 
           />
           <View style={styles.storyOverlay} />
@@ -469,14 +513,13 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
                   <Ionicons name="camera" size={18} color="#fff" />
                 </View>
               </TouchableOpacity>
-              {/* Full-card invisible overlay to ensure taps open creator */}
               <TouchableOpacity
                 onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
                 style={StyleSheet.absoluteFillObject}
               />
             </>
           ) : (
-            <Image source={{ uri: item?.avatar || 'https://via.placeholder.com/50' }} style={styles.storyAvatarBorder} />
+            <Image source={getAvatarSource(item?.avatar)} style={styles.storyAvatarBorder} />
           )}
           <View style={styles.storyNameWrap}>
             <Text style={styles.storyName} numberOfLines={1}>
@@ -491,20 +534,15 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  // Zalo Blue Header 
   zaloHeader: { backgroundColor: '#0082f6', paddingHorizontal: 16, pb: 0 },
   headerTop: { flexDirection: 'row', alignItems: 'center', height: 48 },
   searchBar: { flex: 1, color: '#fff', fontSize: 16, height: '100%' },
-  // badge removed
-  
-  // Tabs Navigation
   tabBar: { flexDirection: 'row', marginTop: 4 },
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
   tabActive: { borderBottomWidth: 3, borderBottomColor: '#fff' },
   tabText: { color: 'rgba(255,255,255,0.7)', fontWeight: '500', fontSize: 15 },
   tabTextActive: { color: '#fff', fontWeight: 'bold' },
 
-  // Stories Section
   storySection: { backgroundColor: '#fff', paddingVertical: 12, paddingLeft: 12, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
   storyCard: { width: 105, height: 145, marginRight: 10, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f0f0f0', position: 'relative' },
   storyCover: { width: '100%', height: '100%' },
@@ -514,7 +552,6 @@ const styles = StyleSheet.create({
   storyNameWrap: { position: 'absolute', bottom: 8, left: 8, right: 8, alignItems: 'flex-start' },
   storyName: { color: '#fff', fontSize: 12, fontWeight: '600', maxWidth: 88 },
 
-  // Composer Area
   composerCard: { backgroundColor: '#fff', padding: 12, marginTop: 8, marginBottom: 4 },
   composerTop: { flexDirection: 'row', alignItems: 'center' },
   avatarSmall: { width: 38, height: 38, borderRadius: 19 },
@@ -523,7 +560,6 @@ const styles = StyleSheet.create({
   composerBtn: { flexDirection: 'row', alignItems: 'center' },
   composerBtnTxt: { marginLeft: 6, color: '#555', fontSize: 13, fontWeight: '500' },
 
-  // Post Card Standard
   card: { marginTop: 6, paddingVertical: 12 },
   postHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
   avatar: { width: 42, height: 42, borderRadius: 21, marginRight: 10 },
@@ -534,19 +570,15 @@ const styles = StyleSheet.create({
   moreButton: { padding: 4 },
   contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#1c1c1c', lineHeight: 21 },
   
-  // Image layout fitting screen width perfectly
   imageContainer: { marginTop: 10, width: width, height: width * 0.65, position: 'relative' },
   postImage: { width: '100%', height: '100%' },
   muteButton: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
-  // Action Buttons row 
   actionsRow: { flexDirection: 'row', marginTop: 12, paddingHorizontal: 12, alignItems: 'center' },
   leftActions: { flexDirection: 'row', alignItems: 'center' },
   actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 24, backgroundColor: '#f5f5f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   actionCount: { marginLeft: 6, fontSize: 13, color: '#333', fontWeight: '500' },
 
-  // Bottom tab simulation removed
-  // === STYLES CHO BÌNH LUẬN POPUP NỬA MÀN HÌNH ===
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -567,12 +599,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sheetHandle: {
-    width: 40,
+    width: 44,
     height: 5,
     backgroundColor: '#dbdbdb',
     borderRadius: 3,
     alignSelf: 'center',
-    marginTop: 8,
+    marginTop: 10,
+    marginBottom: 8,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -639,5 +672,52 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // === STYLES MỚI CHO OPTIONS MENU 3 CHẤM NỬA MÀN HÌNH ===
+  menuBottomSheetContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: SCREEN_HEIGHT * 0.55, // Giới hạn chiều cao tối đa khoảng nửa màn hình
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 10,
+  },
+  menuOptionsList: {
+    paddingTop: 8,
+    paddingHorizontal: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f2f2f2',
+  },
+  menuIcon: {
+    width: 28,
+    marginRight: 14,
+    textAlign: 'center',
+  },
+  menuTextContent: {
+    flex: 1,
+  },
+  menuItemTitle: {
+    fontSize: 16,
+    color: '#222',
+    fontWeight: '400',
+  },
+  menuItemSubtitle: {
+    fontSize: 12,
+    color: '#7c7c7c',
+    marginTop: 3,
+    lineHeight: 16,
   },
 });

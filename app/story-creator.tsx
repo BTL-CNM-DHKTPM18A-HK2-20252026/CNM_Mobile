@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import api from '@/services/api';
+import * as SecureStore from 'expo-secure-store';
 
 type Props = { onCreated?: () => void };
 
@@ -65,8 +66,23 @@ export default function StoryCreator({ onCreated }: Props) {
         type: mime,
       } as any);
 
-      const uploadRes: any = await api.post('/files/upload/multiple', uploadForm, { headers: { 'Content-Type': 'multipart/form-data' } });
-      const uploaded = Array.isArray(uploadRes) ? uploadRes : uploadRes?.data || [];
+      // Use fetch for multipart upload to let the native layer set the correct Content-Type/boundary
+      const API_URL = process.env.EXPO_PUBLIC_API_URL;
+      const token = await SecureStore.getItemAsync('user_token');
+      const uploadResponse = await fetch(`${API_URL}/files/upload/multiple`, {
+        method: 'POST',
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+          'X-Platform': 'mobile',
+        },
+        body: uploadForm,
+      });
+      if (!uploadResponse.ok) {
+        const txt = await uploadResponse.text();
+        throw new Error(`Upload failed: ${uploadResponse.status} ${txt}`);
+      }
+      const uploadResJson = await uploadResponse.json();
+      const uploaded = Array.isArray(uploadResJson) ? uploadResJson : uploadResJson?.data || uploadResJson || [];
       const fileUrl = uploaded[0]?.fileUrl || uploaded[0]?.url || uploaded[0]?.file_url;
       if (!fileUrl) throw new Error('Upload failed');
 
