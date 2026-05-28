@@ -19,6 +19,7 @@ import api from '@/services/api';
 import { authService } from '@/services/authService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import StoryViewer, { type StoryViewerStory } from '@/components/StoryViewer';
 
 const { width } = Dimensions.get('window');
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -45,6 +46,7 @@ export default function TimelineScreen() {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>(samplePosts);
   const [stories, setStories] = useState<any[]>([]);
+  const [selectedStory, setSelectedStory] = useState<StoryViewerStory | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,6 +98,7 @@ export default function TimelineScreen() {
         avatar: s.authorAvatarUrl || s.authorAvatar || s.avatar,
         mediaUrl: s.mediaUrl || s.media || s.cover,
         mediaType: s.mediaType || (s.mediaUrl && s.mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE'),
+        caption: s.caption || '',
         isViewed: s.isViewedByMe || false,
       }));
       setStories(mapped);
@@ -343,7 +346,11 @@ export default function TimelineScreen() {
         ListHeaderComponent={
           <>
             <View style={styles.storySection}>
-              <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} />
+              <ScrollViewHorizontal
+                stories={stories}
+                onPressCreate={() => router.push('/story-creator')}
+                onPressStory={(story) => setSelectedStory(story)}
+              />
             </View>
 
             <View style={styles.composerCard}>
@@ -431,6 +438,12 @@ export default function TimelineScreen() {
         </View>
       </Modal>
 
+      <StoryViewer
+        visible={!!selectedStory}
+        story={selectedStory}
+        onClose={() => setSelectedStory(null)}
+      />
+
       {/* POPUP OPTIONS MENU (3 CHẤM) CHIẾM NỬA MÀN HÌNH CHUẨN UI TRONG ẢNH MẪU */}
       <Modal
         visible={!!activeMenuPostId}
@@ -502,7 +515,15 @@ export default function TimelineScreen() {
   );
 }
 
-const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onPressCreate?: () => void }) => {
+const ScrollViewHorizontal = ({
+  stories,
+  onPressCreate,
+  onPressStory,
+}: {
+  stories?: StoryViewerStory[];
+  onPressCreate?: () => void;
+  onPressStory?: (story: StoryViewerStory) => void;
+}) => {
   const router = useRouter();
   const data = [null, ...(stories || [])];
   return (
@@ -512,7 +533,23 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
       showsHorizontalScrollIndicator={false}
       keyExtractor={(_, index) => String(index)}
       renderItem={({ item, index }) => (
-        <View style={styles.storyCard}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={styles.storyCard}
+          onPress={() => {
+            if (index === 0) {
+              if (onPressCreate) {
+                onPressCreate();
+              } else {
+                router.push('/story-creator');
+              }
+              return;
+            }
+            if (item) {
+              onPressStory?.(item);
+            }
+          }}
+        >
           <Image 
             source={{ uri: index === 0 ? 'https://via.placeholder.com/150/333' : (item?.mediaUrl || 'https://via.placeholder.com/150/ffc107') }} 
             style={styles.storyCover} 
@@ -521,7 +558,13 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
           {index === 0 ? (
             <>
               <TouchableOpacity
-                onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
+                onPress={() => {
+                  if (onPressCreate) {
+                    onPressCreate();
+                    return;
+                  }
+                  router.push('/story-creator');
+                }}
                 style={{ position: 'absolute', left: 12, top: 75 }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
@@ -529,10 +572,6 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
                   <Ionicons name="camera" size={18} color="#fff" />
                 </View>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
-                style={StyleSheet.absoluteFillObject}
-              />
             </>
           ) : (
             <Image source={getAvatarSource(item?.avatar)} style={styles.storyAvatarBorder} />
@@ -542,7 +581,7 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
               {index === 0 ? 'Tạo mới' : (item?.name || 'Bạn bè')}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
       )}
     />
   );
