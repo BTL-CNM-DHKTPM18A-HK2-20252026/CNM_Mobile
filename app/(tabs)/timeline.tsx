@@ -13,11 +13,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '@/context/ThemeContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
 import { authService } from '@/services/authService';
+import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 
 const { width } = Dimensions.get('window');
@@ -34,14 +34,13 @@ type Post = {
   isLikedByMe?: boolean;
   myReactionType?: string | null;
   comments: number;
-  reactions?: Array<{ type: string; count: number }>;
+  reactions?: { type: string; count: number }[];
   isSponsored?: boolean;
 };
 
 const samplePosts: Post[] = [];
 
 export default function TimelineScreen() {
-  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>(samplePosts);
@@ -62,23 +61,7 @@ export default function TimelineScreen() {
     fetchPosts();
   }, []);
 
-  useEffect(() => {
-    fetchPosts();
-    (async () => {
-      const p = await authService.getProfile();
-      if (p) setProfile(p);
-    })();
-    fetchStories();
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchPosts();
-      fetchStories();
-    }, [])
-  );
-
-  const fetchStories = async () => {
+  const fetchStories = useCallback(async () => {
     try {
       let userId = profile?.id || profile?.userId || profile?.user_id;
       if (!userId) {
@@ -88,7 +71,24 @@ export default function TimelineScreen() {
           userId = p.id || p.userId || p.user_id;
         }
       }
-      const res: any = await api.get('/stories/feed', { headers: userId ? { 'X-User-Id': String(userId) } : undefined });
+
+      const friendsResponse: any = await friendService.getFriendsList().catch((err) => {
+        console.warn('Fetch friends for stories error', err);
+        return [];
+      });
+      const friends = Array.isArray(friendsResponse)
+        ? friendsResponse
+        : (friendsResponse?.data || friendsResponse || []);
+      const friendIds = Array.isArray(friends)
+        ? friends
+            .map((friend: any) => friend.userId || friend.user_id || friend.id)
+            .filter(Boolean)
+        : [];
+
+      const res: any = await api.get('/stories/feed', {
+        headers: userId ? { 'X-User-Id': String(userId) } : undefined,
+        params: friendIds.length > 0 ? { friendIds: friendIds.join(',') } : undefined,
+      });
       const list = Array.isArray(res) ? res : res?.data || res || [];
       const mapped = (list || []).map((s: any) => ({
         id: s.storyId || s.id,
@@ -102,7 +102,23 @@ export default function TimelineScreen() {
     } catch (err) {
       console.warn('Fetch stories error', err);
     }
-  };
+  }, [profile]);
+
+  useEffect(() => {
+    fetchPosts();
+    (async () => {
+      const p = await authService.getProfile();
+      if (p) setProfile(p);
+    })();
+    fetchStories();
+  }, [fetchStories]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPosts();
+      fetchStories();
+    }, [fetchStories])
+  );
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -167,7 +183,7 @@ export default function TimelineScreen() {
         comments: res.commentCount ?? p.comments,
         isLikedByMe: res.isLikedByMe ?? p.isLikedByMe,
         myReactionType: res.myReactionType ?? p.myReactionType,
-        reactions: res.reactionCounts ? Object.entries(res.reactionCounts).map(([k, v]) => ({ type: k, count: v })) : p.reactions,
+        reactions: res.reactionCounts ? Object.entries(res.reactionCounts).map(([k, v]) => ({ type: k, count: Number(v) || 0 })) : p.reactions,
       };
     }));
   };
@@ -534,7 +550,7 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  zaloHeader: { backgroundColor: '#0082f6', paddingHorizontal: 16, pb: 0 },
+  zaloHeader: { backgroundColor: '#0082f6', paddingHorizontal: 16, paddingBottom: 0 },
   headerTop: { flexDirection: 'row', alignItems: 'center', height: 48 },
   searchBar: { flex: 1, color: '#fff', fontSize: 16, height: '100%' },
   tabBar: { flexDirection: 'row', marginTop: 4 },
