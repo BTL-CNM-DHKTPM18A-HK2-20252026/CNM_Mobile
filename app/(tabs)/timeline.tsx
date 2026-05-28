@@ -6,6 +6,7 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
+  Modal,
   ActivityIndicator,
   TextInput,
   RefreshControl,
@@ -16,8 +17,11 @@ import { useTheme } from '@/context/ThemeContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
+import { authService } from '@/services/authService';
+import { getAvatarSource } from '@/services/mediaUtils';
 
 const { width } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type Post = {
   id: string;
@@ -27,7 +31,10 @@ type Post = {
   text?: string;
   image?: string;
   likes: number;
+  isLikedByMe?: boolean;
+  myReactionType?: string | null;
   comments: number;
+  reactions?: Array<{ type: string; count: number }>;
   isSponsored?: boolean;
 };
 // Minimal sample posts to avoid runtime undefined errors
@@ -39,9 +46,14 @@ export default function TimelineScreen() {
   const [posts, setPosts] = useState<Post[]>(samplePosts);
   // stories will be fetched later; for now start empty so we show Create-new only
   const [stories, setStories] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [composer, setComposer] = useState('');
   const [loading, setLoading] = useState(false);
+  const [reactionPickerPostId, setReactionPickerPostId] = useState<string | null>(null);
+  const [commentModalPostId, setCommentModalPostId] = useState<string | null>(null);
+  const [commentList, setCommentList] = useState<any[]>([]);
+  const [commentInput, setCommentInput] = useState('');
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -50,6 +62,11 @@ export default function TimelineScreen() {
 
   useEffect(() => {
     fetchPosts();
+    // load current user profile for avatar
+    (async () => {
+      const p = await authService.getProfile();
+      if (p) setProfile(p);
+    })();
   }, []);
 
   // Refresh posts when screen gains focus (after creating a post)
@@ -73,6 +90,9 @@ export default function TimelineScreen() {
         text: p.content || p.text || p.body || '',
         image: (p.media && p.media[0]?.url) || p.image || null,
         likes: p.likeCount || p.likes || 0,
+        isLikedByMe: p.isLikedByMe || false,
+        myReactionType: p.myReactionType || null,
+        reactions: p.reactionCounts ? Object.entries(p.reactionCounts).map(([k, v]) => ({ type: k, count: v })) : undefined,
         comments: p.commentCount || p.comments || 0,
         isSponsored: p.isSponsored || false,
       }));
@@ -83,6 +103,122 @@ export default function TimelineScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
+
+  const emojiToReactionType = (emoji: string): 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY' => {
+    switch (emoji) {
+      case '❤️':
+        return 'LOVE';
+      case '😆':
+        return 'HAHA';
+      case '😮':
+        return 'WOW';
+      case '😭':
+        return 'SAD';
+      case '😡':
+        return 'ANGRY';
+      default:
+        return 'LIKE';
+    }
+  };
+
+  const reactionTypeToEmoji = (type?: string | null) => {
+    switch (type) {
+      case 'LOVE': return '❤️';
+      case 'HAHA': return '😆';
+      case 'WOW': return '😮';
+      case 'SAD': return '😭';
+      case 'ANGRY': return '😡';
+      default: return '👍';
+    }
+  };
+
+  const updatePostFromResponse = (postId: string, res: any) => {
+    setPosts((prev) => prev.map((p) => {
+      if (p.id !== String(res.postId || res.id || res.postId)) return p;
+      return {
+        ...p,
+        likes: res.likeCount ?? p.likes,
+        comments: res.commentCount ?? p.comments,
+        isLikedByMe: res.isLikedByMe ?? p.isLikedByMe,
+        myReactionType: res.myReactionType ?? p.myReactionType,
+        reactions: res.reactionCounts ? Object.entries(res.reactionCounts).map(([k, v]) => ({ type: k, count: v })) : p.reactions,
+      };
+    }));
+  };
+
+  const toggleLike = async (postId: string) => {
+    try {
+      const existing = posts.find(p => p.id === postId);
+      // optimistic update
+      setPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        if (p.isLikedByMe) {
+          return { ...p, isLikedByMe: false, myReactionType: null, likes: Math.max(0, (p.likes || 1) - 1) };
+        }
+        return { ...p, isLikedByMe: true, myReactionType: 'LIKE', likes: (p.likes || 0) + 1 };
+      }));
+
+      if (existing?.isLikedByMe) {
+        const res = await api.delete(`/posts/${postId}/like`);
+        updatePostFromResponse(postId, res);
+      } else {
+        const res = await api.post(`/posts/${postId}/react/LIKE`);
+        updatePostFromResponse(postId, res);
+      }
+    } catch (err) {
+      console.warn('Toggle like error', err);
+    }
+  };
+
+  const reactWith = async (postId: string, emoji: string) => {
+    try {
+      const reactionType = emojiToReactionType(emoji);
+      // optimistic update: set myReactionType and isLikedByMe
+      setPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        const alreadyLiked = !!p.isLikedByMe;
+        return {
+          ...p,
+          isLikedByMe: true,
+          myReactionType: reactionType,
+          likes: alreadyLiked ? p.likes : (p.likes || 0) + 1,
+        };
+      }));
+
+      const res = await api.post(`/posts/${postId}/react/${reactionType}`);
+      updatePostFromResponse(postId, res);
+      setReactionPickerPostId(null);
+    } catch (err) {
+      console.warn('React error', err);
+    }
+  };
+
+  const openCommentModal = async (postId: string) => {
+    try {
+      const res: any = await api.get(`/posts/${postId}/comments`);
+      setCommentList(Array.isArray(res) ? res : (res || []));
+      setCommentModalPostId(postId);
+    } catch (err) {
+      console.warn('Fetch comments error', err);
+    }
+  };
+
+  const submitComment = async () => {
+    if (!commentModalPostId || !commentInput.trim()) return;
+    try {
+      const body = { content: commentInput.trim() };
+      const res = await api.post(`/posts/${commentModalPostId}/comments`, body);
+      // increase comment count locally
+      setPosts(prev => prev.map(p => p.id === commentModalPostId ? { ...p, comments: (p.comments || 0) + 1 } : p));
+      setCommentInput('');
+      // prepend new comment to list
+      setCommentList(prev => [res, ...prev]);
+    } catch (err) {
+      console.warn('Submit comment error', err);
     }
   };
 
@@ -126,12 +262,20 @@ export default function TimelineScreen() {
       {/* Thanh tương tác dưới bài viết */}
       <View style={styles.actionsRow}>
         <View style={styles.leftActions}>
-          <TouchableOpacity style={styles.actionItem}>
-            <Ionicons name="heart-outline" size={22} color="#111" />
+          <TouchableOpacity
+            style={styles.actionItem}
+            onPress={() => toggleLike(item.id)}
+            onLongPress={() => setReactionPickerPostId(item.id)}
+          >
+            {item.myReactionType ? (
+              <Text style={{ fontSize: 20, marginRight: 4 }}>{reactionTypeToEmoji(item.myReactionType)}</Text>
+            ) : (
+              <Ionicons name={item.isLikedByMe ? 'heart' : 'heart-outline'} size={22} color={item.isLikedByMe ? '#e91e63' : '#111'} />
+            )}
             {item.likes > 0 && <Text style={styles.actionCount}>{item.likes}</Text>}
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity style={styles.actionItem} onPress={() => openCommentModal(item.id)}>
             <Ionicons name="chatbubble-outline" size={20} color="#111" />
             {item.comments > 0 && <Text style={styles.actionCount}>{item.comments}</Text>}
           </TouchableOpacity>
@@ -184,7 +328,7 @@ export default function TimelineScreen() {
             {/* Khung đăng bài "Hôm nay bạn thế nào?" */}
             <View style={styles.composerCard}>
               <View style={styles.composerTop}>
-                <Image source={{ uri: 'https://via.placeholder.com/80' }} style={styles.avatarSmall} />
+                <Image source={getAvatarSource(profile?.avatar_url || profile?.avatar || profile?.profile_picture)} style={styles.avatarSmall} />
                 <TouchableOpacity style={styles.composerInputMock} onPress={() => router.push('/create-post')}>
                   <Text style={{ color: '#7f7f7f', fontSize: 15 }}>Hôm nay bạn thế nào?</Text>
                 </TouchableOpacity>
@@ -201,6 +345,93 @@ export default function TimelineScreen() {
         }
       />
 
+      {/* Reaction picker modal (long-press heart) */}
+      <Modal visible={!!reactionPickerPostId} transparent animationType="fade" onRequestClose={() => setReactionPickerPostId(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 12, flexDirection: 'row' }}>
+            {REACTION_EMOJIS.map((e) => (
+              <TouchableOpacity key={e} onPress={() => reactWith(reactionPickerPostId as string, e)} style={{ padding: 8 }}>
+                <Text style={{ fontSize: 24 }}>{e}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Comment modal - Thiết kế dạng Bottom Sheet chiếm nửa màn hình */}
+      <Modal
+        visible={!!commentModalPostId}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setCommentModalPostId(null)}
+      >
+        {/* Vùng mờ phía trên: Bấm vào để đóng popup */}
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setCommentModalPostId(null)}
+        />
+
+        {/* Khung nội dung đẩy lên khi có bàn phím */}
+        <View style={styles.bottomSheetContainer}>
+          <View style={styles.bottomSheetContent}>
+
+            {/* Thanh gạch nhỏ trang trí trên đầu đúng chuẩn Bottom Sheet */}
+            <View style={styles.sheetHandle} />
+
+            {/* Tiêu đề vùng bình luận */}
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetHeaderTitle}>Bình luận</Text>
+              <TouchableOpacity onPress={() => setCommentModalPostId(null)}>
+                <Ionicons name="close" size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Danh sách bình luận chiếm không gian chính */}
+            <View style={styles.commentListWrapper}>
+              {commentList.length === 0 ? (
+                <View style={styles.emptyComments}>
+                  <Text style={{ color: '#888' }}>Chưa có bình luận nào</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={commentList}
+                  keyExtractor={(c, i) => c.commentId || c.id || String(i)}
+                  renderItem={({ item }) => (
+                    <View style={styles.commentItem}>
+                      <Text style={styles.commentUser}>{item.userName || item.authorName || 'Người dùng'}</Text>
+                      <Text style={styles.commentText}>{item.content}</Text>
+                    </View>
+                  )}
+                />
+              )}
+            </View>
+
+            {/* Thanh nhập liệu tích hợp tự động đẩy theo bàn phím */}
+            <View style={styles.inputWrapper}>
+              <TextInput
+                value={commentInput}
+                onChangeText={setCommentInput}
+                placeholder="Viết bình luận..."
+                placeholderTextColor="#999"
+                style={styles.bottomSheetInput}
+                multiline={false}
+              />
+              <TouchableOpacity
+                onPress={submitComment}
+                style={[
+                  styles.sendButton,
+                  { backgroundColor: commentInput.trim() ? '#0082f6' : '#e0e0e0' }
+                ]}
+                disabled={!commentInput.trim()}
+              >
+                <Ionicons name="send" size={16} color={commentInput.trim() ? '#fff' : '#999'} />
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
       {/* bottom tab removed */}
     </View>
   );
@@ -297,4 +528,98 @@ const styles = StyleSheet.create({
   actionCount: { marginLeft: 6, fontSize: 13, color: '#333', fontWeight: '500' },
 
   // Bottom tab simulation removed
+  // === STYLES CHO BÌNH LUẬN POPUP NỬA MÀN HÌNH ===
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  bottomSheetContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SCREEN_HEIGHT * 0.5,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+  },
+  bottomSheetContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  sheetHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#dbdbdb',
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f0f0f0',
+  },
+  sheetHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  commentListWrapper: {
+    flex: 1,
+  },
+  emptyComments: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  commentItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f9f9f9',
+  },
+  commentUser: {
+    fontWeight: '600',
+    fontSize: 14,
+    color: '#333',
+  },
+  commentText: {
+    marginTop: 3,
+    fontSize: 14,
+    color: '#111',
+    lineHeight: 18,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: '#e0e0e0',
+    backgroundColor: '#fff',
+  },
+  bottomSheetInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: '#000',
+  },
+  sendButton: {
+    marginLeft: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
