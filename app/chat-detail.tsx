@@ -1,5 +1,6 @@
 import { AttachMenuContent } from '@/components/chat/AttachMenuContent';
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import ExpandableText from '@/components/chat/ExpandableText';
 import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
 import { MediaViewer } from '@/components/chat/MediaViewer';
 import { MessageInput } from '@/components/chat/MessageInput';
@@ -21,6 +22,7 @@ import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
 import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
 import { ResizeMode, Video } from 'expo-av';
@@ -1582,6 +1584,75 @@ export default function ChatDetailScreen() {
     }
   };
 
+  const sendTextMessagesSequentially = useCallback(async (content: string, replyToMessageId?: string) => {
+    if (!conversationId) {
+      return { failedParts: [] as string[] };
+    }
+
+    const segments = splitMessage(content, DEFAULT_SPLIT_MESSAGE_MAX_WORDS);
+    if (segments.length === 0) {
+      return { failedParts: [] as string[] };
+    }
+
+    const baseTimestamp = Date.now();
+    const optimisticMessages: Message[] = segments.map((segment, index) => ({
+      messageId: `temp-${baseTimestamp}-${index}`,
+      content: segment,
+      senderId: currentUserId ?? 'local-user',
+      senderName: 'Me',
+      createdAt: toLocalIsoString(new Date(baseTimestamp + index)),
+    }));
+
+    setMessages((prev) => mergeUniqueMessages(prev, optimisticMessages));
+    requestScrollToLatest(true);
+
+    const failedParts: string[] = [];
+    let shouldRefresh = false;
+
+    for (let index = 0; index < segments.length; index += 1) {
+      const part = segments[index];
+      const optimisticId = optimisticMessages[index].messageId;
+
+      try {
+        const response = await chatService.sendMessage(conversationId, {
+          content: part,
+          messageType: 'TEXT',
+          attachments: [],
+          replyToMessageId: index === 0 ? replyToMessageId : undefined,
+        });
+
+        logChatDebug('sendMessage.response', response);
+
+        const mappedMessage = mapAnyPayloadToUiMessage(response);
+        if (mappedMessage) {
+          logChatDebug('sendMessage.mapped', mappedMessage);
+          setMessages((prev) => {
+            const withoutTemp = prev.filter((message) => message.messageId !== optimisticId);
+            return mergeUniqueMessages(withoutTemp, [mappedMessage]);
+          });
+        } else {
+          shouldRefresh = true;
+        }
+      } catch (error) {
+        const axiosError = error as AxiosError<{ message?: string; error?: { message?: string } }>;
+        console.error('Failed to send message part via REST:', {
+          status: axiosError.response?.status,
+          data: axiosError.response?.data,
+          message: axiosError.message,
+        });
+
+        failedParts.push(part);
+        setMessages((prev) => prev.filter((message) => message.messageId !== optimisticId));
+      }
+    }
+
+    if (shouldRefresh) {
+      void loadInitialMessages(currentUserId, true);
+    }
+
+    return { failedParts };
+  }, [conversationId, currentUserId, loadInitialMessages, logChatDebug, mapAnyPayloadToUiMessage, mergeUniqueMessages, requestScrollToLatest]);
+
   const handleSendMessage = async () => {
     if (inputText.trim() === '' || !conversationId) return;
     if (isAiConversation && isSendingAi) return;
@@ -1623,23 +1694,25 @@ export default function ChatDetailScreen() {
     }
 
     const messageContent = inputText.trim();
-    const tempMessageId = `temp-${Date.now()}`;
-    const now = new Date();
-    const optimisticMessage: Message = {
-      messageId: tempMessageId,
-      content: messageContent,
-      senderId: currentUserId ?? 'local-user',
-      senderName: 'Me',
-      createdAt: toLocalIsoString(now),
-    };
-
-    setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
-    requestScrollToLatest(true);
+    const replyToMessageId = replyingTo?.messageId;
     setInputText('');
     setReplyingTo(null);
 
     try {
       if (isAiConversation) {
+        const tempMessageId = `temp-${Date.now()}`;
+        const now = new Date();
+        const optimisticMessage: Message = {
+          messageId: tempMessageId,
+          content: messageContent,
+          senderId: currentUserId ?? 'local-user',
+          senderName: 'Me',
+          createdAt: toLocalIsoString(now),
+        };
+
+        setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
+        requestScrollToLatest(true);
+
         setIsSendingAi(true);
 
         const locale = (i18n.resolvedLanguage || i18n.language || 'vi').toLowerCase();
@@ -1682,26 +1755,9 @@ export default function ChatDetailScreen() {
         return;
       }
 
-      const response = await chatService.sendMessage(conversationId, {
-        content: messageContent,
-        messageType: 'TEXT',
-        attachments: [],
-        replyToMessageId: replyingTo?.messageId,
-      });
-
-      logChatDebug('sendMessage.response', response);
-
-      const mappedMessage = mapAnyPayloadToUiMessage(response);
-      if (mappedMessage) {
-        logChatDebug('sendMessage.mapped', mappedMessage);
-        setMessages((prev) => {
-          const withoutTemp = prev.filter((message) => message.messageId !== tempMessageId);
-          return mergeUniqueMessages(withoutTemp, [mappedMessage]);
-        });
-        requestScrollToLatest(true);
-      } else {
-        // Keep optimistic message visible and let polling/socket reconcile shortly.
-        void loadInitialMessages(currentUserId, true);
+      const { failedParts } = await sendTextMessagesSequentially(messageContent, replyToMessageId);
+      if (failedParts.length > 0) {
+        setInputText(failedParts.join('\n\n'));
       }
     } catch (error) {
       const axiosError = error as AxiosError<{ message?: string; error?: { message?: string } }>;
@@ -1710,7 +1766,6 @@ export default function ChatDetailScreen() {
         data: axiosError.response?.data,
         message: axiosError.message,
       });
-      setMessages((prev) => prev.filter((message) => message.messageId !== tempMessageId));
       setInputText(messageContent);
     } finally {
       if (isAiConversation) {
@@ -3309,9 +3364,14 @@ export default function ChatDetailScreen() {
                 resizeMode="cover"
               />
               {item.caption ? (
-                <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-                  {item.caption}
-                </Text>
+                <ExpandableText
+                  text={item.caption}
+                  previewWords={120}
+                  previewLines={8}
+                  containerStyle={{ marginTop: 6 }}
+                  textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+                  actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+                />
               ) : null}
               {isLocalUri && (
                 <View style={styles.mediaUploadingOverlay}>
@@ -3430,9 +3490,14 @@ export default function ChatDetailScreen() {
             {forwardedBanner}
             {renderGrid()}
             {item.caption ? (
-              <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-                {item.caption}
-              </Text>
+              <ExpandableText
+                text={item.caption}
+                previewWords={120}
+                previewLines={8}
+                containerStyle={{ marginTop: 6 }}
+                textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+                actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+              />
             ) : null}
           </>
         );
@@ -3477,9 +3542,14 @@ export default function ChatDetailScreen() {
                 ) : null}
               </View>
               {item.caption ? (
-                <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-                  {item.caption}
-                </Text>
+                <ExpandableText
+                  text={item.caption}
+                  previewWords={120}
+                  previewLines={8}
+                  containerStyle={{ marginTop: 6 }}
+                  textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+                  actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+                />
               ) : null}
             </TouchableOpacity>
           </>
@@ -3628,7 +3698,13 @@ export default function ChatDetailScreen() {
         <>
           {replyBlock}
           {forwardedBanner}
-          <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}>{displayContent}</Text>
+          <ExpandableText
+            text={displayContent}
+            previewWords={120}
+            previewLines={8}
+            textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+            actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+          />
           {item.isEdited ? <Text style={[styles.editedLabel, isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }]}>{t('chat.edited', 'Đã chỉnh sửa')}</Text> : null}
         </>
       );
