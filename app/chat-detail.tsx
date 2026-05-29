@@ -1,5 +1,6 @@
 import { AttachMenuContent } from '@/components/chat/AttachMenuContent';
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import ExpandableText from '@/components/chat/ExpandableText';
 import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
 import { MediaViewer } from '@/components/chat/MediaViewer';
 import { MessageInput } from '@/components/chat/MessageInput';
@@ -3363,9 +3364,14 @@ export default function ChatDetailScreen() {
                 resizeMode="cover"
               />
               {item.caption ? (
-                <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-                  {item.caption}
-                </Text>
+                <ExpandableText
+                  text={item.caption}
+                  previewWords={120}
+                  previewLines={8}
+                  containerStyle={{ marginTop: 6 }}
+                  textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+                  actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+                />
               ) : null}
               {isLocalUri && (
                 <View style={styles.mediaUploadingOverlay}>
@@ -3484,9 +3490,14 @@ export default function ChatDetailScreen() {
             {forwardedBanner}
             {renderGrid()}
             {item.caption ? (
-              <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-                {item.caption}
-              </Text>
+              <ExpandableText
+                text={item.caption}
+                previewWords={120}
+                previewLines={8}
+                containerStyle={{ marginTop: 6 }}
+                textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+                actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+              />
             ) : null}
           </>
         );
@@ -3531,9 +3542,14 @@ export default function ChatDetailScreen() {
                 ) : null}
               </View>
               {item.caption ? (
-                <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }, { marginTop: 6 }]}>
-                  {item.caption}
-                </Text>
+                <ExpandableText
+                  text={item.caption}
+                  previewWords={120}
+                  previewLines={8}
+                  containerStyle={{ marginTop: 6 }}
+                  textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+                  actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+                />
               ) : null}
             </TouchableOpacity>
           </>
@@ -3682,7 +3698,13 @@ export default function ChatDetailScreen() {
         <>
           {replyBlock}
           {forwardedBanner}
-          <Text style={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}>{displayContent}</Text>
+          <ExpandableText
+            text={displayContent}
+            previewWords={120}
+            previewLines={8}
+            textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
+            actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
+          />
           {item.isEdited ? <Text style={[styles.editedLabel, isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }]}>{t('chat.edited', 'Đã chỉnh sửa')}</Text> : null}
         </>
       );
