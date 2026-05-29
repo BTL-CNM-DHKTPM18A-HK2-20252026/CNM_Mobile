@@ -1,9 +1,9 @@
 import { COLORS } from '@/constants/theme';
-import { useTheme } from '@/context/ThemeContext';
 import { usePresence } from '@/context/PresenceContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useChatSocket } from '@/hooks/useChatSocket';
-import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import api from '@/services/api';
+import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
@@ -16,9 +16,9 @@ import { File, Paths } from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -44,6 +44,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CallOverlay } from '../components/CallOverlay';
 import {
   mapChatPayloadListToUiMessages,
   mapChatPayloadToUiMessage,
@@ -51,7 +52,6 @@ import {
   type ChatUiReaction,
 } from '../services/chatMessageAdapter';
 import { webrtcService } from '../services/webrtcService';
-import { CallOverlay } from '../components/CallOverlay';
 
 // ── Local-delete persistence (mirrors Web's localStorage approach) ──────────
 const LOCAL_DELETED_STORAGE_KEY = 'fruvia.chat.deleted-local.v1';
