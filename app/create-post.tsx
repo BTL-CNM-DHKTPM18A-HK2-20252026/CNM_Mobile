@@ -39,18 +39,32 @@ export default function CreatePostScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') return;
-    const res = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-    if (!res.cancelled) {
-      setSelectedImages(prev => [...prev, { uri: res.uri }]);
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'], // Sửa thành mảng chuỗi trực tiếp ở đây
+      quality: 0.8
+    });
+
+    if (!res.canceled && res.assets && res.assets.length > 0) {
+      setSelectedImages(prev => [...prev, { uri: res.assets[0].uri }]);
     }
   };
 
   const pickFromLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-    if (!res.cancelled) {
-      setSelectedImages(prev => [...prev, { uri: res.uri }]);
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], // Sửa thành mảng chuỗi trực tiếp ở đây
+      allowsMultipleSelection: true,
+      quality: 0.8
+    });
+
+    if (!res.canceled && res.assets && res.assets.length > 0) {
+      setSelectedImages(prev => [
+        ...prev,
+        ...res.assets
+          .filter((asset) => !!asset.uri)
+          .map((asset) => ({ uri: asset.uri })),
+      ]);
     }
   };
 
@@ -58,35 +72,41 @@ export default function CreatePostScreen() {
     if (!content.trim()) return;
     setLoading(true);
     try {
-      // If there are images selected, upload them first to /files/upload/multiple
       let media: { url: string; altText?: string }[] = [];
       if (selectedImages.length > 0) {
         const uploadForm = new FormData();
+        let appendedCount = 0;
         selectedImages.forEach((it, idx) => {
           const uri = it.uri;
+
+          // Lớp bảo vệ: Bỏ qua nếu cấu trúc uri trống
+          if (!uri) return;
+
           const filename = uri.split('/').pop() || `photo_${idx}.jpg`;
           const fileType = (filename.match(/\.(\w+)$/)?.[1] || 'jpg').toLowerCase();
           const mime = fileType === 'png' ? 'image/png' : 'image/jpeg';
+
           uploadForm.append('files', {
             uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
             name: filename,
             type: mime,
           } as any);
+          appendedCount += 1;
         });
 
-        // Use files/multiple upload endpoint
-        const uploadRes: any = await api.post('/files/upload/multiple', uploadForm, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        if (appendedCount > 0) {
+          const uploadRes: any = await api.post('/files/upload/multiple', uploadForm, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
 
-        // uploadRes is expected to be an array of FileUploadResponse
-        const uploaded: any[] = Array.isArray(uploadRes) ? uploadRes : uploadRes?.data || [];
-        media = uploaded.map(u => ({ url: u.fileUrl || u.url || u.file_url, altText: '' }));
+          const uploaded: any[] = Array.isArray(uploadRes) ? uploadRes : uploadRes?.data || [];
+          media = uploaded.map(u => ({ url: u.fileUrl || u.url || u.file_url, altText: '' }));
+        }
       }
 
-      // Create post with JSON body including media URLs
       const postBody: any = { content: content.trim() };
       if (media.length) postBody.media = media;
+
       await api.post('/posts', postBody);
       router.back();
     } catch (err) {
@@ -171,6 +191,28 @@ export default function CreatePostScreen() {
               value={content}
               onChangeText={setContent}
             />
+
+            {/* PHẦN HIỂN THỊ DANH SÁCH HÌNH ẢNH THỰC TẾ ĐÃ CHỌN ĐỂ ĐĂNG BÀI */}
+            {selectedImages.length > 0 && (
+              <FlatList
+                data={selectedImages}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item, index) => index.toString()}
+                contentContainerStyle={{ paddingBottom: 12 }}
+                renderItem={({ item, index }) => (
+                  <View style={styles.selectedImageContainer}>
+                    <Image source={{ uri: item.uri }} style={styles.selectedPreviewImage} />
+                    <TouchableOpacity
+                      onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== index))}
+                      style={styles.removeImageBadge}
+                    >
+                      <Ionicons name="close-circle" size={18} color="rgba(0,0,0,0.7)" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              />
+            )}
 
             <View style={styles.colorTextRow}>
               <TouchableOpacity style={styles.circleColorButton}>
@@ -261,6 +303,12 @@ const styles = StyleSheet.create({
   postBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   mainContent: { paddingHorizontal: 16, paddingTop: 16 },
   input: { minHeight: 120, fontSize: 18, color: '#111', textAlignVertical: 'top' },
+
+  // Các style mới phục vụ danh sách ảnh được chọn preview
+  selectedImageContainer: { marginRight: 10, position: 'relative', marginTop: 4 },
+  selectedPreviewImage: { width: 72, height: 72, borderRadius: 8, borderWidth: 0.5, borderColor: '#e0e0e0' },
+  removeImageBadge: { position: 'absolute', top: -6, right: -6, backgroundColor: '#fff', borderRadius: 9 },
+
   colorTextRow: { marginVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   circleColorButton: {
     width: 32,

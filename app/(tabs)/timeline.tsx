@@ -29,6 +29,7 @@ type Post = {
   avatar?: string;
   time: string;
   text?: string;
+  images?: string[];
   image?: string;
   likes: number;
   isLikedByMe?: boolean;
@@ -117,6 +118,9 @@ export default function TimelineScreen() {
           null,
         time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
         text: p.content || p.text || p.body || '',
+        images: Array.isArray(p.media) && p.media.length > 0
+          ? p.media.map((m: any) => m.url || m)
+          : (p.images && Array.isArray(p.images) ? p.images : (p.image ? [p.image] : [])),
         image: (p.media && p.media[0]?.url) || p.image || null,
         likes: p.likeCount || p.likes || 0,
         isLikedByMe: p.isLikedByMe || false,
@@ -167,7 +171,9 @@ export default function TimelineScreen() {
         comments: res.commentCount ?? p.comments,
         isLikedByMe: res.isLikedByMe ?? p.isLikedByMe,
         myReactionType: res.myReactionType ?? p.myReactionType,
-        reactions: res.reactionCounts ? Object.entries(res.reactionCounts).map(([k, v]) => ({ type: k, count: v })) : p.reactions,
+        reactions: res.reactionCounts
+          ? Object.entries(res.reactionCounts).map(([k, v]) => ({ type: k, count: Number(v) || 0 }))
+          : p.reactions,
       };
     }));
   };
@@ -257,15 +263,113 @@ export default function TimelineScreen() {
 
       {item.text ? <Text style={styles.contentText}>{item.text}</Text> : null}
 
-      {item.image ? (
-        <View style={styles.imageContainer}>
-          <Image source={{ uri: item.image }} style={styles.postImage} resizeMode="cover" />
-          {!item.isSponsored && (
-            <TouchableOpacity style={styles.muteButton}>
-              <Ionicons name="volume-mute" size={16} color="#fff" />
-            </TouchableOpacity>
-          )}
-        </View>
+      {item.images && item.images.length > 0 ? (
+        (() => {
+          const images = item.images.slice(0, 4);
+          const count = images.length;
+          const gutter = 2;
+          const innerWidth = width - 4;
+          const squareSize = (innerWidth - gutter) / 2;
+          const topImageHeight = innerWidth * 0.65;
+
+          return (
+            <View
+              style={[
+                styles.imageContainer,
+                {
+                  height:
+                    count === 1
+                      ? topImageHeight
+                      : count === 2
+                        ? squareSize
+                        : count === 3
+                          ? topImageHeight + gutter + squareSize
+                          : squareSize * 2 + gutter,
+                },
+              ]}
+            >
+              {count === 1 ? (
+                <Image source={{ uri: images[0] }} style={styles.singleImage} resizeMode="cover" />
+              ) : count === 2 ? (
+                <View style={styles.twoImageRow}>
+                  {images.map((uri, idx) => (
+                    <Image
+                      key={idx}
+                      source={{ uri }}
+                      style={[
+                        styles.twoImageTile,
+                        { width: squareSize, height: squareSize, marginRight: idx === 0 ? gutter : 0 },
+                      ]}
+                      resizeMode="cover"
+                    />
+                  ))}
+                </View>
+              ) : count === 3 ? (
+                <View style={styles.threeImageLayout}>
+                  <Image
+                    source={{ uri: images[0] }}
+                    style={[styles.threeMainImage, { width: innerWidth, height: topImageHeight, marginBottom: gutter }]}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.threeBottomRow}>
+                    {images.slice(1, 3).map((uri, idx) => (
+                      <Image
+                        key={idx}
+                        source={{ uri }}
+                        style={[
+                          styles.threeBottomTile,
+                          { width: squareSize, height: squareSize, marginRight: idx === 0 ? gutter : 0 },
+                        ]}
+                        resizeMode="cover"
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.fourGrid}>
+                  {images.map((uri, idx) => {
+                    const isLastVisibleTile = idx === 3;
+                    const extraCount = item.images!.length - 4;
+                    const isLeftColumn = idx % 2 === 0;
+                    const isTopRow = idx < 2;
+
+                    return (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.fourGridTile,
+                          {
+                            width: squareSize,
+                            height: squareSize,
+                            marginRight: isLeftColumn ? gutter : 0,
+                            marginBottom: isTopRow ? gutter : 0,
+                          },
+                        ]}
+                      >
+                        <Image
+                          source={{ uri }}
+                          style={styles.fourGridImage}
+                          resizeMode="cover"
+                        />
+                        {isLastVisibleTile && item.images!.length > 4 ? (
+                          <View style={styles.moreOverlay}>
+                            <Text style={styles.moreOverlayText}>+{extraCount}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {!item.isSponsored && (
+                <TouchableOpacity style={styles.muteButton}>
+                  <Ionicons name="volume-mute" size={16} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })()
       ) : null}
 
       <View style={styles.actionsRow}>
@@ -534,7 +638,7 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  zaloHeader: { backgroundColor: '#0082f6', paddingHorizontal: 16, pb: 0 },
+  zaloHeader: { backgroundColor: '#0082f6', paddingHorizontal: 16, paddingBottom: 0 },
   headerTop: { flexDirection: 'row', alignItems: 'center', height: 48 },
   searchBar: { flex: 1, color: '#fff', fontSize: 16, height: '100%' },
   tabBar: { flexDirection: 'row', marginTop: 4 },
@@ -570,8 +674,24 @@ const styles = StyleSheet.create({
   moreButton: { padding: 4 },
   contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#1c1c1c', lineHeight: 21 },
   
-  imageContainer: { marginTop: 10, width: width, height: width * 0.65, position: 'relative' },
-  postImage: { width: '100%', height: '100%' },
+  imageContainer: { marginTop: 10, width: width, position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
+  singleImage: { width: '100%', height: '100%' },
+  twoImageRow: { flexDirection: 'row', width: '100%', height: '100%' },
+  twoImageTile: { height: '100%' },
+  threeImageLayout: { width: '100%', height: '100%' },
+  threeMainImage: { width: '100%' },
+  threeBottomRow: { flexDirection: 'row', width: '100%', height: width / 2 },
+  threeBottomTile: { height: '100%' },
+  fourGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', height: '100%' },
+  fourGridTile: { position: 'relative', overflow: 'hidden' },
+  fourGridImage: { width: '100%', height: '100%' },
+  moreOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreOverlayText: { color: '#fff', fontSize: 26, fontWeight: '700' },
   muteButton: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
 
   actionsRow: { flexDirection: 'row', marginTop: 12, paddingHorizontal: 12, alignItems: 'center' },
