@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { PostCard, type PostCardData } from '@/components/post/PostCard';
 import { useTheme } from '@/context/ThemeContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,21 +24,7 @@ import { getAvatarSource } from '@/services/mediaUtils';
 const { width } = Dimensions.get('window');
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-type Post = {
-  id: string;
-  author: string;
-  avatar?: string;
-  time: string;
-  text?: string;
-  images?: string[];
-  image?: string;
-  likes: number;
-  isLikedByMe?: boolean;
-  myReactionType?: string | null;
-  comments: number;
-  reactions?: Array<{ type: string; count: number }>;
-  isSponsored?: boolean;
-};
+type Post = PostCardData;
 
 const samplePosts: Post[] = [];
 
@@ -112,8 +99,10 @@ export default function TimelineScreen() {
       const list = Array.isArray(res) ? res : res?.content || res?.data || [];
       const mapped: Post[] = (list || []).map((p: any) => ({
         id: String(p.id || p.postId || p._id || Date.now()),
+        authorId: String(p.authorId || p.userId || p.createdById || p.createdBy || ''),
         author: p.author?.displayName || p.authorName || p.createdBy || p.userName || 'Người dùng',
         avatar:
+          p.authorAvatarUrl ||
           p.avatarUrl ||
           null,
         time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
@@ -241,159 +230,13 @@ export default function TimelineScreen() {
   };
 
   const renderPost = ({ item }: { item: Post }) => (
-    <View style={[styles.card, { backgroundColor: '#fff' }]}>
-      <View style={styles.postHeader}>
-        <Image source={getAvatarSource(item.avatar)} style={styles.avatar} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.author}>{item.author}</Text>
-          <View style={styles.timeRow}>
-            {item.isSponsored ? (
-              <Text style={styles.sponsoredText}>Được tài trợ</Text>
-            ) : (
-              <Text style={styles.time}>{item.time}</Text>
-            )}
-          </View>
-        </View>
-        
-        {/* Kết nối nút 3 chấm mở Bottom Sheet */}
-        <TouchableOpacity style={styles.moreButton} onPress={() => setActiveMenuPostId(item.id)}>
-          <Ionicons name="ellipsis-horizontal" size={16} color="#727272" />
-        </TouchableOpacity>
-      </View>
-
-      {item.text ? <Text style={styles.contentText}>{item.text}</Text> : null}
-
-      {item.images && item.images.length > 0 ? (
-        (() => {
-          const images = item.images.slice(0, 4);
-          const count = images.length;
-          const gutter = 2;
-          const innerWidth = width - 4;
-          const squareSize = (innerWidth - gutter) / 2;
-          const topImageHeight = innerWidth * 0.65;
-
-          return (
-            <View
-              style={[
-                styles.imageContainer,
-                {
-                  height:
-                    count === 1
-                      ? topImageHeight
-                      : count === 2
-                        ? squareSize
-                        : count === 3
-                          ? topImageHeight + gutter + squareSize
-                          : squareSize * 2 + gutter,
-                },
-              ]}
-            >
-              {count === 1 ? (
-                <Image source={{ uri: images[0] }} style={styles.singleImage} resizeMode="cover" />
-              ) : count === 2 ? (
-                <View style={styles.twoImageRow}>
-                  {images.map((uri, idx) => (
-                    <Image
-                      key={idx}
-                      source={{ uri }}
-                      style={[
-                        styles.twoImageTile,
-                        { width: squareSize, height: squareSize, marginRight: idx === 0 ? gutter : 0 },
-                      ]}
-                      resizeMode="cover"
-                    />
-                  ))}
-                </View>
-              ) : count === 3 ? (
-                <View style={styles.threeImageLayout}>
-                  <Image
-                    source={{ uri: images[0] }}
-                    style={[styles.threeMainImage, { width: innerWidth, height: topImageHeight, marginBottom: gutter }]}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.threeBottomRow}>
-                    {images.slice(1, 3).map((uri, idx) => (
-                      <Image
-                        key={idx}
-                        source={{ uri }}
-                        style={[
-                          styles.threeBottomTile,
-                          { width: squareSize, height: squareSize, marginRight: idx === 0 ? gutter : 0 },
-                        ]}
-                        resizeMode="cover"
-                      />
-                    ))}
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.fourGrid}>
-                  {images.map((uri, idx) => {
-                    const isLastVisibleTile = idx === 3;
-                    const extraCount = item.images!.length - 4;
-                    const isLeftColumn = idx % 2 === 0;
-                    const isTopRow = idx < 2;
-
-                    return (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.fourGridTile,
-                          {
-                            width: squareSize,
-                            height: squareSize,
-                            marginRight: isLeftColumn ? gutter : 0,
-                            marginBottom: isTopRow ? gutter : 0,
-                          },
-                        ]}
-                      >
-                        <Image
-                          source={{ uri }}
-                          style={styles.fourGridImage}
-                          resizeMode="cover"
-                        />
-                        {isLastVisibleTile && item.images!.length > 4 ? (
-                          <View style={styles.moreOverlay}>
-                            <Text style={styles.moreOverlayText}>+{extraCount}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-
-              {!item.isSponsored && (
-                <TouchableOpacity style={styles.muteButton}>
-                  <Ionicons name="volume-mute" size={16} color="#fff" />
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })()
-      ) : null}
-
-      <View style={styles.actionsRow}>
-        <View style={styles.leftActions}>
-          <TouchableOpacity
-            style={styles.actionItem}
-            onPress={() => toggleLike(item.id)}
-            onLongPress={() => setReactionPickerPostId(item.id)}
-          >
-            {item.myReactionType ? (
-              <Text style={{ fontSize: 20, marginRight: 4 }}>{reactionTypeToEmoji(item.myReactionType)}</Text>
-            ) : (
-              <Ionicons name={item.isLikedByMe ? 'heart' : 'heart-outline'} size={22} color={item.isLikedByMe ? '#e91e63' : '#111'} />
-            )}
-            {item.likes > 0 && <Text style={styles.actionCount}>{item.likes}</Text>}
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionItem} onPress={() => openCommentModal(item.id)}>
-            <Ionicons name="chatbubble-outline" size={20} color="#111" />
-            {item.comments > 0 && <Text style={styles.actionCount}>{item.comments}</Text>}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
+    <PostCard
+      post={item}
+      onMenuPress={setActiveMenuPostId}
+      onToggleLike={toggleLike}
+      onLongPressLike={setReactionPickerPostId}
+      onCommentPress={openCommentModal}
+    />
   );
 
   return (

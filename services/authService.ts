@@ -354,6 +354,20 @@ export const authService = {
     return response.success;
   },
 
+  getCoverPresignedUrl: async (fileName: string, fileType: string) => {
+    const response = await api.get<any, ApiResponse<string>>(
+      `/messages/presigned-url?fileName=${fileName}&fileType=${fileType}`
+    );
+    return response.data;
+  },
+
+  updateCoverPhoto: async (coverPhotoUrl: string) => {
+    const response = await api.patch<any, ApiResponse<any>>('/users/me/cover-photo', {
+      cover_photo_url: coverPhotoUrl,
+    });
+    return response.success;
+  },
+
   updateProfile: async (data: {
     displayName: string;
     full_name: string;
