@@ -195,8 +195,6 @@ export default function EditProfileScreen() {
               value={fullName}
               onChangeText={setFullName}
             />
-            <Text style={[styles.previewText, { color: colors.textSecondary }]}> 
-              {t('profile.display_name_preview', { name: fullName || t('profile.display_name_preview_empty') })}            </Text>
           </View>
           {/* Bio Section */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
