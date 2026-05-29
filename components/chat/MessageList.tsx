@@ -1,19 +1,15 @@
 import React from 'react';
 import { FlatList } from 'react-native';
 
-export type MessageListProps = {
-  messages: any[];
-  renderItem: ({ item, index }: { item: any; index: number }) => React.ReactElement | null;
-  listRef?: React.RefObject<FlatList<any>>;
-};
+export type MessageListProps = any;
 
-export const MessageList: React.FC<MessageListProps> = ({ messages, renderItem, listRef }) => {
+export const MessageList: React.FC<MessageListProps> = ({ messages, listRef, ...rest }) => {
   return (
-    <FlatList
+    <FlatList<any>
       ref={listRef}
       data={messages}
       keyExtractor={(item) => String((item as any).messageId)}
-      renderItem={renderItem as any}
+      {...(rest as any)}
     />
   );
 };

@@ -3,7 +3,7 @@ import { Modal, View } from 'react-native';
 
 export type MediaViewerProps = {
   visible: boolean;
-  onClose: () => void;
+  onClose?: () => void;
   children?: React.ReactNode;
 };
 

@@ -1,10 +1,16 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Modal, View } from 'react-native';
 
 export type PinnedMessagesProps = {
+  visible: boolean;
+  onClose?: () => void;
   children?: React.ReactNode;
 };
 
-export const PinnedMessages: React.FC<PinnedMessagesProps> = ({ children }) => {
-  return <View>{children}</View>;
+export const PinnedMessages: React.FC<PinnedMessagesProps> = ({ visible, onClose, children }) => {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1 }}>{children}</View>
+    </Modal>
+  );
 };

@@ -45,6 +45,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CallOverlay } from '../components/CallOverlay';
+import { ChatHeader } from '@/components/chat/ChatHeader';
+import { MessageList } from '@/components/chat/MessageList';
+import { MessageInput } from '@/components/chat/MessageInput';
+import { MediaViewer } from '@/components/chat/MediaViewer';
+import { PinnedMessages } from '@/components/chat/PinnedMessages';
+import { AttachmentsViewer } from '@/components/chat/AttachmentsViewer';
 import {
   mapChatPayloadListToUiMessages,
   mapChatPayloadToUiMessage,
@@ -317,7 +323,7 @@ export default function ChatDetailScreen() {
           const doc = item?.document ?? item;
           return mapChatPayloadToUiMessage(doc);
         });
-        setSearchResults(mapped.filter(Boolean));
+        setSearchResults(mapped.filter(Boolean) as Message[]);
       } else {
         setSearchResults([]);
       }
@@ -1040,7 +1046,7 @@ export default function ChatDetailScreen() {
   });
 
   useEffect(() => {
-    webrtcService.setSignalSender((signal) => {
+    webrtcService.setSignalSender((signal: any) => {
       // Send strictly through useChatSocket connection callback
       return sendCallSignal!(signal as any);
     });
@@ -3774,83 +3780,85 @@ export default function ChatDetailScreen() {
       >
 
         {/* Header */}
-        <View style={styles.header}>
-          {!isSearching ? (
-            <>
-              <TouchableOpacity onPress={() => router.back()}>
-                <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
-              </TouchableOpacity>
-              <View style={styles.headerInfo}>
-                <Text style={styles.headerTitle} numberOfLines={1}>
-                  {conversationDisplayName}
-                </Text>
-                <Text style={styles.headerSubtitle}>
-                  {headerSubtitleText}
-                </Text>
+        <ChatHeader>
+          <View style={styles.header}>
+            {!isSearching ? (
+              <>
+                <TouchableOpacity onPress={() => router.back()}>
+                  <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.headerInfo}>
+                  <Text style={styles.headerTitle} numberOfLines={1}>
+                    {conversationDisplayName}
+                  </Text>
+                  <Text style={styles.headerSubtitle}>
+                    {headerSubtitleText}
+                  </Text>
+                </View>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity style={styles.headerIcon} onPress={toggleSearchMode}>
+                    <Ionicons name="search-outline" size={26} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  {showCallActions ? (
+                    <>
+                      <TouchableOpacity style={styles.headerIcon}>
+                        <Ionicons name="call-outline" size={27} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.headerIcon}
+                        onPress={() => {
+                          const peerName = isGroupConversation ? conversationName : chatHeaderName;
+                          const peerAvatar = isGroupConversation ? conversationAvatarUrl : partnerUser?.avatarUrl;
+                          webrtcService.startCall(
+                            currentUserId!,
+                            partnerId || '',
+                            peerName || 'Unknown',
+                            peerAvatar,
+                            conversationId,
+                            'Bạn',
+                            undefined
+                          );
+                        }}
+                      >
+                        <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </>
+                  ) : null}
+                  <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
+                    <Ionicons name="list-outline" size={30} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.searchBarHeader}>
+                <TouchableOpacity onPress={toggleSearchMode}>
+                  <Ionicons name="arrow-back" size={26} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Tìm tin nhắn..."
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  value={searchQuery}
+                  onChangeText={(txt) => {
+                    setSearchQuery(txt);
+                    if (txt.length > 0) {
+                      void handleSearchMessages(txt);
+                    } else {
+                      setSearchResults([]);
+                    }
+                  }}
+                  autoFocus
+                  selectionColor="#FFF"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                    <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
               </View>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerIcon} onPress={toggleSearchMode}>
-                  <Ionicons name="search-outline" size={26} color="#FFFFFF" />
-                </TouchableOpacity>
-                {showCallActions ? (
-                  <>
-                    <TouchableOpacity style={styles.headerIcon}>
-                      <Ionicons name="call-outline" size={27} color="#FFFFFF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.headerIcon}
-                      onPress={() => {
-                        const peerName = isGroupConversation ? conversationName : chatHeaderName;
-                        const peerAvatar = isGroupConversation ? conversationAvatarUrl : partnerUser?.avatarUrl;
-                        webrtcService.startCall(
-                          currentUserId!,
-                          partnerId || '',
-                          peerName || 'Unknown',
-                          peerAvatar,
-                          conversationId,
-                          'Bạn',
-                          undefined
-                        );
-                      }}
-                    >
-                      <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </>
-                ) : null}
-                <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
-                  <Ionicons name="list-outline" size={30} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <View style={styles.searchBarHeader}>
-              <TouchableOpacity onPress={toggleSearchMode}>
-                <Ionicons name="arrow-back" size={26} color="#FFFFFF" />
-              </TouchableOpacity>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm tin nhắn..."
-                placeholderTextColor="rgba(255,255,255,0.7)"
-                value={searchQuery}
-                onChangeText={(txt) => {
-                  setSearchQuery(txt);
-                  if (txt.length > 0) {
-                    void handleSearchMessages(txt);
-                  } else {
-                    setSearchResults([]);
-                  }
-                }}
-                autoFocus
-                selectionColor="#FFF"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
-                  <Ionicons name="close-circle" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
+            )}
+          </View>
+        </ChatHeader>
 
         {/* Search Results Overlay */}
         {isSearching && searchQuery.length > 0 && (
@@ -3910,11 +3918,10 @@ export default function ChatDetailScreen() {
         ) : null}
 
         {/* Messages List */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => String(item.messageId)}
-          renderItem={renderMessage}
+        <MessageList
+          ref={flatListRef as any}
+          messages={messages}
+          renderItem={renderMessage as any}
           contentContainerStyle={styles.messagesList}
           scrollEnabled={true}
           keyboardShouldPersistTaps="handled"
@@ -3928,7 +3935,7 @@ export default function ChatDetailScreen() {
           maintainVisibleContentPosition={{
             minIndexForVisible: 0,
           }}
-          onScrollToIndexFailed={(info) => {
+          onScrollToIndexFailed={(info: any) => {
             flatListRef.current?.scrollToOffset({
               offset: info.averageItemLength * info.index,
               animated: true,
@@ -3937,7 +3944,8 @@ export default function ChatDetailScreen() {
         />
 
         {/* Input Area */}
-        <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
+        <MessageInput>
+          <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
           {editingMessageId ? (
             <View style={styles.editingBanner}>
               <View style={styles.editingBannerTextWrap}>
@@ -4136,7 +4144,8 @@ export default function ChatDetailScreen() {
               </>
             )}
           </View>
-        </SafeAreaView>
+          </SafeAreaView>
+        </MessageInput>
 
         <Modal
           visible={isMessageActionVisible}
@@ -4701,12 +4710,7 @@ export default function ChatDetailScreen() {
         </Modal>
 
         {/* Fullscreen Image Preview */}
-        <Modal
-          visible={!!fullscreenImageUrl}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setFullscreenImageUrl(null)}
-        >
+        <MediaViewer visible={!!fullscreenImageUrl} onClose={() => setFullscreenImageUrl(null)}>
           <View style={styles.fullscreenImageBackdrop}>
             <TouchableOpacity
               style={styles.fullscreenImageClose}
@@ -4732,15 +4736,10 @@ export default function ChatDetailScreen() {
               <Ionicons name="download-outline" size={26} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        </Modal>
+        </MediaViewer>
 
         {/* Fullscreen Video Preview */}
-        <Modal
-          visible={!!fullscreenVideoUrl}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setFullscreenVideoUrl(null)}
-        >
+        <MediaViewer visible={!!fullscreenVideoUrl} onClose={() => setFullscreenVideoUrl(null)}>
           <View style={styles.fullscreenImageBackdrop}>
             <TouchableOpacity
               style={styles.fullscreenImageClose}
@@ -4758,7 +4757,7 @@ export default function ChatDetailScreen() {
               />
             ) : null}
           </View>
-        </Modal>
+        </MediaViewer>
 
         {/* ── Chat Info Panel ──────────────────────────────────────────────── */}
         <Modal
