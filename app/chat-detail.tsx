@@ -4,6 +4,8 @@ import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
 import { MediaViewer } from '@/components/chat/MediaViewer';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { MessageItem } from '@/components/chat/MessageItem';
+import ForwardedBanner from '@/components/chat/MessageItem/ForwardedBanner';
+import ReplySnippet from '@/components/chat/MessageItem/ReplySnippet';
 import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
@@ -12,6 +14,8 @@ import { COLORS } from '@/constants/theme';
 import { usePresence } from '@/context/PresenceContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useChatSocket } from '@/hooks/useChatSocket';
+import useLocalDeleted from '@/hooks/useLocalDeleted';
+import useVoiceRecording from '@/hooks/useVoiceRecording';
 import api from '@/services/api';
 import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
@@ -19,7 +23,7 @@ import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
-import { Audio, ResizeMode, Video } from 'expo-av';
+import { ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
@@ -371,7 +375,7 @@ export default function ChatDetailScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const filterDeletedMessages = useCallback((msgs: Message[]) => {
-    const deletedSet = locallyDeletedMessageIdsRef.current;
+    const deletedSet = localDeleted.getDeletedSet();
     if (!deletedSet || deletedSet.size === 0) return msgs;
     const filtered = msgs.filter((m) => !deletedSet.has(String(m.messageId)));
     return filtered;
@@ -435,15 +439,7 @@ export default function ChatDetailScreen() {
   const [scSending, setScSending] = useState(false);
   const [scIncludePhone, setScIncludePhone] = useState(true);
 
-  // Voice recording
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const recordingStartTimeRef = useRef<number>(0);
-  // Voice playback
-  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  // Voice recording moved into hook (useVoiceRecording)
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<TextInput>(null);
@@ -478,6 +474,15 @@ export default function ChatDetailScreen() {
     setReplyingTo(null);
     setForwardingMsg(null);
   }, [avatar, id, name]);
+
+  // Initialize local-deleted IDs into the existing ref so legacy usages keep working
+  useEffect(() => {
+    if (!conversationId) return;
+    void (async () => {
+      await localDeleted.initDeletedSet(conversationId, currentUserId ?? undefined);
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
+    })();
+  }, [conversationId, currentUserId]);
 
   useEffect(() => {
     const ensureSpecialConversation = async () => {
@@ -537,13 +542,13 @@ export default function ChatDetailScreen() {
     const mergedById = new Map<string, Message>();
 
     base.forEach((message) => {
-      if (!locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+      if (!localDeleted.isDeleted(String(message.messageId))) {
         mergedById.set(String(message.messageId), message);
       }
     });
 
     incoming.forEach((message) => {
-      if (!locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+      if (!localDeleted.isDeleted(String(message.messageId))) {
         mergedById.set(String(message.messageId), message);
       }
     });
@@ -574,7 +579,7 @@ export default function ChatDetailScreen() {
 
   const appendOrUpdateMessage = useCallback((message: ChatUiMessage) => {
     logChatDebug('appendOrUpdateMessage', message);
-    if (locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+    if (localDeleted.isDeleted(String(message.messageId))) {
       return;
     }
     setMessages((prev) => {
@@ -1016,9 +1021,9 @@ export default function ChatDetailScreen() {
       if (event.type !== 'MESSAGE_LOCAL_DELETE') return;
       const msgId = String(event.messageId);
       const convId = String(event.conversationId);
-      // Persist to SecureStore so it stays hidden after reload
-      const nextSet = await addDeletedMessageId(convId, currentUserId || 'anonymous', msgId);
-      locallyDeletedMessageIdsRef.current = nextSet;
+      // Persist to SecureStore via hook so it stays hidden after reload
+      await localDeleted.markDeleted(convId, currentUserId || 'anonymous', msgId);
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
       // Hide from current message list immediately
       if (convId === conversationId) {
         setMessages((prev) => prev.filter((m) => String(m.messageId) !== msgId));
@@ -1175,9 +1180,9 @@ export default function ChatDetailScreen() {
     }
 
     try {
-      // 1. Load deleted IDs from storage first
-      const deletedSet = await readDeletedMessageIds(conversationId, uid || currentUserId || 'anonymous');
-      locallyDeletedMessageIdsRef.current = deletedSet;
+      // 1. Load deleted IDs from storage first (via hook)
+      await localDeleted.initDeletedSet(conversationId, uid || currentUserId || 'anonymous');
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
 
       const response = await chatService.getMessages(conversationId, 0, PAGE_SIZE);
       const { payload, hasMore } = parsePageResult(response, PAGE_SIZE);
@@ -1264,7 +1269,7 @@ export default function ChatDetailScreen() {
           return isSameMessageList(prev, filtered) ? prev : filtered;
         });
       } else {
-        const filteredNext = nextMessages.filter(m => !locallyDeletedMessageIdsRef.current.has(String(m.messageId)));
+        const filteredNext = nextMessages.filter(m => !localDeleted.isDeleted(String(m.messageId)));
         setMessages((prev) => (isSameMessageList(prev, filteredNext) ? prev : filteredNext));
         setHasMoreOlder(nextHasMoreOlder);
         shouldScrollToLatestRef.current = true;
@@ -1285,8 +1290,9 @@ export default function ChatDetailScreen() {
     const initialize = async () => {
       const uid = await SecureStore.getItemAsync('user_id');
       setCurrentUserId(uid);
-      // Load locally-deleted IDs BEFORE loading messages so they get filtered
-      locallyDeletedMessageIdsRef.current = await readDeletedMessageIds(conversationId, uid || 'anonymous');
+      // Load locally-deleted IDs BEFORE loading messages so they get filtered (via hook)
+      await localDeleted.initDeletedSet(conversationId, uid || 'anonymous');
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
       await loadInitialMessages(uid);
     };
     initialize();
@@ -1793,54 +1799,31 @@ export default function ChatDetailScreen() {
     }
   }, []);
 
-  // ─── Voice recording ──────────────────────────────────────────────────────
+  // ─── Voice recording (moved to hooks) ────────────────────────────────────
+  const {
+    isRecording,
+    recordingTime,
+    startRecording,
+    stopRecording,
+    playingVoiceId,
+    togglePlayVoice: hookTogglePlayVoice,
+    stopPlayback,
+  } = useVoiceRecording();
+
+  // Local-deleted helper (initialize below to populate existing ref)
+  const localDeleted = useLocalDeleted();
+
   const startVoiceRecording = useCallback(async () => {
     if (isRecording) return;
-    try {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert('Quyền truy cập', 'Cần quyền truy cập microphone để ghi âm');
-        return;
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = recording;
-      recordingStartTimeRef.current = Date.now();
-      setIsRecording(true);
-      setRecordingTime(0);
-      recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-    } catch {
-      Alert.alert('Lỗi', 'Không thể mở microphone');
-    }
-  }, [isRecording]);
+    await startRecording();
+  }, [isRecording, startRecording]);
 
   const stopVoiceRecording = useCallback(async (discard = false) => {
-    if (!recordingRef.current) return;
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    setIsRecording(false);
-    const duration = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
-    const recording = recordingRef.current;
-    recordingRef.current = null;
-    setRecordingTime(0);
+    const result = await stopRecording(discard);
+    if (!result) return;
 
-    try {
-      await recording.stopAndUnloadAsync();
-    } catch { /* ignore */ }
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-
-    if (discard || duration < 1) return;
-
-    const uri = recording.getURI();
+    const { uri, durationSeconds: duration, fileName, mimeType, tempId } = result;
     if (!uri) return;
-
-    const isIos = Platform.OS === 'ios';
-    const mimeType = isIos ? 'audio/m4a' : 'audio/3gpp';
-    const ext = isIos ? 'm4a' : '3gp';
-    const fileName = `voice_${Date.now()}.${ext}`;
-    const tempId = `temp-voice-${Date.now()}`;
 
     const optMsg: Message = {
       messageId: tempId,
@@ -1878,36 +1861,11 @@ export default function ChatDetailScreen() {
       Alert.alert('Lỗi', 'Không thể gửi tin nhắn giọng nói');
       setMessages(prev => prev.filter(m => m.messageId !== tempId));
     }
-  }, [currentUserId, conversationId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
+  }, [stopRecording, currentUserId, conversationId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
 
   const togglePlayVoice = useCallback(async (item: Message) => {
-    if (playingVoiceId === item.messageId) {
-      await soundRef.current?.pauseAsync();
-      setPlayingVoiceId(null);
-      return;
-    }
-    if (soundRef.current) {
-      await soundRef.current.stopAsync().catch(() => { });
-      await soundRef.current.unloadAsync().catch(() => { });
-      soundRef.current = null;
-    }
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync({ uri: item.content });
-      soundRef.current = sound;
-      setPlayingVoiceId(item.messageId);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPlayingVoiceId(null);
-          sound.unloadAsync().catch(() => { });
-          if (soundRef.current === sound) soundRef.current = null;
-        }
-      });
-    } catch {
-      setPlayingVoiceId(null);
-    }
-  }, [playingVoiceId]);
+    await hookTogglePlayVoice(item.content ?? null, String(item.messageId));
+  }, [hookTogglePlayVoice]);
 
   const handlePickFile = useCallback(async () => {
     setIsAttachMenuVisible(false);
@@ -2212,10 +2170,10 @@ export default function ChatDetailScreen() {
           text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
-            try {
+              try {
               await chatService.deleteMessageLocal(selectedMessage.messageId);
-              const nextSet = await addDeletedMessageId(conversationId, currentUserId || 'anonymous', selectedMessage.messageId);
-              locallyDeletedMessageIdsRef.current = nextSet;
+              await localDeleted.markDeleted(conversationId, currentUserId || 'anonymous', selectedMessage.messageId);
+              locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
               setMessages((prev) => prev.filter((m) => String(m.messageId) !== String(selectedMessage.messageId)));
             } catch (error) {
               console.error('Failed to delete local message:', error);
@@ -3297,7 +3255,7 @@ export default function ChatDetailScreen() {
         );
       }
 
-      // Reply snippet block
+      // Reply snippet block (presentational component)
       const replyBlock = item.replyToMessageId ? (() => {
         const repliedMsg = messages.find((m) => m.messageId === item.replyToMessageId);
         const snippet = repliedMsg
@@ -3313,29 +3271,20 @@ export default function ChatDetailScreen() {
           }
         };
         return (
-          <TouchableOpacity
-            style={[styles.replySnippetBlock, isCurrentUserMessage ? styles.replySnippetBlockUser : styles.replySnippetBlockOther]}
+          <ReplySnippet
+            senderLabel={senderLabel}
+            snippet={snippet}
             onPress={scrollToReplied}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.replySnippetSender, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]} numberOfLines={1}>
-              {senderLabel}
-            </Text>
-            <Text style={[styles.replySnippetText, { color: isCurrentUserMessage ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]} numberOfLines={2}>
-              {snippet}
-            </Text>
-          </TouchableOpacity>
+            isCurrentUserMessage={isCurrentUserMessage}
+            styles={styles}
+            colors={colors}
+          />
         );
       })() : null;
 
-      // Forwarded banner
+      // Forwarded banner (presentational component)
       const forwardedBanner = (item.forwardedFromSenderName && !item.isRecalled) ? (
-        <View style={styles.forwardedBanner}>
-          <Ionicons name="return-up-forward-outline" size={12} color={isCurrentUserMessage ? '#90CAF9' : '#0068FF'} />
-          <Text style={[styles.forwardedBannerText, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]}>
-            {`Chuyển tiếp từ ${item.forwardedFromSenderName}`}
-          </Text>
-        </View>
+        <ForwardedBanner forwardedFromSenderName={item.forwardedFromSenderName} isCurrentUserMessage={isCurrentUserMessage} styles={styles} />
       ) : null;
 
       if (isImageMsg) {

@@ -1,21 +1,43 @@
+import type { ChatUiReaction } from '@/services/chatMessageAdapter';
 import React from 'react';
 import { Image, Text, TouchableOpacity, View } from 'react-native';
+import ReactionChips from './MessageItem/ReactionChips';
 
-export type MessageItemProps = any;
+type ReactionSummaryItem = { emoji: string; count: number };
+
+export interface MessageItemProps {
+  item: { messageId: string } & Record<string, any>;
+  index?: number;
+  dateSepLabel?: string | null;
+  isCurrentUserMessage: boolean;
+  showAvatar: boolean;
+  showSenderName: boolean;
+  senderDisplayName?: string;
+  senderAvatarSource?: any;
+  mediaContent?: React.ReactNode;
+  reactionSummary?: ReactionSummaryItem[] | Array<Pick<ChatUiReaction, 'emoji'>>;
+  showTimestamp?: boolean;
+  timeLabel?: string;
+  highlighted?: boolean;
+  onLongPress?: () => void;
+  colors?: any;
+  styles: any;
+  playingVoiceId?: string | null;
+}
 
 export const MessageItem: React.FC<MessageItemProps> = ({
   item,
-  dateSepLabel,
+  dateSepLabel = null,
   isCurrentUserMessage,
   showAvatar,
   showSenderName,
   senderDisplayName,
   senderAvatarSource,
   mediaContent,
-  reactionSummary,
-  showTimestamp,
+  reactionSummary = [],
+  showTimestamp = false,
   timeLabel,
-  highlighted,
+  highlighted = false,
   onLongPress,
   colors,
   styles,
@@ -41,15 +63,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             {mediaContent}
           </TouchableOpacity>
 
-          {reactionSummary && reactionSummary.length > 0 ? (
-            <View style={styles.reactionRowRight}>
-              {reactionSummary.map((reaction: any) => (
-                <View key={`${item.messageId}-${reaction.emoji}`} style={styles.reactionChip}>
-                  <Text style={styles.reactionChipText}>{reaction.emoji} {reaction.count}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
+          <ReactionChips reactions={reactionSummary as any} messageId={item.messageId} styles={styles} />
 
           {showTimestamp ? <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text> : null}
         </View>
@@ -68,15 +82,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               {mediaContent}
             </TouchableOpacity>
 
-            {reactionSummary && reactionSummary.length > 0 ? (
-              <View style={styles.reactionRowLeft}>
-                {reactionSummary.map((reaction: any) => (
-                  <View key={`${item.messageId}-${reaction.emoji}`} style={styles.reactionChip}>
-                    <Text style={styles.reactionChipText}>{reaction.emoji} {reaction.count}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
+            <ReactionChips reactions={reactionSummary as any} messageId={item.messageId} styles={styles} />
 
             {showTimestamp ? <Text style={[styles.timestamp, styles.timestampLeft]}>{timeLabel}</Text> : null}
           </View>
@@ -86,4 +92,4 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   );
 };
 
-export default MessageItem;
+export default React.memo(MessageItem);
