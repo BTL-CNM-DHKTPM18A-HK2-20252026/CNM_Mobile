@@ -1,24 +1,38 @@
+import { AttachMenuContent } from '@/components/chat/AttachMenuContent';
+import { ChatHeader } from '@/components/chat/ChatHeader';
+import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
+import { MediaViewer } from '@/components/chat/MediaViewer';
+import { MessageInput } from '@/components/chat/MessageInput';
+import { MessageItem } from '@/components/chat/MessageItem';
+import ForwardedBanner from '@/components/chat/MessageItem/ForwardedBanner';
+import ReplySnippet from '@/components/chat/MessageItem/ReplySnippet';
+import { MessageList } from '@/components/chat/MessageList';
+import { PinnedListContent } from '@/components/chat/PinnedListContent';
+import { ReactionPicker } from '@/components/chat/ReactionPicker';
+import { ShareContactContent } from '@/components/chat/ShareContactContent';
 import { COLORS } from '@/constants/theme';
-import { useTheme } from '@/context/ThemeContext';
 import { usePresence } from '@/context/PresenceContext';
+import { useTheme } from '@/context/ThemeContext';
 import { useChatSocket } from '@/hooks/useChatSocket';
-import { chatFileService, type PickedMedia } from '@/services/chatFileService';
+import useLocalDeleted from '@/hooks/useLocalDeleted';
+import useVoiceRecording from '@/hooks/useVoiceRecording';
 import api from '@/services/api';
+import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
-import { Audio, ResizeMode, Video } from 'expo-av';
+import { ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -44,6 +58,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CallOverlay } from '../components/CallOverlay';
 import {
   mapChatPayloadListToUiMessages,
   mapChatPayloadToUiMessage,
@@ -51,7 +66,6 @@ import {
   type ChatUiReaction,
 } from '../services/chatMessageAdapter';
 import { webrtcService } from '../services/webrtcService';
-import { CallOverlay } from '../components/CallOverlay';
 
 // ── Local-delete persistence (mirrors Web's localStorage approach) ──────────
 const LOCAL_DELETED_STORAGE_KEY = 'fruvia.chat.deleted-local.v1';
@@ -317,7 +331,7 @@ export default function ChatDetailScreen() {
           const doc = item?.document ?? item;
           return mapChatPayloadToUiMessage(doc);
         });
-        setSearchResults(mapped.filter(Boolean));
+        setSearchResults(mapped.filter(Boolean) as Message[]);
       } else {
         setSearchResults([]);
       }
@@ -361,7 +375,7 @@ export default function ChatDetailScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const filterDeletedMessages = useCallback((msgs: Message[]) => {
-    const deletedSet = locallyDeletedMessageIdsRef.current;
+    const deletedSet = localDeleted.getDeletedSet();
     if (!deletedSet || deletedSet.size === 0) return msgs;
     const filtered = msgs.filter((m) => !deletedSet.has(String(m.messageId)));
     return filtered;
@@ -425,15 +439,7 @@ export default function ChatDetailScreen() {
   const [scSending, setScSending] = useState(false);
   const [scIncludePhone, setScIncludePhone] = useState(true);
 
-  // Voice recording
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const recordingStartTimeRef = useRef<number>(0);
-  // Voice playback
-  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
+  // Voice recording moved into hook (useVoiceRecording)
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<TextInput>(null);
@@ -468,6 +474,15 @@ export default function ChatDetailScreen() {
     setReplyingTo(null);
     setForwardingMsg(null);
   }, [avatar, id, name]);
+
+  // Initialize local-deleted IDs into the existing ref so legacy usages keep working
+  useEffect(() => {
+    if (!conversationId) return;
+    void (async () => {
+      await localDeleted.initDeletedSet(conversationId, currentUserId ?? undefined);
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
+    })();
+  }, [conversationId, currentUserId]);
 
   useEffect(() => {
     const ensureSpecialConversation = async () => {
@@ -527,13 +542,13 @@ export default function ChatDetailScreen() {
     const mergedById = new Map<string, Message>();
 
     base.forEach((message) => {
-      if (!locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+      if (!localDeleted.isDeleted(String(message.messageId))) {
         mergedById.set(String(message.messageId), message);
       }
     });
 
     incoming.forEach((message) => {
-      if (!locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+      if (!localDeleted.isDeleted(String(message.messageId))) {
         mergedById.set(String(message.messageId), message);
       }
     });
@@ -564,7 +579,7 @@ export default function ChatDetailScreen() {
 
   const appendOrUpdateMessage = useCallback((message: ChatUiMessage) => {
     logChatDebug('appendOrUpdateMessage', message);
-    if (locallyDeletedMessageIdsRef.current.has(String(message.messageId))) {
+    if (localDeleted.isDeleted(String(message.messageId))) {
       return;
     }
     setMessages((prev) => {
@@ -1006,9 +1021,9 @@ export default function ChatDetailScreen() {
       if (event.type !== 'MESSAGE_LOCAL_DELETE') return;
       const msgId = String(event.messageId);
       const convId = String(event.conversationId);
-      // Persist to SecureStore so it stays hidden after reload
-      const nextSet = await addDeletedMessageId(convId, currentUserId || 'anonymous', msgId);
-      locallyDeletedMessageIdsRef.current = nextSet;
+      // Persist to SecureStore via hook so it stays hidden after reload
+      await localDeleted.markDeleted(convId, currentUserId || 'anonymous', msgId);
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
       // Hide from current message list immediately
       if (convId === conversationId) {
         setMessages((prev) => prev.filter((m) => String(m.messageId) !== msgId));
@@ -1040,7 +1055,7 @@ export default function ChatDetailScreen() {
   });
 
   useEffect(() => {
-    webrtcService.setSignalSender((signal) => {
+    webrtcService.setSignalSender((signal: any) => {
       // Send strictly through useChatSocket connection callback
       return sendCallSignal!(signal as any);
     });
@@ -1165,9 +1180,9 @@ export default function ChatDetailScreen() {
     }
 
     try {
-      // 1. Load deleted IDs from storage first
-      const deletedSet = await readDeletedMessageIds(conversationId, uid || currentUserId || 'anonymous');
-      locallyDeletedMessageIdsRef.current = deletedSet;
+      // 1. Load deleted IDs from storage first (via hook)
+      await localDeleted.initDeletedSet(conversationId, uid || currentUserId || 'anonymous');
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
 
       const response = await chatService.getMessages(conversationId, 0, PAGE_SIZE);
       const { payload, hasMore } = parsePageResult(response, PAGE_SIZE);
@@ -1254,7 +1269,7 @@ export default function ChatDetailScreen() {
           return isSameMessageList(prev, filtered) ? prev : filtered;
         });
       } else {
-        const filteredNext = nextMessages.filter(m => !locallyDeletedMessageIdsRef.current.has(String(m.messageId)));
+        const filteredNext = nextMessages.filter(m => !localDeleted.isDeleted(String(m.messageId)));
         setMessages((prev) => (isSameMessageList(prev, filteredNext) ? prev : filteredNext));
         setHasMoreOlder(nextHasMoreOlder);
         shouldScrollToLatestRef.current = true;
@@ -1275,8 +1290,9 @@ export default function ChatDetailScreen() {
     const initialize = async () => {
       const uid = await SecureStore.getItemAsync('user_id');
       setCurrentUserId(uid);
-      // Load locally-deleted IDs BEFORE loading messages so they get filtered
-      locallyDeletedMessageIdsRef.current = await readDeletedMessageIds(conversationId, uid || 'anonymous');
+      // Load locally-deleted IDs BEFORE loading messages so they get filtered (via hook)
+      await localDeleted.initDeletedSet(conversationId, uid || 'anonymous');
+      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
       await loadInitialMessages(uid);
     };
     initialize();
@@ -1783,54 +1799,31 @@ export default function ChatDetailScreen() {
     }
   }, []);
 
-  // ─── Voice recording ──────────────────────────────────────────────────────
+  // ─── Voice recording (moved to hooks) ────────────────────────────────────
+  const {
+    isRecording,
+    recordingTime,
+    startRecording,
+    stopRecording,
+    playingVoiceId,
+    togglePlayVoice: hookTogglePlayVoice,
+    stopPlayback,
+  } = useVoiceRecording();
+
+  // Local-deleted helper (initialize below to populate existing ref)
+  const localDeleted = useLocalDeleted();
+
   const startVoiceRecording = useCallback(async () => {
     if (isRecording) return;
-    try {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
-        Alert.alert('Quyền truy cập', 'Cần quyền truy cập microphone để ghi âm');
-        return;
-      }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = recording;
-      recordingStartTimeRef.current = Date.now();
-      setIsRecording(true);
-      setRecordingTime(0);
-      recordingTimerRef.current = setInterval(() => setRecordingTime(prev => prev + 1), 1000);
-    } catch {
-      Alert.alert('Lỗi', 'Không thể mở microphone');
-    }
-  }, [isRecording]);
+    await startRecording();
+  }, [isRecording, startRecording]);
 
   const stopVoiceRecording = useCallback(async (discard = false) => {
-    if (!recordingRef.current) return;
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    setIsRecording(false);
-    const duration = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
-    const recording = recordingRef.current;
-    recordingRef.current = null;
-    setRecordingTime(0);
+    const result = await stopRecording(discard);
+    if (!result) return;
 
-    try {
-      await recording.stopAndUnloadAsync();
-    } catch { /* ignore */ }
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-
-    if (discard || duration < 1) return;
-
-    const uri = recording.getURI();
+    const { uri, durationSeconds: duration, fileName, mimeType, tempId } = result;
     if (!uri) return;
-
-    const isIos = Platform.OS === 'ios';
-    const mimeType = isIos ? 'audio/m4a' : 'audio/3gpp';
-    const ext = isIos ? 'm4a' : '3gp';
-    const fileName = `voice_${Date.now()}.${ext}`;
-    const tempId = `temp-voice-${Date.now()}`;
 
     const optMsg: Message = {
       messageId: tempId,
@@ -1868,36 +1861,11 @@ export default function ChatDetailScreen() {
       Alert.alert('Lỗi', 'Không thể gửi tin nhắn giọng nói');
       setMessages(prev => prev.filter(m => m.messageId !== tempId));
     }
-  }, [currentUserId, conversationId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
+  }, [stopRecording, currentUserId, conversationId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage]);
 
   const togglePlayVoice = useCallback(async (item: Message) => {
-    if (playingVoiceId === item.messageId) {
-      await soundRef.current?.pauseAsync();
-      setPlayingVoiceId(null);
-      return;
-    }
-    if (soundRef.current) {
-      await soundRef.current.stopAsync().catch(() => { });
-      await soundRef.current.unloadAsync().catch(() => { });
-      soundRef.current = null;
-    }
-    try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync({ uri: item.content });
-      soundRef.current = sound;
-      setPlayingVoiceId(item.messageId);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPlayingVoiceId(null);
-          sound.unloadAsync().catch(() => { });
-          if (soundRef.current === sound) soundRef.current = null;
-        }
-      });
-    } catch {
-      setPlayingVoiceId(null);
-    }
-  }, [playingVoiceId]);
+    await hookTogglePlayVoice(item.content ?? null, String(item.messageId));
+  }, [hookTogglePlayVoice]);
 
   const handlePickFile = useCallback(async () => {
     setIsAttachMenuVisible(false);
@@ -2202,10 +2170,10 @@ export default function ChatDetailScreen() {
           text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
-            try {
+              try {
               await chatService.deleteMessageLocal(selectedMessage.messageId);
-              const nextSet = await addDeletedMessageId(conversationId, currentUserId || 'anonymous', selectedMessage.messageId);
-              locallyDeletedMessageIdsRef.current = nextSet;
+              await localDeleted.markDeleted(conversationId, currentUserId || 'anonymous', selectedMessage.messageId);
+              locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
               setMessages((prev) => prev.filter((m) => String(m.messageId) !== String(selectedMessage.messageId)));
             } catch (error) {
               console.error('Failed to delete local message:', error);
@@ -3287,7 +3255,7 @@ export default function ChatDetailScreen() {
         );
       }
 
-      // Reply snippet block
+      // Reply snippet block (presentational component)
       const replyBlock = item.replyToMessageId ? (() => {
         const repliedMsg = messages.find((m) => m.messageId === item.replyToMessageId);
         const snippet = repliedMsg
@@ -3303,29 +3271,20 @@ export default function ChatDetailScreen() {
           }
         };
         return (
-          <TouchableOpacity
-            style={[styles.replySnippetBlock, isCurrentUserMessage ? styles.replySnippetBlockUser : styles.replySnippetBlockOther]}
+          <ReplySnippet
+            senderLabel={senderLabel}
+            snippet={snippet}
             onPress={scrollToReplied}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.replySnippetSender, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]} numberOfLines={1}>
-              {senderLabel}
-            </Text>
-            <Text style={[styles.replySnippetText, { color: isCurrentUserMessage ? 'rgba(255,255,255,0.8)' : colors.textSecondary }]} numberOfLines={2}>
-              {snippet}
-            </Text>
-          </TouchableOpacity>
+            isCurrentUserMessage={isCurrentUserMessage}
+            styles={styles}
+            colors={colors}
+          />
         );
       })() : null;
 
-      // Forwarded banner
+      // Forwarded banner (presentational component)
       const forwardedBanner = (item.forwardedFromSenderName && !item.isRecalled) ? (
-        <View style={styles.forwardedBanner}>
-          <Ionicons name="return-up-forward-outline" size={12} color={isCurrentUserMessage ? '#90CAF9' : '#0068FF'} />
-          <Text style={[styles.forwardedBannerText, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]}>
-            {`Chuyển tiếp từ ${item.forwardedFromSenderName}`}
-          </Text>
-        </View>
+        <ForwardedBanner forwardedFromSenderName={item.forwardedFromSenderName} isCurrentUserMessage={isCurrentUserMessage} styles={styles} />
       ) : null;
 
       if (isImageMsg) {
@@ -3675,90 +3634,28 @@ export default function ChatDetailScreen() {
       );
     };
 
+    const mediaContent = renderMediaContent();
+
     return (
-      <View
-        style={[
-          styles.messageContainer,
-          { marginBottom: showTimestamp ? 10 : 4 },
-          highlightedMessageId === String(item.messageId) && styles.messageContainerHighlighted,
-        ]}
-      >
-        {dateSepLabel ? (
-          <View style={styles.dateSeparator}>
-            <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
-          </View>
-        ) : null}
-        {isCurrentUserMessage ? (
-          <View style={styles.userMessageBlock}>
-            <TouchableOpacity
-              activeOpacity={1}
-              onLongPress={() => openMessageActionMenu(item)}
-              delayLongPress={220}
-              style={[
-                styles.messageBubble,
-                styles.userBubble,
-                isMediaMsg && !isFileMsg && !isVoiceMsg && styles.mediaBubble,
-              ]}
-            >
-              {renderMediaContent()}
-            </TouchableOpacity>
-
-            {reactionSummary.length > 0 ? (
-              <View style={styles.reactionRowRight}>
-                {reactionSummary.map((reaction) => (
-                  <View key={`${item.messageId}-${reaction.emoji}`} style={styles.reactionChip}>
-                    <Text style={styles.reactionChipText}>{reaction.emoji} {reaction.count}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {showTimestamp ? (
-              <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text>
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.otherMessageBlock}>
-            <View style={[styles.otherAvatarSlot, { marginBottom: showTimestamp ? 18 : 2 }]}>
-              {showAvatar && senderAvatarSource ? <Image source={senderAvatarSource} style={styles.peerAvatar} /> : null}
-            </View>
-            <View style={styles.otherContentBlock}>
-              {showSenderName ? (
-                <Text style={[styles.groupSenderName, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {senderDisplayName}
-                </Text>
-              ) : null}
-              <TouchableOpacity
-                activeOpacity={1}
-                onLongPress={() => openMessageActionMenu(item)}
-                delayLongPress={220}
-                style={[
-                  styles.messageBubble,
-                  styles.otherBubble,
-                  { backgroundColor: colors.card },
-                  isMediaMsg && !isFileMsg && !isVoiceMsg && styles.mediaBubble,
-                ]}
-              >
-                {renderMediaContent()}
-              </TouchableOpacity>
-
-              {reactionSummary.length > 0 ? (
-                <View style={styles.reactionRowLeft}>
-                  {reactionSummary.map((reaction) => (
-                    <View key={`${item.messageId}-${reaction.emoji}`} style={styles.reactionChip}>
-                      <Text style={styles.reactionChipText}>{reaction.emoji} {reaction.count}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {showTimestamp ? (
-                <Text style={[styles.timestamp, styles.timestampLeft]}>{timeLabel}</Text>
-              ) : null}
-            </View>
-          </View>
-        )}
-      </View>
+      <MessageItem
+        item={item}
+        index={index}
+        dateSepLabel={dateSepLabel}
+        isCurrentUserMessage={isCurrentUserMessage}
+        showAvatar={showAvatar}
+        showSenderName={showSenderName}
+        senderDisplayName={senderDisplayName}
+        senderAvatarSource={senderAvatarSource}
+        mediaContent={mediaContent}
+        reactionSummary={reactionSummary}
+        showTimestamp={showTimestamp}
+        timeLabel={timeLabel}
+        highlighted={highlightedMessageId === String(item.messageId)}
+        onLongPress={() => openMessageActionMenu(item)}
+        colors={colors}
+        styles={styles as any}
+        playingVoiceId={playingVoiceId}
+      />
     );
   };
 
@@ -3774,83 +3671,85 @@ export default function ChatDetailScreen() {
       >
 
         {/* Header */}
-        <View style={styles.header}>
-          {!isSearching ? (
-            <>
-              <TouchableOpacity onPress={() => router.back()}>
-                <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
-              </TouchableOpacity>
-              <View style={styles.headerInfo}>
-                <Text style={styles.headerTitle} numberOfLines={1}>
-                  {conversationDisplayName}
-                </Text>
-                <Text style={styles.headerSubtitle}>
-                  {headerSubtitleText}
-                </Text>
+        <ChatHeader>
+          <View style={styles.header}>
+            {!isSearching ? (
+              <>
+                <TouchableOpacity onPress={() => router.back()}>
+                  <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.headerInfo}>
+                  <Text style={styles.headerTitle} numberOfLines={1}>
+                    {conversationDisplayName}
+                  </Text>
+                  <Text style={styles.headerSubtitle}>
+                    {headerSubtitleText}
+                  </Text>
+                </View>
+                <View style={styles.headerActions}>
+                  <TouchableOpacity style={styles.headerIcon} onPress={toggleSearchMode}>
+                    <Ionicons name="search-outline" size={26} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  {showCallActions ? (
+                    <>
+                      <TouchableOpacity style={styles.headerIcon}>
+                        <Ionicons name="call-outline" size={27} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.headerIcon}
+                        onPress={() => {
+                          const peerName = conversationDisplayName;
+                          const peerAvatar = conversationAvatarUrl;
+                          webrtcService.startCall(
+                            currentUserId!,
+                            partnerId || '',
+                            peerName || 'Unknown',
+                            peerAvatar,
+                            conversationId,
+                            'Bạn',
+                            undefined
+                          );
+                        }}
+                      >
+                        <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </>
+                  ) : null}
+                  <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
+                    <Ionicons name="list-outline" size={30} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={styles.searchBarHeader}>
+                <TouchableOpacity onPress={toggleSearchMode}>
+                  <Ionicons name="arrow-back" size={26} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Tìm tin nhắn..."
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  value={searchQuery}
+                  onChangeText={(txt) => {
+                    setSearchQuery(txt);
+                    if (txt.length > 0) {
+                      void handleSearchMessages(txt);
+                    } else {
+                      setSearchResults([]);
+                    }
+                  }}
+                  autoFocus
+                  selectionColor="#FFF"
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                    <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
               </View>
-              <View style={styles.headerActions}>
-                <TouchableOpacity style={styles.headerIcon} onPress={toggleSearchMode}>
-                  <Ionicons name="search-outline" size={26} color="#FFFFFF" />
-                </TouchableOpacity>
-                {showCallActions ? (
-                  <>
-                    <TouchableOpacity style={styles.headerIcon}>
-                      <Ionicons name="call-outline" size={27} color="#FFFFFF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.headerIcon}
-                      onPress={() => {
-                        const peerName = isGroupConversation ? conversationName : chatHeaderName;
-                        const peerAvatar = isGroupConversation ? conversationAvatarUrl : partnerUser?.avatarUrl;
-                        webrtcService.startCall(
-                          currentUserId!,
-                          partnerId || '',
-                          peerName || 'Unknown',
-                          peerAvatar,
-                          conversationId,
-                          'Bạn',
-                          undefined
-                        );
-                      }}
-                    >
-                      <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </>
-                ) : null}
-                <TouchableOpacity style={styles.headerIcon} onPress={() => { void openInfoPanel(); }}>
-                  <Ionicons name="list-outline" size={30} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <View style={styles.searchBarHeader}>
-              <TouchableOpacity onPress={toggleSearchMode}>
-                <Ionicons name="arrow-back" size={26} color="#FFFFFF" />
-              </TouchableOpacity>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Tìm tin nhắn..."
-                placeholderTextColor="rgba(255,255,255,0.7)"
-                value={searchQuery}
-                onChangeText={(txt) => {
-                  setSearchQuery(txt);
-                  if (txt.length > 0) {
-                    void handleSearchMessages(txt);
-                  } else {
-                    setSearchResults([]);
-                  }
-                }}
-                autoFocus
-                selectionColor="#FFF"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
-                  <Ionicons name="close-circle" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
+            )}
+          </View>
+        </ChatHeader>
 
         {/* Search Results Overlay */}
         {isSearching && searchQuery.length > 0 && (
@@ -3910,11 +3809,10 @@ export default function ChatDetailScreen() {
         ) : null}
 
         {/* Messages List */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => String(item.messageId)}
-          renderItem={renderMessage}
+        <MessageList
+          ref={flatListRef as any}
+          messages={messages}
+          renderItem={renderMessage as any}
           contentContainerStyle={styles.messagesList}
           scrollEnabled={true}
           keyboardShouldPersistTaps="handled"
@@ -3928,7 +3826,7 @@ export default function ChatDetailScreen() {
           maintainVisibleContentPosition={{
             minIndexForVisible: 0,
           }}
-          onScrollToIndexFailed={(info) => {
+          onScrollToIndexFailed={(info: any) => {
             flatListRef.current?.scrollToOffset({
               offset: info.averageItemLength * info.index,
               animated: true,
@@ -3937,7 +3835,8 @@ export default function ChatDetailScreen() {
         />
 
         {/* Input Area */}
-        <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
+        <MessageInput>
+          <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
           {editingMessageId ? (
             <View style={styles.editingBanner}>
               <View style={styles.editingBannerTextWrap}>
@@ -4136,7 +4035,8 @@ export default function ChatDetailScreen() {
               </>
             )}
           </View>
-        </SafeAreaView>
+          </SafeAreaView>
+        </MessageInput>
 
         <Modal
           visible={isMessageActionVisible}
@@ -4147,17 +4047,7 @@ export default function ChatDetailScreen() {
           <Pressable style={styles.modalBackdrop} onPress={closeMessageActionMenu}>
             <Pressable style={[styles.actionSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
               {/* Emoji reaction bar */}
-              <View style={styles.emojiRow}>
-                {REACTION_EMOJIS.map((emoji) => (
-                  <TouchableOpacity
-                    key={emoji}
-                    style={styles.emojiButton}
-                    onPress={() => { void handleReactWithEmoji(emoji); }}
-                  >
-                    <Text style={styles.emojiButtonText}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <ReactionPicker emojis={REACTION_EMOJIS as any} onSelect={(emoji: string) => { void handleReactWithEmoji(emoji); }} style={styles.emojiRow} />
 
               {/* Action grid */}
               <View style={styles.actionGrid}>
@@ -4244,42 +4134,15 @@ export default function ChatDetailScreen() {
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setIsPinnedListVisible(false)}>
             <Pressable style={[styles.pinnedSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.pinnedHeader}>
-                <Text style={[styles.pinnedTitle, { color: colors.text }]}>{t('chat.pinned_title', 'Tin nhắn đã ghim')}</Text>
-                <TouchableOpacity onPress={() => setIsPinnedListVisible(false)}>
-                  <Ionicons name="close" size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.pinnedList}>
-                {pinnedMessages.length === 0 ? (
-                  <Text style={[styles.pinnedEmpty, { color: colors.textSecondary }]}>{t('chat.pinned_empty', 'Chưa có tin nhắn ghim')}</Text>
-                ) : pinnedMessages.map((item) => (
-                  <TouchableOpacity
-                    key={item.id || item.messageId}
-                    style={[styles.pinnedItem, { borderBottomColor: colors.border }]}
-                    onPress={() => handleJumpToPinnedMessage(item.messageId)}
-                  >
-                    <View style={styles.pinnedItemMain}>
-                      <Text style={[styles.pinnedSender, { color: colors.text }]} numberOfLines={1}>{item.senderName || t('chat.unknown_user', 'Người dùng')}</Text>
-                      <View style={styles.pinnedContentRow}>
-                        <Text style={[styles.pinnedContent, { color: colors.textSecondary }]} numberOfLines={2}>
-                          {getPinnedPreviewText(item)}
-                        </Text>
-                        {getPinnedPreviewThumb(item) ? (
-                          <Image source={{ uri: getPinnedPreviewThumb(item) }} style={styles.pinnedItemThumb} resizeMode="cover" />
-                        ) : null}
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => { void handleUnpinFromPinnedList(item.messageId); }}
-                      style={styles.unpinButton}
-                    >
-                      <Ionicons name="close-circle-outline" size={20} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <PinnedListContent
+                pinnedMessages={pinnedMessages}
+                onClose={() => setIsPinnedListVisible(false)}
+                onJump={handleJumpToPinnedMessage}
+                onUnpin={(msgId: string) => { void handleUnpinFromPinnedList(msgId); }}
+                colors={colors}
+                styles={styles}
+                t={t}
+              />
             </Pressable>
           </Pressable>
         </Modal>
@@ -4293,43 +4156,15 @@ export default function ChatDetailScreen() {
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setIsAttachMenuVisible(false)}>
             <Pressable style={[styles.actionSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
-              <Text style={[styles.attachMenuTitle, { color: colors.text }]}>Gửi tệp đính kèm</Text>
-              <View style={styles.actionGrid}>
-                <TouchableOpacity style={styles.actionGridItem} onPress={handlePickImage}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#E8F5E9' }]}>
-                    <Ionicons name="image" size={24} color="#4CAF50" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Hình ảnh</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionGridItem} onPress={handlePickVideo}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#E3F2FD' }]}>
-                    <Ionicons name="videocam" size={24} color="#2196F3" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Video</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionGridItem} onPress={handlePickFile}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3E0' }]}>
-                    <Ionicons name="document" size={24} color="#FF9800" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Tệp</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionGridItem} onPress={handleTakePhoto}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#FCE4EC' }]}>
-                    <Ionicons name="camera" size={24} color="#E91E63" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Chụp ảnh</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.actionGridItem} onPress={() => { setIsAttachMenuVisible(false); setIsShareContactVisible(true); }}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#E8F4FD' }]}>
-                    <Ionicons name="person-circle-outline" size={24} color="#0068FF" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>Danh thiếp</Text>
-                </TouchableOpacity>
-              </View>
+              <AttachMenuContent
+                onPickImage={handlePickImage}
+                onPickVideo={handlePickVideo}
+                onPickFile={handlePickFile}
+                onTakePhoto={handleTakePhoto}
+                onShareContact={() => { setIsAttachMenuVisible(false); setIsShareContactVisible(true); }}
+                colors={colors}
+                styles={styles}
+              />
             </Pressable>
           </Pressable>
         </Modal>
@@ -4342,195 +4177,44 @@ export default function ChatDetailScreen() {
           onRequestClose={() => { setForwardingMsg(null); setFwdSelected(new Set()); setFwdSearch(''); }}
         >
           <View style={[styles.modalBackdrop, { justifyContent: 'flex-end' }]}>
-            <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}>
-              {/* Header */}
-              <View style={[styles.fwdHeader, { borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => { setForwardingMsg(null); setFwdSelected(new Set()); setFwdSearch(''); }}>
-                  <Ionicons name="close" size={22} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={[styles.fwdTitle, { color: colors.text }]}>Chuyển tiếp tin nhắn</Text>
-                <View style={{ width: 22 }} />
-              </View>
-              {/* Message preview */}
-              {forwardingMsg ? (
-                <View style={[styles.fwdPreview, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  {(() => {
-                    const forwardType = String(forwardingMsg.messageType || 'TEXT').toUpperCase();
-                    const imageUrls = getForwardAttachmentUrls(forwardingMsg);
-                    const isImage = forwardType === 'IMAGE';
-                    const isImageGroup = forwardType === 'IMAGE_GROUP';
-                    const isVideo = forwardType === 'VIDEO';
-                    const isFile = forwardType === 'FILE' || forwardType === 'MEDIA';
-                    const videoThumb = String(
-                      forwardingMsg.thumbnailUrl
-                      ?? videoThumbnailsByMessageId[String(forwardingMsg.messageId)]
-                      ?? ''
-                    ).trim();
-
-                    if (isImage || isImageGroup) {
-                      return (
-                        <>
-                          <View style={styles.fwdPreviewImageWrap}>
-                            {imageUrls.slice(0, 3).map((url, index) => (
-                              <Image
-                                key={`${url}-${index}`}
-                                source={{ uri: url }}
-                                style={styles.fwdPreviewImageThumb}
-                                resizeMode="cover"
-                              />
-                            ))}
-                          </View>
-                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                            {getForwardPreviewText(forwardingMsg)}
-                          </Text>
-                        </>
-                      );
-                    }
-
-                    if (isVideo) {
-                      return (
-                        <>
-                          <View style={styles.fwdPreviewVideoWrap}>
-                            {videoThumb ? <Image source={{ uri: videoThumb }} style={styles.fwdPreviewVideoThumb} resizeMode="cover" /> : null}
-                            <View style={styles.fwdPreviewVideoOverlay}>
-                              <Ionicons name="play" size={14} color="#FFFFFF" />
-                            </View>
-                          </View>
-                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                            {getForwardPreviewText(forwardingMsg)}
-                          </Text>
-                        </>
-                      );
-                    }
-
-                    if (isFile) {
-                      return (
-                        <>
-                          <View style={styles.fwdPreviewFileIcon}>
-                            <Ionicons name="document-text-outline" size={16} color="#0068FF" />
-                          </View>
-                          <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                            {getForwardPreviewText(forwardingMsg)}
-                          </Text>
-                        </>
-                      );
-                    }
-
-                    return (
-                      <>
-                        <Ionicons name="return-up-forward-outline" size={14} color={colors.textSecondary} />
-                        <Text style={[styles.fwdPreviewText, { color: colors.textSecondary }]} numberOfLines={2}>
-                          {getForwardPreviewText(forwardingMsg)}
-                        </Text>
-                      </>
-                    );
-                  })()}
-                </View>
-              ) : null}
-              {/* Search */}
-              <View style={[styles.fwdSearchRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <Ionicons name="search" size={16} color={colors.textSecondary} />
-                <TextInput
-                  style={[styles.fwdSearchInput, { color: colors.text }]}
-                  placeholder="Tìm cuộc trò chuyện..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={fwdSearch}
-                  onChangeText={setFwdSearch}
-                  onFocus={() => {
-                    if (fwdConversations.length === 0 && !fwdLoading) {
-                      void loadForwardConversations(fwdSearch);
-                    }
-                  }}
-                />
-              </View>
-              {/* Load on mount */}
-              {fwdConversations.length === 0 && !fwdLoading ? (
-                <TouchableOpacity
-                  style={{ paddingVertical: 8, alignItems: 'center' }}
-                  onPress={() => {
-                    void loadForwardConversations(fwdSearch);
-                  }}
-                >
-                  <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh sách</Text>
-                </TouchableOpacity>
-              ) : null}
-              {/* Conversation list */}
-              <ScrollView style={styles.fwdList}>
-                {fwdLoading ? (
-                  <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
-                ) : (
-                  filteredFwdConversations
-                    .map((c) => {
-                      const cId = c.id;
-                      const cName = c.name || 'Cuộc trò chuyện';
-                      const isSelected = fwdSelected.has(cId);
-                      return (
-                        <TouchableOpacity
-                          key={cId}
-                          style={[styles.fwdItem, { borderBottomColor: colors.border }]}
-                          onPress={() => {
-                            setFwdSelected((prev) => {
-                              const next = new Set(prev);
-                              if (isSelected) { next.delete(cId); } else { next.add(cId); }
-                              return next;
-                            });
-                          }}
-                        >
-                          <View style={styles.fwdItemAvatar}>
-                            {c.type === 'AI' ? (
-                              <View style={[styles.fwdSpecialAvatar, styles.fwdAiAvatar]}>
-                                <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-                              </View>
-                            ) : c.type === 'CLOUD' ? (
-                              <View style={[styles.fwdSpecialAvatar, styles.fwdCloudAvatar]}>
-                                <Ionicons name="folder-open" size={16} color="#FFFFFF" />
-                              </View>
-                            ) : c.avatarUrl ? (
-                              <Image source={getAvatarSource(c.avatarUrl)} style={styles.fwdItemAvatarImage} resizeMode="cover" />
-                            ) : (
-                              <Text style={styles.fwdItemAvatarText}>{cName.charAt(0).toUpperCase()}</Text>
-                            )}
-                          </View>
-                          <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{cName}</Text>
-                          <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
-                            {isSelected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })
-                )}
-              </ScrollView>
-              {/* Footer */}
-              <View style={[styles.fwdFooter, { borderTopColor: colors.border }]}>
-                {fwdSelected.size > 0 ? (
-                  <Text style={[styles.fwdSelectedCount, { color: colors.textSecondary }]}>
-                    {`Đã chọn ${fwdSelected.size} cuộc trò chuyện`}
-                  </Text>
-                ) : <View />}
-                <TouchableOpacity
-                  style={[styles.fwdSendBtn, { opacity: fwdSelected.size === 0 || fwdSending ? 0.5 : 1 }]}
-                  disabled={fwdSelected.size === 0 || fwdSending}
-                  onPress={async () => {
-                    if (!forwardingMsg || fwdSelected.size === 0) return;
-                    setFwdSending(true);
-                    const sendPromises = Array.from(fwdSelected).map((cId) =>
-                      chatService.sendMessage(cId, buildForwardPayload(forwardingMsg)).catch(() => { })
-                    );
-                    await Promise.all(sendPromises);
-                    setFwdSending(false);
-                    setForwardingMsg(null);
-                    setFwdSelected(new Set());
-                    setFwdSearch('');
-                    Alert.alert('', `Đã chuyển tiếp đến ${sendPromises.length} cuộc trò chuyện`);
-                  }}
-                >
-                  {fwdSending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.fwdSendBtnText}>Gửi</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+            <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}> 
+              <ForwardModalContent
+                forwardingMsg={forwardingMsg}
+                filteredFwdConversations={filteredFwdConversations}
+                fwdLoading={fwdLoading}
+                fwdSelected={fwdSelected}
+                onToggleSelect={(id: string) => {
+                  setFwdSelected((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id); else next.add(id);
+                    return next;
+                  });
+                }}
+                onLoadConversations={(q: string) => { void loadForwardConversations(q); }}
+                fwdSearch={fwdSearch}
+                setFwdSearch={setFwdSearch}
+                onSend={async () => {
+                  if (!forwardingMsg || fwdSelected.size === 0) return;
+                  setFwdSending(true);
+                  const sendPromises = Array.from(fwdSelected).map((cId) =>
+                    chatService.sendMessage(cId, buildForwardPayload(forwardingMsg)).catch(() => { })
+                  );
+                  await Promise.all(sendPromises);
+                  setFwdSending(false);
+                  setForwardingMsg(null);
+                  setFwdSelected(new Set());
+                  setFwdSearch('');
+                  Alert.alert('', `Đã chuyển tiếp đến ${sendPromises.length} cuộc trò chuyện`);
+                }}
+                fwdSending={fwdSending}
+                getForwardAttachmentUrls={getForwardAttachmentUrls}
+                getForwardPreviewText={getForwardPreviewText}
+                videoThumbnailsByMessageId={videoThumbnailsByMessageId}
+                colors={colors}
+                styles={styles}
+                t={t}
+                onClose={() => { setForwardingMsg(null); setFwdSelected(new Set()); setFwdSearch(''); }}
+              />
             </View>
           </View>
         </Modal>
@@ -4543,170 +4227,55 @@ export default function ChatDetailScreen() {
           onRequestClose={() => { setIsShareContactVisible(false); setScSelected(new Set()); setScSearch(''); }}
         >
           <View style={[styles.modalBackdrop, { justifyContent: 'flex-end' }]}>
-            <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}>
-              {/* Header */}
-              <View style={[styles.fwdHeader, { borderBottomColor: colors.border }]}>
-                <TouchableOpacity onPress={() => { setIsShareContactVisible(false); setScSelected(new Set()); setScSearch(''); }}>
-                  <Ionicons name="close" size={22} color={colors.text} />
-                </TouchableOpacity>
-                <Text style={[styles.fwdTitle, { color: colors.text }]}>Gửi danh thiếp</Text>
-                <View style={{ width: 22 }} />
-              </View>
-              {/* Include phone toggle */}
-              <View style={[styles.scToggleRow, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.scToggleLabel, { color: colors.text }]}>Bao gồm số điện thoại</Text>
-                <TouchableOpacity
-                  style={[styles.scToggle, { backgroundColor: scIncludePhone ? '#0068FF' : colors.border }]}
-                  onPress={() => setScIncludePhone((p) => !p)}
-                >
-                  <View style={[styles.scToggleThumb, { left: scIncludePhone ? 18 : 2 }]} />
-                </TouchableOpacity>
-              </View>
-              {/* Search */}
-              <View style={[styles.fwdSearchRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <Ionicons name="search" size={16} color={colors.textSecondary} />
-                <TextInput
-                  style={[styles.fwdSearchInput, { color: colors.text }]}
-                  placeholder="Tìm bạn bè..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={scSearch}
-                  onChangeText={setScSearch}
-                  onFocus={() => {
-                    if (scFriends.length === 0 && !scLoading) {
-                      setScLoading(true);
-                      friendService.getFriendsList()
-                        .then((res: any) => {
-                          const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
-                          setScFriends(list);
-                        })
-                        .catch(() => { }).finally(() => setScLoading(false));
+            <View style={[styles.fwdSheet, { backgroundColor: colors.card }]}> 
+              <ShareContactContent
+                scFriends={scFriends}
+                scLoading={scLoading}
+                scSelected={scSelected}
+                setScSelected={setScSelected}
+                scSearch={scSearch}
+                setScSearch={setScSearch}
+                onSend={async () => {
+                  if (scSelected.size === 0) return;
+                  setScSending(true);
+                  const selectedFriends = scFriends.filter((f: any) => scSelected.has(f.userId || f.user_id || f.id));
+                  try {
+                    for (const f of selectedFriends) {
+                      const contactData = {
+                        userId: f.userId || f.user_id || f.id,
+                        fullName: f.displayName || f.display_name || f.fullName || '',
+                        phoneNumber: scIncludePhone ? (f.phoneNumber || f.phone_number || '') : '',
+                        avatar: f.avatarUrl || f.avatar_url || f.avatar || '',
+                      };
+                      await chatService.sendMessage(conversationId, {
+                        content: JSON.stringify(contactData),
+                        messageType: 'SHARE_CONTACT',
+                        attachments: [],
+                      });
                     }
-                  }}
-                />
-              </View>
-              {/* Load friends on mount helper */}
-              {scFriends.length === 0 && !scLoading ? (
-                <TouchableOpacity
-                  style={{ paddingVertical: 8, alignItems: 'center' }}
-                  onPress={() => {
-                    setScLoading(true);
-                    friendService.getFriendsList()
-                      .then((res: any) => {
-                        const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
-                        setScFriends(list);
-                      })
-                      .catch(() => { })
-                      .finally(() => setScLoading(false));
-                  }}
-                >
-                  <Text style={{ color: '#0068FF', fontSize: 13 }}>Tải danh bạ</Text>
-                </TouchableOpacity>
-              ) : null}
-              {/* Friends list */}
-              <ScrollView style={styles.fwdList}>
-                {scLoading ? (
-                  <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.primary} />
-                ) : (
-                  scFriends
-                    .filter((f: any) => {
-                      const name: string = f.displayName || f.display_name || f.fullName || '';
-                      const phone: string = f.phoneNumber || f.phone_number || '';
-                      const q = scSearch.toLowerCase();
-                      return name.toLowerCase().includes(q) || phone.includes(q);
-                    })
-                    .map((f: any) => {
-                      const fId: string = f.userId || f.user_id || f.id;
-                      const fName: string = f.displayName || f.display_name || f.fullName || 'Người dùng';
-                      const fPhone: string = f.phoneNumber || f.phone_number || '';
-                      const fAvatar: string = f.avatarUrl || f.avatar_url || f.avatar || '';
-                      const isSelected = scSelected.has(fId);
-                      return (
-                        <TouchableOpacity
-                          key={fId}
-                          style={[styles.fwdItem, { borderBottomColor: colors.border }]}
-                          onPress={() => {
-                            setScSelected((prev) => {
-                              const next = new Set(prev);
-                              if (isSelected) { next.delete(fId); } else if (next.size < 9) { next.add(fId); }
-                              return next;
-                            });
-                          }}
-                        >
-                          <View style={styles.fwdItemAvatar}>
-                            {fAvatar ? (
-                              <Image source={{ uri: fAvatar }} style={{ width: 36, height: 36, borderRadius: 18 }} />
-                            ) : (
-                              <Text style={styles.fwdItemAvatarText}>{fName.charAt(0).toUpperCase()}</Text>
-                            )}
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.fwdItemName, { color: colors.text }]} numberOfLines={1}>{fName}</Text>
-                            {fPhone ? <Text style={{ fontSize: 12, color: colors.textSecondary }}>{fPhone}</Text> : null}
-                          </View>
-                          <View style={[styles.fwdCheckbox, isSelected && styles.fwdCheckboxSelected, { borderColor: isSelected ? '#0068FF' : colors.border }]}>
-                            {isSelected ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })
-                )}
-              </ScrollView>
-              {/* Footer */}
-              <View style={[styles.fwdFooter, { borderTopColor: colors.border }]}>
-                {scSelected.size > 0 ? (
-                  <Text style={[styles.fwdSelectedCount, { color: colors.textSecondary }]}>
-                    {`Đã chọn ${scSelected.size}/9`}
-                  </Text>
-                ) : <View />}
-                <TouchableOpacity
-                  style={[styles.fwdSendBtn, { opacity: scSelected.size === 0 || scSending ? 0.5 : 1 }]}
-                  disabled={scSelected.size === 0 || scSending}
-                  onPress={async () => {
-                    if (scSelected.size === 0) return;
-                    setScSending(true);
-                    const selectedFriends = scFriends.filter((f: any) => scSelected.has(f.userId || f.user_id || f.id));
-                    try {
-                      for (const f of selectedFriends) {
-                        const contactData = {
-                          userId: f.userId || f.user_id || f.id,
-                          fullName: f.displayName || f.display_name || f.fullName || '',
-                          phoneNumber: scIncludePhone ? (f.phoneNumber || f.phone_number || '') : '',
-                          avatar: f.avatarUrl || f.avatar_url || f.avatar || '',
-                        };
-                        await chatService.sendMessage(conversationId, {
-                          content: JSON.stringify(contactData),
-                          messageType: 'SHARE_CONTACT',
-                          attachments: [],
-                        });
-                      }
-                      setIsShareContactVisible(false);
-                      setScSelected(new Set());
-                      setScSearch('');
-                    } catch {
-                      Alert.alert('Lỗi', 'Không thể gửi danh thiếp. Vui lòng thử lại.');
-                    } finally {
-                      setScSending(false);
-                    }
-                  }}
-                >
-                  {scSending ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.fwdSendBtnText}>Gửi</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                    setIsShareContactVisible(false);
+                    setScSelected(new Set());
+                    setScSearch('');
+                  } catch {
+                    Alert.alert('Lỗi', 'Không thể gửi danh thiếp. Vui lòng thử lại.');
+                  } finally {
+                    setScSending(false);
+                  }
+                }}
+                scSending={scSending}
+                scIncludePhone={scIncludePhone}
+                setScIncludePhone={setScIncludePhone}
+                colors={colors}
+                styles={styles}
+                t={t}
+                onClose={() => { setIsShareContactVisible(false); setScSelected(new Set()); setScSearch(''); }}
+              />
             </View>
           </View>
         </Modal>
 
         {/* Fullscreen Image Preview */}
-        <Modal
-          visible={!!fullscreenImageUrl}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setFullscreenImageUrl(null)}
-        >
+        <MediaViewer visible={!!fullscreenImageUrl} onClose={() => setFullscreenImageUrl(null)}>
           <View style={styles.fullscreenImageBackdrop}>
             <TouchableOpacity
               style={styles.fullscreenImageClose}
@@ -4732,15 +4301,10 @@ export default function ChatDetailScreen() {
               <Ionicons name="download-outline" size={26} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
-        </Modal>
+        </MediaViewer>
 
         {/* Fullscreen Video Preview */}
-        <Modal
-          visible={!!fullscreenVideoUrl}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setFullscreenVideoUrl(null)}
-        >
+        <MediaViewer visible={!!fullscreenVideoUrl} onClose={() => setFullscreenVideoUrl(null)}>
           <View style={styles.fullscreenImageBackdrop}>
             <TouchableOpacity
               style={styles.fullscreenImageClose}
@@ -4758,7 +4322,7 @@ export default function ChatDetailScreen() {
               />
             ) : null}
           </View>
-        </Modal>
+        </MediaViewer>
 
         {/* ── Chat Info Panel ──────────────────────────────────────────────── */}
         <Modal
