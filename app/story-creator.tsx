@@ -25,7 +25,7 @@ export default function StoryCreator({ onCreated }: Props) {
         return;
       }
       const res = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.All, quality: 0.8 });
-      if (res.cancelled) return;
+      if (res.canceled) return;
       const asset = res.assets ? res.assets[0] : (res as any);
       setPreviewUri(asset.uri);
       setIsVideo(asset.type === 'video' || asset.uri.endsWith('.mp4'));
@@ -42,7 +42,7 @@ export default function StoryCreator({ onCreated }: Props) {
         return;
       }
       const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.All, quality: 0.8 });
-      if (res.cancelled) return;
+      if (res.canceled) return;
       const asset = res.assets ? res.assets[0] : (res as any);
       setPreviewUri(asset.uri);
       setIsVideo(asset.type === 'video' || asset.uri.endsWith('.mp4'));
@@ -87,7 +87,16 @@ export default function StoryCreator({ onCreated }: Props) {
       if (!fileUrl) throw new Error('Upload failed');
 
       const body = { mediaUrl: fileUrl, mediaType: isVideo ? 'VIDEO' : 'IMAGE', caption: caption || '' };
-      await api.post('/stories', body);
+      const userId = await SecureStore.getItemAsync('user_id');
+      if (!userId) {
+        throw new Error('Missing user id');
+      }
+
+      await api.post('/stories', body, {
+        headers: {
+          'X-User-Id': userId,
+        },
+      });
 
       onCreated && onCreated();
       router.back();
