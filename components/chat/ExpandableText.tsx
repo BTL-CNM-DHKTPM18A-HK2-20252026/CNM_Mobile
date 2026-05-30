@@ -31,6 +31,41 @@ const getCharacterFallbackThreshold = (previewWords: number) => {
   return Math.max(MIN_CHARACTER_FALLBACK, previewWords * WORDS_PER_LINE_FALLBACK);
 };
 
+const extractTiptapText = (node: any): string => {
+  if (!node) return '';
+  if (node.type === 'text') return node.text ?? '';
+  if (Array.isArray(node.content)) return node.content.map(extractTiptapText).join('');
+  return '';
+};
+
+const renderTiptapNode = (node: any, textStyle: any, key: string = 'root'): React.ReactNode => {
+  if (!node) return null;
+  if (node.type === 'text') {
+    const textStr: string = node.text ?? '';
+    const marks: any[] = node.marks ?? [];
+    const style: any = { ...StyleSheet.flatten(textStyle) };
+    for (const mark of marks) {
+      if (mark.type === 'bold') style.fontWeight = '700';
+      if (mark.type === 'italic') style.fontStyle = 'italic';
+      if (mark.type === 'underline') style.textDecorationLine = 'underline';
+      if (mark.type === 'strike') style.textDecorationLine = 'line-through';
+      if (mark.type === 'textStyle' && mark.attrs?.color) style.color = mark.attrs.color;
+    }
+    return <Text key={key} style={style}>{textStr}</Text>;
+  }
+  const children = (node.content ?? []).map((child: any, idx: number) =>
+    renderTiptapNode(child, textStyle, `${key}-${idx}`)
+  );
+  if (node.type === 'hardBreak') return <Text key={key}>{`\n`}</Text>;
+  if (node.type === 'paragraph') return <Text key={key}>{children}{`\n`}</Text>;
+  if (node.type === 'heading') return <Text key={key} style={[textStyle, { fontWeight: '700', fontSize: 16 }]}>{children}{`\n`}</Text>;
+  if (node.type === 'blockquote') return <Text key={key} style={[textStyle, { fontStyle: 'italic' }]}>{children}</Text>;
+  if (node.type === 'bulletList' || node.type === 'orderedList') return <Text key={key}>{children}</Text>;
+  if (node.type === 'listItem') return <Text key={key}>{'\u2022 '}{children}</Text>;
+  if (node.type === 'doc') return <React.Fragment key={key}>{children}</React.Fragment>;
+  return <Text key={key}>{children}</Text>;
+};
+
 export const ExpandableText: React.FC<ExpandableTextProps> = React.memo(({
   text,
   previewWords = DEFAULT_PREVIEW_WORDS,
@@ -42,9 +77,25 @@ export const ExpandableText: React.FC<ExpandableTextProps> = React.memo(({
   collapseLabel = 'Thu gọn',
 }) => {
   const rawText = String(text ?? '');
-  const renderedText = rawText.replace(/\r\n/g, '\n');
-  const analysisText = renderedText.trim();
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Parse JSON if applicable
+  const parsedData = useMemo(() => {
+    if (rawText.trim().startsWith('{') && rawText.trim().endsWith('}')) {
+      try {
+        const json = JSON.parse(rawText);
+        if (json && typeof json === 'object' && json.type === 'doc') {
+          const plainText = extractTiptapText(json).trim();
+          return { isJson: true, json, plainText };
+        }
+      } catch {
+        // Fall back to plain text
+      }
+    }
+    return { isJson: false, json: null, plainText: rawText.replace(/\r\n/g, '\n') };
+  }, [rawText]);
+
+  const analysisText = parsedData.plainText.trim();
 
   useEffect(() => {
     setIsExpanded(false);
@@ -52,7 +103,7 @@ export const ExpandableText: React.FC<ExpandableTextProps> = React.memo(({
 
   const metrics = useMemo(() => {
     const wordCount = countWords(analysisText);
-    const lineCount = countLogicalLines(renderedText);
+    const lineCount = countLogicalLines(parsedData.plainText);
     const characterFallbackThreshold = getCharacterFallbackThreshold(previewWords);
 
     return {
@@ -63,7 +114,7 @@ export const ExpandableText: React.FC<ExpandableTextProps> = React.memo(({
         lineCount > previewLines ||
         analysisText.length > characterFallbackThreshold,
     };
-  }, [analysisText, previewLines, previewWords, renderedText]);
+  }, [analysisText, previewLines, previewWords, parsedData.plainText]);
 
   const handleToggle = () => {
     setIsExpanded((prev) => !prev);
@@ -72,7 +123,11 @@ export const ExpandableText: React.FC<ExpandableTextProps> = React.memo(({
   if (!metrics.shouldCollapse) {
     return (
       <View style={containerStyle}>
-        <Text style={textStyle}>{renderedText}</Text>
+        <Text style={textStyle}>
+          {parsedData.isJson
+            ? renderTiptapNode(parsedData.json, textStyle)
+            : parsedData.plainText}
+        </Text>
       </View>
     );
   }
@@ -84,7 +139,9 @@ export const ExpandableText: React.FC<ExpandableTextProps> = React.memo(({
         numberOfLines={isExpanded ? undefined : previewLines}
         ellipsizeMode={isExpanded ? undefined : 'tail'}
       >
-        {renderedText}
+        {parsedData.isJson
+          ? renderTiptapNode(parsedData.json, textStyle)
+          : parsedData.plainText}
       </Text>
 
       <Pressable onPress={handleToggle} hitSlop={8} accessibilityRole="button">

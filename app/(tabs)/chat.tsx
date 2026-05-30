@@ -29,6 +29,27 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
 }
 
+function getPlainTextFromMessageContent(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') {
+        const extract = (node: any): string => {
+          if (!node) return '';
+          if (node.type === 'text') return node.text ?? '';
+          if (Array.isArray(node.content)) return node.content.map(extract).join('');
+          return '';
+        };
+        return extract(parsed).trim() || content;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return content;
+}
+
 type ConversationType = 'PRIVATE' | 'GROUP' | 'CLOUD' | 'SYSTEM' | 'AI' | 'SELF';
 
 interface ChatItem {
@@ -203,7 +224,7 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
       item.preview ??
       item.snippet ??
       `${senderPrefix}Chưa có tin nhắn`;
-    const lastMessage = stripHtml(String(rawLastMessage));
+    const lastMessage = stripHtml(getPlainTextFromMessageContent(String(rawLastMessage)));
 
     return {
       id: String(item.conversationId ?? item.id ?? item.userId ?? `conversation-${index}`),

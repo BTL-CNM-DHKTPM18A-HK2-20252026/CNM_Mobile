@@ -706,7 +706,21 @@ export default function ChatDetailScreen() {
     if (mType === 'SHARE_CONTACT') {
       try { const c = JSON.parse(msg.content || '{}'); return `📇 ${c.fullName || 'Danh thiếp'}`; } catch { return '📇 Danh thiếp'; }
     }
-    const text = msg.content || '';
+    let text = msg.content || '';
+    try {
+      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') {
+          const extract = (node: any): string => {
+            if (!node) return '';
+            if (node.type === 'text') return node.text ?? '';
+            if (Array.isArray(node.content)) return node.content.map(extract).join('');
+            return '';
+          };
+          text = extract(parsed).trim() || text;
+        }
+      }
+    } catch { /* not JSON */ }
     return text.length > 80 ? `${text.slice(0, 80)}...` : text;
   }, [getDisplayFileNameFromValue]);
 
@@ -747,7 +761,22 @@ export default function ChatDetailScreen() {
       }
     }
 
-    const content = String(msg.content ?? '').trim();
+    let content = String(msg.content ?? '').trim();
+    try {
+      if (content.startsWith('{') && content.endsWith('}')) {
+        const parsed = JSON.parse(content);
+        if (parsed && typeof parsed === 'object') {
+          const extract = (node: any): string => {
+            if (!node) return '';
+            if (node.type === 'text') return node.text ?? '';
+            if (Array.isArray(node.content)) return node.content.map(extract).join('');
+            return '';
+          };
+          content = extract(parsed).trim() || content;
+        }
+      }
+    } catch { /* not JSON */ }
+
     if (!content) {
       return t('chat.empty_message', 'Tin nhắn trống');
     }
@@ -854,11 +883,28 @@ export default function ChatDetailScreen() {
       String(message.senderId) === AI_TYPING_USER_ID ||
       senderName === 'fruvia ai';
 
+    const raw = message.content || '';
     if (!isAiSender) {
-      return message.content;
+      return raw;
     }
 
-    return stripAiMarkdownMarkers(message.content);
+    let plain = raw;
+    try {
+      if (raw.trim().startsWith('{') && raw.trim().endsWith('}')) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          const extract = (node: any): string => {
+            if (!node) return '';
+            if (node.type === 'text') return node.text ?? '';
+            if (Array.isArray(node.content)) return node.content.map(extract).join('');
+            return '';
+          };
+          plain = extract(parsed).trim() || raw;
+        }
+      }
+    } catch { /* not JSON */ }
+
+    return stripAiMarkdownMarkers(plain);
   }, [isAiConversation, stripAiMarkdownMarkers]);
 
   const closeMessageActionMenu = useCallback(() => {
@@ -2211,7 +2257,21 @@ export default function ChatDetailScreen() {
 
   const handleCopySelectedMessage = useCallback(async () => {
     if (!selectedMessage) return;
-    const text = selectedMessage.content || '';
+    let text = selectedMessage.content || '';
+    try {
+      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') {
+          const extract = (node: any): string => {
+            if (!node) return '';
+            if (node.type === 'text') return node.text ?? '';
+            if (Array.isArray(node.content)) return node.content.map(extract).join('');
+            return '';
+          };
+          text = extract(parsed).trim() || text;
+        }
+      }
+    } catch { /* not JSON */ }
     await Clipboard.setStringAsync(text);
     closeMessageActionMenu();
     Alert.alert('', 'Đã sao chép tin nhắn');
@@ -2223,7 +2283,22 @@ export default function ChatDetailScreen() {
     }
 
     setEditingMessageId(selectedMessage.messageId);
-    setInputText(selectedMessage.content || '');
+    let text = selectedMessage.content || '';
+    try {
+      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') {
+          const extract = (node: any): string => {
+            if (!node) return '';
+            if (node.type === 'text') return node.text ?? '';
+            if (Array.isArray(node.content)) return node.content.map(extract).join('');
+            return '';
+          };
+          text = extract(parsed).trim() || text;
+        }
+      }
+    } catch { /* not JSON */ }
+    setInputText(text);
     closeMessageActionMenu();
   }, [closeMessageActionMenu, selectedMessage]);
 
