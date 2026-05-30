@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
 import { ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
@@ -175,6 +176,7 @@ const MAX_IMAGE_SELECTION = 30;
 const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 const emojiToReactionType = (emoji: string): 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY' => {
   switch (emoji) {
@@ -383,7 +385,7 @@ export default function ChatDetailScreen() {
     if (!deletedSet || deletedSet.size === 0) return msgs;
     const filtered = msgs.filter((m) => !deletedSet.has(String(m.messageId)));
     return filtered;
-  }, []);
+  }, [isExpoGo]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCurrentIndex, setUploadCurrentIndex] = useState(0);
   const [videoThumbnailsByMessageId, setVideoThumbnailsByMessageId] = useState<Record<string, string>>({});
@@ -1808,6 +1810,22 @@ export default function ChatDetailScreen() {
     });
   }, []);
 
+  const getFileExtensionFromMimeType = useCallback((mimeType?: string) => {
+    switch (mimeType) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'image/heic':
+      case 'image/heif':
+        return 'heic';
+      case 'image/jpg':
+      case 'image/jpeg':
+      default:
+        return 'jpg';
+    }
+  }, []);
+
   const handleConfirmCustomImages = useCallback((selectedUris: string[]) => {
     const picked = buildPickedMediaFromUris(selectedUris);
     if (picked.length === 0) {
@@ -1822,8 +1840,41 @@ export default function ChatDetailScreen() {
 
   const handlePickImage = useCallback(async () => {
     setIsAttachMenuVisible(false);
+    if (isExpoGo) {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: MAX_IMAGE_SELECTION,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.length) {
+        return;
+      }
+
+      const picked = result.assets.slice(0, MAX_IMAGE_SELECTION).map((asset, index) => ({
+        uri: asset.uri,
+        fileName: asset.fileName || `image_${Date.now()}_${index + 1}.${getFileExtensionFromMimeType(asset.mimeType)}`,
+        fileSize: asset.fileSize || 0,
+        mimeType: asset.mimeType || 'image/jpeg',
+        mediaType: 'IMAGE' as const,
+        width: asset.width,
+        height: asset.height,
+      }));
+
+      setPendingMediaList(picked);
+      return;
+    }
+
     setIsCustomImagePickerVisible(true);
-  }, []);
+  }, [getFileExtensionFromMimeType, isExpoGo]);
 
   const handlePickVideo = useCallback(async () => {
     setIsAttachMenuVisible(false);
