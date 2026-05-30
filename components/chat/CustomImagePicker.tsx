@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MAX_SELECTION = 30;
 const PAGE_SIZE = 50;
@@ -71,25 +72,32 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
   const [endCursor, setEndCursor] = useState<string | undefined>(undefined);
   const [loadingAlbums, setLoadingAlbums] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
+  const [onEndReachedCalled, setOnEndReachedCalled] = useState(false);
   const [albumMenuVisible, setAlbumMenuVisible] = useState(false);
 
   const currentAlbum = albums[selectedAlbumIndex] ?? null;
   const selectedAssetIds = useMemo(() => new Set(selectedAssets.map((item) => item.id)), [selectedAssets]);
+  const insets = useSafeAreaInsets();
 
   const ensurePermission = useCallback(async () => {
+    console.log('[CustomImagePicker] ensurePermission: checking');
     const existing = await MediaLibrary.getPermissionsAsync(false, ['photo']);
+    console.log('[CustomImagePicker] ensurePermission: existing', existing.status);
     if (existing.status === 'granted') {
       return true;
     }
 
     const requested = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+    console.log('[CustomImagePicker] ensurePermission: requested', requested.status);
     return requested.status === 'granted';
   }, []);
 
   const loadAlbums = useCallback(async () => {
     setLoadingAlbums(true);
     try {
+      console.log('[CustomImagePicker] loadAlbums: start');
       const granted = await ensurePermission();
+      console.log('[CustomImagePicker] loadAlbums: granted=', granted);
       if (!granted) {
         Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh để chọn ảnh.');
         onClose();
@@ -97,6 +105,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
       }
 
       const systemAlbums = await MediaLibrary.getAlbumsAsync();
+      console.log('[CustomImagePicker] loadAlbums: got', systemAlbums.length, 'albums');
       const nextAlbums: PickerAlbum[] = [
         { id: null, title: 'Tất cả ảnh' },
         ...systemAlbums.filter((album) => album.assetCount > 0),
@@ -112,45 +121,61 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
     }
   }, [ensurePermission, onClose]);
 
-  const loadAssets = useCallback(async (album: PickerAlbum | null, reset = false) => {
-    setLoadingAssets(true);
-    try {
-      const query: MediaLibrary.GetAssetsOptions = {
-        first: PAGE_SIZE,
-        mediaType: ['photo'],
-      };
+  const loadAssets = useCallback(
+    async (album: PickerAlbum | null, reset = false, after?: string) => {
+      setLoadingAssets(true);
+      try {
+        console.log('[CustomImagePicker] loadAssets: start', { albumId: album?.id ?? null, reset, after });
+        const query: MediaLibrary.GetAssetsOptions = {
+          first: PAGE_SIZE,
+          mediaType: ['photo'],
+          // request assets ordered by creation time (newest first)
+          sortBy: [MediaLibrary.SortBy.creationTime],
+        };
 
-      if (album && album.id) {
-        query.album = album;
-      }
+        // If a specific album is provided, pass its id (string) to the query.
+        if (album && typeof (album as Album).id === 'string') {
+          // @ts-expect-error - MediaLibrary accepts album id or Album depending on platform
+          query.album = (album as Album).id;
+        }
 
-      if (!reset && endCursor) {
-        query.after = endCursor;
-      }
+        if (!reset && after) {
+          query.after = after;
+        }
 
-      const result = await MediaLibrary.getAssetsAsync(query);
+        const result = await MediaLibrary.getAssetsAsync(query);
+        console.log('[CustomImagePicker] loadAssets: got', result.assets.length, 'assets, hasNextPage=', result.hasNextPage);
 
-      setAssets((prev) => {
-        const next = reset ? result.assets : [...prev, ...result.assets];
-        const seen = new Set<string>();
-        return next.filter((item) => {
-          if (seen.has(item.id)) {
-            return false;
-          }
-          seen.add(item.id);
-          return true;
+        setAssets((prev) => {
+          // merge results and ensure newest->oldest order by creationTime
+          const combined = reset ? result.assets.slice() : [...prev, ...result.assets];
+          // dedupe by id while preserving newest-first order
+          const seen = new Set<string>();
+          const deduped = combined
+            .slice()
+            .sort((a, b) => (b.creationTime ?? 0) - (a.creationTime ?? 0))
+            .filter((item) => {
+              if (seen.has(item.id)) return false;
+              seen.add(item.id);
+              return true;
+            });
+
+          return deduped;
         });
-      });
 
-      setHasNextPage(Boolean(result.hasNextPage));
-      setEndCursor(result.endCursor ?? undefined);
-    } catch (error) {
-      console.warn('[CustomImagePicker] Failed to load assets:', error);
-      Alert.alert('Lỗi', 'Không thể tải ảnh trong album này.');
-    } finally {
-      setLoadingAssets(false);
-    }
-  }, [endCursor]);
+        setHasNextPage(Boolean(result.hasNextPage));
+        setEndCursor(result.endCursor ?? undefined);
+      } catch (error) {
+        console.warn('[CustomImagePicker] Failed to load assets:', error);
+        Alert.alert('Lỗi', 'Không thể tải ảnh trong album này.');
+      } finally {
+        setLoadingAssets(false);
+        // allow subsequent onEndReached calls after this load finishes
+        setOnEndReachedCalled(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (!isVisible) {
@@ -175,7 +200,8 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
     setAssets([]);
     setEndCursor(undefined);
     setHasNextPage(false);
-    void loadAssets(currentAlbum, true);
+    setOnEndReachedCalled(false);
+    void loadAssets(currentAlbum, true, undefined);
   }, [isVisible, albums, currentAlbum, loadAssets]);
 
   const selectedIndexById = useMemo(() => {
@@ -190,6 +216,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
     setSelectedAssets((prev) => {
       const existingIndex = prev.findIndex((item) => item.id === asset.id);
       if (existingIndex >= 0) {
+        console.log('[CustomImagePicker] toggleAsset: removing', asset.id);
         return prev.filter((item) => item.id !== asset.id);
       }
 
@@ -198,8 +225,11 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
           'Chọn ảnh gửi đi',
           'Bạn chỉ có thể gửi tối đa 30 hình ảnh trong một lần. Vui lòng bỏ bớt một vài ảnh nhé!'
         );
+        console.log('[CustomImagePicker] toggleAsset: reached maxSelection');
         return prev;
       }
+
+      console.log('[CustomImagePicker] toggleAsset: adding', asset.id);
 
       return [...prev, asset];
     });
@@ -220,12 +250,13 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
   }, [maxSelection, onClose, onConfirm, selectedAssets]);
 
   const handleLoadMore = useCallback(() => {
-    if (!hasNextPage || loadingAssets) {
+    if (!hasNextPage || loadingAssets || onEndReachedCalled) {
       return;
     }
 
-    void loadAssets(currentAlbum, false);
-  }, [currentAlbum, hasNextPage, loadAssets, loadingAssets]);
+    setOnEndReachedCalled(true);
+    void loadAssets(currentAlbum, false, endCursor);
+  }, [currentAlbum, hasNextPage, loadAssets, loadingAssets, endCursor, onEndReachedCalled]);
 
   const handleSelectAlbum = useCallback((index: number) => {
     setSelectedAlbumIndex(index);
@@ -254,8 +285,9 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
 
   return (
     <Modal visible={isVisible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: 18 + insets.top }]}>
           <TouchableOpacity onPress={onClose} style={styles.headerButton}>
             <Ionicons name="close" size={28} color="#111827" />
           </TouchableOpacity>
@@ -275,11 +307,26 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
           keyExtractor={(item) => item.id}
           renderItem={renderAssetItem}
           numColumns={4}
-          contentContainerStyle={styles.gridContent}
+          contentContainerStyle={[styles.gridContent, { paddingBottom: 136 + insets.bottom }]}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.7}
           refreshing={loadingAssets}
-          onRefresh={() => loadAssets(currentAlbum, true)}
+          onRefresh={() => {
+            setOnEndReachedCalled(false);
+            void loadAssets(currentAlbum, true, undefined);
+          }}
+          onMomentumScrollBegin={() => setOnEndReachedCalled(false)}
+          initialNumToRender={20}
+          windowSize={5}
+          removeClippedSubviews
+          getItemLayout={(data, index) => {
+            const { width } = Dimensions.get('window');
+            // grid has 4 columns, cell padding creates small gaps; compute approximate item size
+            const totalPadding = 8; // gridContent padding + cell padding approximation
+            const itemSize = Math.floor((width - totalPadding) / 4);
+            const row = Math.floor(index / 4);
+            return { length: itemSize, offset: row * itemSize, index };
+          }}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text style={styles.emptyText}>
@@ -289,7 +336,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
           }
         />
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: 18 + insets.bottom }]}>
           <View style={styles.selectedStrip}>
             <FlatList
               data={selectedAssets}
@@ -348,6 +395,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
           </Pressable>
         </Modal>
       </View>
+      </SafeAreaView>
     </Modal>
   );
 };
@@ -356,6 +404,10 @@ export default CustomImagePicker;
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: '#FFF7FA',
+  },
+  safeArea: {
     flex: 1,
     backgroundColor: '#FFF7FA',
   },
