@@ -168,7 +168,6 @@ interface ApiWrappedPayload<T> {
 
 const PAGE_SIZE = 10;
 const SCROLL_TOP_THRESHOLD = 48;
-const DEBUG_CHAT_MESSAGES = __DEV__;
 const AI_TYPING_USER_ID = 'FRUVIA_AI_ASSISTANT';
 const BLOCK_GAP_MS = 5 * 60 * 1000;
 const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
@@ -511,13 +510,7 @@ export default function ChatDetailScreen() {
     void ensureSpecialConversation();
   }, [id, isAiConversation, isCloudConversation]);
 
-  const logChatDebug = useCallback((label: string, payload: unknown) => {
-    if (!DEBUG_CHAT_MESSAGES) {
-      return;
-    }
-
-    console.log(`[CHAT_DEBUG] ${label}`, payload);
-  }, []);
+  const logChatDebug = useCallback((_label: string, _payload: unknown) => {}, []);
 
   const scrollToLatest = useCallback((animated: boolean) => {
     requestAnimationFrame(() => {
