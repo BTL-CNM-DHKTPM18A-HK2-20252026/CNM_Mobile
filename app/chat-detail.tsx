@@ -4,6 +4,7 @@ import CustomImagePicker from '@/components/chat/CustomImagePicker';
 import ExpandableText from '@/components/chat/ExpandableText';
 import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
 import { MediaViewer } from '@/components/chat/MediaViewer';
+import MemberListModal from '@/components/chat/MemberListModal';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { MessageItem } from '@/components/chat/MessageItem';
 import ForwardedBanner from '@/components/chat/MessageItem/ForwardedBanner';
@@ -402,7 +403,6 @@ export default function ChatDetailScreen() {
   const [infoMediaItems, setInfoMediaItems] = useState<any[]>([]);
   const [infoFileItems, setInfoFileItems] = useState<any[]>([]);
   const [infoStorageStats, setInfoStorageStats] = useState<any>(null);
-  const [infoShowMembers, setInfoShowMembers] = useState(true);
   const [infoShowMedia, setInfoShowMedia] = useState(true);
   const [infoShowFiles, setInfoShowFiles] = useState(false);
   const [infoShowPinned, setInfoShowPinned] = useState(true);
@@ -433,6 +433,7 @@ export default function ChatDetailScreen() {
   const [infoEditNameValue, setInfoEditNameValue] = useState('');
   const [infoUpdatingGroupName, setInfoUpdatingGroupName] = useState(false);
   const [infoUpdatingGroupAvatar, setInfoUpdatingGroupAvatar] = useState(false);
+  const [isMemberListVisible, setIsMemberListVisible] = useState(false);
 
   // Reply, Forward, Share Contact
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -486,6 +487,7 @@ export default function ChatDetailScreen() {
     setSelectedMessage(null);
     setReplyingTo(null);
     setForwardingMsg(null);
+    setIsMemberListVisible(false);
   }, [avatar, id, name]);
 
   // Initialize local-deleted IDs into the existing ref so legacy usages keep working
@@ -2640,6 +2642,18 @@ export default function ChatDetailScreen() {
     ]);
   }, [fetchInfoMembers, fetchInfoMedia, fetchInfoStorageStats, fetchPinnedMessages]);
 
+  const openMemberList = useCallback(async () => {
+    if (!isGroupConversation) {
+      return;
+    }
+
+    if (infoMembers.length === 0) {
+      await fetchInfoMembers();
+    }
+
+    setIsMemberListVisible(true);
+  }, [fetchInfoMembers, infoMembers.length, isGroupConversation]);
+
   const getInfoMediaUrl = useCallback((item: any) => {
     return String(item?.content ?? item?.mediaUrl ?? item?.url ?? '').trim();
   }, []);
@@ -4495,6 +4509,23 @@ export default function ChatDetailScreen() {
           </View>
         </Modal>
 
+        <MemberListModal
+          visible={isMemberListVisible}
+          members={infoMembers}
+          currentUserId={currentUserId}
+          conversationName={conversationDisplayName}
+          onClose={() => setIsMemberListVisible(false)}
+          onAddMemberPress={() => {
+            setIsMemberListVisible(false);
+            void handleOpenInfoAddMemberModal();
+          }}
+          onSearchPress={() => Alert.alert('Tìm thành viên', 'Chức năng đang phát triển')}
+          onMemberMenuPress={(member) => {
+            const memberName = String(member.displayName ?? member.userName ?? member.fullName ?? 'Thành viên');
+            Alert.alert(memberName, 'Chức năng đang phát triển');
+          }}
+        />
+
         {/* Fullscreen Image Preview */}
         <MediaViewer visible={!!fullscreenImageUrl} onClose={() => setFullscreenImageUrl(null)}>
           <View style={styles.fullscreenImageBackdrop}>
@@ -4698,191 +4729,21 @@ export default function ChatDetailScreen() {
                 </View>
               )}
 
-              {/* Group Members section */}
+              {/* Group Members entry */}
               {isGroupConversation && (
-                <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
-                  <TouchableOpacity
-                    style={styles.infoPanelSectionToggle}
-                    onPress={() => setInfoShowMembers((v) => !v)}
-                  >
-                    <View style={styles.infoPanelSectionToggleLeft}>
-                      <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
-                      <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>
-                        Thành viên ({infoMembers.length})
-                      </Text>
-                    </View>
-                    <Ionicons name={infoShowMembers ? 'chevron-down' : 'chevron-forward'} size={18} color={colors.textSecondary} />
-                  </TouchableOpacity>
-
-                  {infoShowMembers && (
-                    <View style={styles.infoPanelMemberList}>
-                      {/* Members list */}
-                      {infoMembers.map((m: any) => {
-                        const mName = m.displayName || m.userName || 'Unknown';
-                        const mAvatar = m.avatarUrl || m.avatar;
-                        const mRole = m.role;
-                        const isMe = m.userId === currentUserId;
-                        const menuOpen = infoMemberMenuId === m.userId;
-                        return (
-                          <View key={m.userId} style={styles.infoPanelMemberRow}>
-                            {mAvatar ? (
-                              <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelMemberAvatar} />
-                            ) : (
-                              <View style={[styles.infoPanelMemberAvatar, styles.infoPanelDefaultAvatar]}>
-                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{mName.charAt(0)}</Text>
-                              </View>
-                            )}
-                            <View style={styles.infoPanelMemberInfo}>
-                              <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>
-                                {mName}{isMe ? ' (Bạn)' : ''}
-                              </Text>
-                              {mRole === 'ADMIN' && <Text style={styles.infoPanelRoleBadgeAdmin}>Trưởng nhóm</Text>}
-                              {mRole === 'DEPUTY' && <Text style={styles.infoPanelRoleBadgeDeputy}>Phó nhóm</Text>}
-                            </View>
-                            {infoIsAdmin && !isMe && (
-                              <TouchableOpacity
-                                style={styles.infoPanelMemberMenuBtn}
-                                onPress={() => setInfoMemberMenuId(menuOpen ? null : m.userId)}
-                              >
-                                <Ionicons name="ellipsis-vertical" size={18} color={colors.textSecondary} />
-                              </TouchableOpacity>
-                            )}
-                            {menuOpen && (
-                              <View style={[styles.infoPanelMemberMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                {mRole !== 'DEPUTY' && (
-                                  <TouchableOpacity
-                                    style={styles.infoPanelMemberMenuItem}
-                                    onPress={() => handleInfoChangeRole(m.userId, mName, 'DEPUTY')}
-                                  >
-                                    <Text style={[styles.infoPanelMemberMenuItemText, { color: colors.text }]}>Đặt làm phó nhóm</Text>
-                                  </TouchableOpacity>
-                                )}
-                                {mRole === 'DEPUTY' && (
-                                  <TouchableOpacity
-                                    style={styles.infoPanelMemberMenuItem}
-                                    onPress={() => handleInfoChangeRole(m.userId, mName, 'MEMBER')}
-                                  >
-                                    <Text style={[styles.infoPanelMemberMenuItemText, { color: colors.text }]}>Hạ xuống thành viên</Text>
-                                  </TouchableOpacity>
-                                )}
-                                <TouchableOpacity
-                                  style={styles.infoPanelMemberMenuItem}
-                                  onPress={() => { setInfoMemberMenuId(null); setInfoTransferReason('transfer'); handleInfoTransferOwnership(m.userId, mName); }}
-                                >
-                                  <Text style={[styles.infoPanelMemberMenuItemText, { color: '#F97316' }]}>Chuyển quyền trưởng nhóm</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={styles.infoPanelMemberMenuItem}
-                                  onPress={() => { setInfoMemberMenuId(null); handleInfoRemoveMember(m.userId, mName); }}
-                                >
-                                  <Text style={[styles.infoPanelMemberMenuItemText, { color: '#F04343' }]}>Xóa khỏi nhóm</Text>
-                                </TouchableOpacity>
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-
-                      {/* Leave / Dissolve buttons moved to bottom of info panel */}
-
-                      {/* Transfer ownership modal */}
-                      {infoShowTransferModal && (
-                        <View style={[styles.infoPanelTransferBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                          <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginBottom: 8 }]}>
-                            {infoTransferReason === 'leave' ? 'Chọn trưởng nhóm kế tiếp' : 'Chọn người nhận quyền'}
-                          </Text>
-
-                          <TextInput
-                            value={infoTransferSearch}
-                            onChangeText={setInfoTransferSearch}
-                            placeholder="Tìm thành viên"
-                            placeholderTextColor={colors.textSecondary}
-                            style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border, color: colors.text, marginBottom: 8 }]}
-                          />
-
-                          <View style={{ maxHeight: 260 }}>
-                            {(infoMembers.filter((m) => m.userId !== currentUserId)
-                              .filter((m) => {
-                                if (!infoTransferSearch.trim()) return true;
-                                const q = infoTransferSearch.trim().toLowerCase();
-                                const name = String(m.displayName || m.userName || '').toLowerCase();
-                                return name.includes(q);
-                              })
-                            ).map((m: any) => {
-                              const mName = m.displayName || m.userName || 'Unknown';
-                              const mAvatar = m.avatarUrl || m.avatar;
-                              const selected = infoTransferSelectedId === String(m.userId);
-                              return (
-                                <TouchableOpacity
-                                  key={m.userId}
-                                  style={[styles.infoPanelFriendRow, { backgroundColor: selected ? 'rgba(46,125,233,0.06)' : 'transparent' }]}
-                                  onPress={() => { setInfoTransferSelectedId(String(m.userId)); setInfoTransferSelectedName(mName); }}
-                                >
-                                  {mAvatar ? (
-                                    <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelSmallAvatar} />
-                                  ) : (
-                                    <View style={[styles.infoPanelSmallAvatar, styles.infoPanelDefaultAvatar]}>
-                                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{mName.charAt(0)}</Text>
-                                    </View>
-                                  )}
-                                  <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>{mName}</Text>
-                                  {selected ? <Ionicons name="checkmark" size={18} color="#2E7DE9" /> : <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />}
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-
-                          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
-                            <TouchableOpacity onPress={() => { setInfoShowTransferModal(false); setInfoTransferSelectedId(null); setInfoTransferSelectedName(null); setInfoTransferSearch(''); }} style={{ paddingVertical: 8, paddingHorizontal: 12 }}>
-                              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Hủy</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              onPress={() => {
-                                if (!infoTransferSelectedId || !infoTransferSelectedName) {
-                                  Alert.alert('Chưa chọn', 'Vui lòng chọn thành viên để chuyển quyền.');
-                                  return;
-                                }
-                                Alert.alert(
-                                  'Xác nhận',
-                                  `Bạn muốn bổ nhiệm ${infoTransferSelectedName} làm trưởng nhóm và rời nhóm đúng không?`,
-                                  [
-                                    { text: 'Hủy', style: 'cancel' },
-                                    {
-                                      text: 'OK',
-                                      onPress: async () => {
-                                        try {
-                                          if (infoTransferReason === 'leave') {
-                                            await chatService.leaveConversation(conversationId!, infoTransferSelectedId);
-                                            setInfoShowTransferModal(false);
-                                            setIsInfoPanelVisible(false);
-                                            router.back();
-                                          } else {
-                                            await chatService.transferOwnership(conversationId!, infoTransferSelectedId);
-                                            await fetchInfoMembers();
-                                            setInfoShowTransferModal(false);
-                                          }
-                                          setInfoTransferSelectedId(null);
-                                          setInfoTransferSelectedName(null);
-                                          setInfoTransferSearch('');
-                                        } catch (err: any) {
-                                          Alert.alert('Lỗi', err?.message || 'Không thể chuyển quyền');
-                                        }
-                                      }
-                                    }
-                                  ]
-                                );
-                              }}
-                              style={{ paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#2E7DE9', borderRadius: 8 }}
-                            >
-                              <Text style={{ color: '#fff', fontWeight: '700' }}>{infoTransferReason === 'leave' ? 'Chuyển quyền & rời' : 'Chuyển quyền'}</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </View>
+                <TouchableOpacity
+                  style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}
+                  onPress={() => { void openMemberList(); }}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.infoPanelSectionToggleLeft}>
+                    <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
+                    <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}> 
+                      Xem Thành viên ({infoMembers.length})
+                    </Text>
+                  </View>
+                  
+                </TouchableOpacity>
               )}
 
               {/* Pinned Messages section */}
