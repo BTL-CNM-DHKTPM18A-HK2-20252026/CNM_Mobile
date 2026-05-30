@@ -4,6 +4,7 @@ import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import { buildSectionedList, MAX_CREATE_GROUP_SELECTABLE_MEMBERS, type SectionedListItem } from '@/utils/group/groupMembers';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -36,9 +37,7 @@ type ApiResponse<T> = {
   message?: string;
 };
 
-type ListItem =
-  | { type: 'header'; letter: string; id: string }
-  | { type: 'friend'; friend: FriendItem; id: string };
+type ListItem = SectionedListItem<FriendItem>;
 
 function normalizeFriends(raw: unknown): FriendItem[] {
   const payload = chatService.unwrapApiPayload<any>(raw);
@@ -125,35 +124,22 @@ export default function CreateGroupScreen() {
   }, [friends, query]);
 
   const listData = useMemo(() => {
-    const output: ListItem[] = [];
-    let currentLetter = '';
-
-    filteredFriends.forEach((friend) => {
-      const letter = friend.display_name.charAt(0).toUpperCase();
-
-      if (letter !== currentLetter) {
-        currentLetter = letter;
-        output.push({
-          type: 'header',
-          letter,
-          id: `header-${letter}`,
-        });
-      }
-
-      output.push({
-        type: 'friend',
-        friend,
-        id: `friend-${friend.user_id}`,
-      });
-    });
-
-    return output;
+    return buildSectionedList(
+      filteredFriends,
+      (friend) => friend.user_id,
+      (friend) => friend.display_name,
+    );
   }, [filteredFriends]);
 
   const toggleFriend = (userId: string) => {
     setSelectedIds((prev) => {
       if (prev.includes(userId)) {
         return prev.filter((id) => id !== userId);
+      }
+
+      if (prev.length >= MAX_CREATE_GROUP_SELECTABLE_MEMBERS) {
+        Alert.alert('Giới hạn nhóm', `Nhóm chỉ chọn tối đa ${MAX_CREATE_GROUP_SELECTABLE_MEMBERS} thành viên.`);
+        return prev;
       }
 
       return [...prev, userId];
@@ -222,23 +208,24 @@ export default function CreateGroupScreen() {
       );
     }
 
-    const selected = selectedIds.includes(item.friend.user_id);
+    const friend = item.item;
+    const selected = selectedIds.includes(friend.user_id);
 
     return (
       <TouchableOpacity
         style={[styles.friendRow, { borderBottomColor: colors.border, backgroundColor: colors.card }]}
         activeOpacity={0.7}
-        onPress={() => toggleFriend(item.friend.user_id)}
+        onPress={() => toggleFriend(friend.user_id)}
       >
-        <Image source={getAvatarSource(item.friend.avatar_url)} style={styles.avatar} />
+        <Image source={getAvatarSource(friend.avatar_url)} style={styles.avatar} />
 
         <View style={styles.friendInfo}>
           <Text style={[styles.friendName, { color: colors.text }]} numberOfLines={1}>
-            {item.friend.display_name}
+            {friend.display_name}
           </Text>
-          {item.friend.email ? (
+          {friend.email ? (
             <Text style={[styles.friendSub, { color: colors.textSecondary }]} numberOfLines={1}>
-              {item.friend.email}
+              {friend.email}
             </Text>
           ) : null}
         </View>
@@ -261,7 +248,7 @@ export default function CreateGroupScreen() {
 
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Nhóm mới</Text>
-          <Text style={[styles.selectedText, { color: colors.textSecondary }]}>Đã chọn: {selectedIds.length}</Text>
+          <Text style={[styles.selectedText, { color: colors.textSecondary }]}>Đã chọn: {selectedIds.length}/{MAX_CREATE_GROUP_SELECTABLE_MEMBERS}</Text>
         </View>
 
         <TouchableOpacity

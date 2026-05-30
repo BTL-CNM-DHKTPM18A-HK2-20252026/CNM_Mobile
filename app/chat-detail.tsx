@@ -25,6 +25,7 @@ import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
+import { buildSectionedList, getRemainingGroupMemberSlots, isGroupAtCapacity, MAX_GROUP_MEMBERS } from '@/utils/group/groupMembers';
 import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
 import { ResizeMode, Video } from 'expo-av';
@@ -2866,6 +2867,9 @@ export default function ChatDetailScreen() {
   const infoIsAdmin = infoCurrentUserRole === 'ADMIN';
   const infoIsDeputy = infoCurrentUserRole === 'DEPUTY';
   const infoCanAddMembers = infoIsAdmin || infoIsDeputy;
+  const infoMemberCount = infoMembers.length;
+  const infoRemainingMemberSlots = getRemainingGroupMemberSlots(infoMemberCount);
+  const infoGroupIsFull = isGroupAtCapacity(infoMemberCount);
 
   const handleOpenInfoEditNameModal = useCallback(() => {
     setInfoEditNameValue(String(conversationDisplayName ?? '').trim());
@@ -3045,35 +3049,24 @@ export default function ChatDetailScreen() {
   }, [getFriendDisplayName, infoAddMemberSearch, infoFriendsList]);
 
   const infoAddMemberListData = useMemo(() => {
-    const output: Array<{ type: 'header'; id: string; letter: string } | { type: 'friend'; id: string; friend: any }> = [];
-    let currentLetter = '';
-
-    filteredInfoFriendsList.forEach((friend: any) => {
-      const friendId = getFriendId(friend);
-      if (!friendId) {
-        return;
-      }
-
-      const displayName = getFriendDisplayName(friend).trim();
-      const letter = displayName.charAt(0).toUpperCase() || '#';
-
-      if (letter !== currentLetter) {
-        currentLetter = letter;
-        output.push({ type: 'header', id: `header-${letter}`, letter });
-      }
-
-      output.push({ type: 'friend', id: `friend-${friendId}`, friend });
-    });
-
-    return output;
+    return buildSectionedList(
+      filteredInfoFriendsList,
+      (friend: any) => getFriendId(friend),
+      (friend: any) => getFriendDisplayName(friend).trim(),
+    );
   }, [filteredInfoFriendsList, getFriendDisplayName, getFriendId]);
 
   const handleOpenInfoAddMemberModal = useCallback(async () => {
+    if (infoGroupIsFull) {
+      Alert.alert('Giới hạn nhóm', `Nhóm chỉ có tối đa ${MAX_GROUP_MEMBERS} thành viên.`);
+      return;
+    }
+
     setInfoAddMemberVisible(true);
     setInfoAddMemberSearch('');
     setInfoSelectedMembers([]);
     await fetchInfoFriendsForAdd();
-  }, [fetchInfoFriendsForAdd]);
+  }, [fetchInfoFriendsForAdd, infoGroupIsFull]);
 
   const handleCloseInfoAddMemberModal = useCallback(() => {
     setInfoAddMemberVisible(false);
@@ -3084,6 +3077,11 @@ export default function ChatDetailScreen() {
   const handleInfoAddMembers = useCallback(async () => {
     const validMemberIds = Array.from(new Set(infoSelectedMembers.map((id) => String(id).trim()).filter(Boolean)));
     if (validMemberIds.length === 0 || infoAddingMembers || !conversationId) return;
+
+    if (validMemberIds.length > infoRemainingMemberSlots) {
+      Alert.alert('Giới hạn nhóm', `Nhóm chỉ còn chỗ cho ${infoRemainingMemberSlots} thành viên.`);
+      return;
+    }
 
     setInfoAddingMembers(true);
     try {
@@ -3098,7 +3096,7 @@ export default function ChatDetailScreen() {
         || err?.message;
       Alert.alert('Lỗi', backendMessage || 'Không thể thêm thành viên');
     } finally { setInfoAddingMembers(false); }
-  }, [conversationId, fetchInfoMembers, handleCloseInfoAddMemberModal, infoAddingMembers, infoSelectedMembers]);
+  }, [conversationId, fetchInfoMembers, handleCloseInfoAddMemberModal, infoAddingMembers, infoRemainingMemberSlots, infoSelectedMembers]);
 
   const handleInfoRemoveMember = useCallback((memberId: string, memberName: string) => {
     Alert.alert(
@@ -4621,7 +4619,7 @@ export default function ChatDetailScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.infoPanelQuickAction}
+                      style={[styles.infoPanelQuickAction, infoGroupIsFull && { opacity: 0.45 }]}
                       onPress={() => { void handleOpenInfoAddMemberModal(); }}
                     >
                       <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -5337,7 +5335,7 @@ export default function ChatDetailScreen() {
               <View style={styles.addMemberModalHeaderCenter}>
                 <Text style={[styles.addMemberModalTitle, { color: colors.text }]}>Thêm thành viên</Text>
                 <Text style={[styles.addMemberModalSubtitle, { color: colors.textSecondary }]}>
-                  Đã chọn: {infoSelectedMembers.length}
+                  Đã có: {infoMemberCount}/{MAX_GROUP_MEMBERS}
                 </Text>
               </View>
 
@@ -5362,7 +5360,7 @@ export default function ChatDetailScreen() {
                 onChangeText={setInfoAddMemberSearch}
                 placeholder="Tìm tên hoặc số điện thoại"
                 placeholderTextColor={colors.textSecondary}
-                style={[styles.searchInput, { color: colors.text }]}
+                style={[styles.addMemberSearchInput, { color: colors.text }]}
               />
             </View>
 
@@ -5382,7 +5380,7 @@ export default function ChatDetailScreen() {
                     );
                   }
 
-                  const friend = item.friend;
+                  const friend = item.item;
                   const friendId = getFriendId(friend);
                   const friendName = getFriendDisplayName(friend);
                   const friendAvatar = getFriendAvatar(friend);
@@ -5395,7 +5393,11 @@ export default function ChatDetailScreen() {
                       onPress={() => {
                         if (!friendId) return;
                         setInfoSelectedMembers((prev) => (
-                          prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId]
+                          prev.includes(friendId)
+                            ? prev.filter((id) => id !== friendId)
+                            : (prev.length >= infoRemainingMemberSlots
+                              ? (Alert.alert('Giới hạn nhóm', `Nhóm chỉ còn chỗ cho ${infoRemainingMemberSlots} thành viên.`), prev)
+                              : [...prev, friendId])
                         ));
                       }}
                     >
@@ -6830,7 +6832,7 @@ const styles = StyleSheet.create({
   searchIcon: {
     marginRight: 6,
   },
-  searchInput: {
+  addMemberSearchInput: {
     flex: 1,
     fontSize: 13,
     paddingVertical: 12,
