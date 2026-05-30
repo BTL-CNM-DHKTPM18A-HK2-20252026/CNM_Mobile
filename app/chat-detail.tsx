@@ -1,5 +1,6 @@
 import { AttachMenuContent } from '@/components/chat/AttachMenuContent';
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import CustomImagePicker from '@/components/chat/CustomImagePicker';
 import ExpandableText from '@/components/chat/ExpandableText';
 import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
 import { MediaViewer } from '@/components/chat/MediaViewer';
@@ -27,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
 import { ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
@@ -170,9 +172,11 @@ const PAGE_SIZE = 10;
 const SCROLL_TOP_THRESHOLD = 48;
 const AI_TYPING_USER_ID = 'FRUVIA_AI_ASSISTANT';
 const BLOCK_GAP_MS = 5 * 60 * 1000;
+const MAX_IMAGE_SELECTION = 30;
 const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 const emojiToReactionType = (emoji: string): 'LIKE' | 'LOVE' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY' => {
   switch (emoji) {
@@ -312,6 +316,7 @@ export default function ChatDetailScreen() {
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
+  const [isCustomImagePickerVisible, setIsCustomImagePickerVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Message[]>([]);
@@ -380,7 +385,7 @@ export default function ChatDetailScreen() {
     if (!deletedSet || deletedSet.size === 0) return msgs;
     const filtered = msgs.filter((m) => !deletedSet.has(String(m.messageId)));
     return filtered;
-  }, []);
+  }, [isExpoGo]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCurrentIndex, setUploadCurrentIndex] = useState(0);
   const [videoThumbnailsByMessageId, setVideoThumbnailsByMessageId] = useState<Record<string, string>>({});
@@ -1775,42 +1780,101 @@ export default function ChatDetailScreen() {
     }
   };
 
+  const buildPickedMediaFromUris = useCallback((selectedUris: string[]): PickedMedia[] => {
+    return selectedUris.map((uri, index) => {
+      const cleanUri = uri.split('?')[0];
+      const decodedUri = (() => {
+        try {
+          return decodeURIComponent(cleanUri);
+        } catch {
+          return cleanUri;
+        }
+      })();
+      const fileExtensionMatch = decodedUri.match(/\.([a-zA-Z0-9]+)$/);
+      const extension = (fileExtensionMatch?.[1] || 'jpg').toLowerCase();
+      const mimeType = extension === 'png'
+        ? 'image/png'
+        : extension === 'webp'
+          ? 'image/webp'
+          : extension === 'heic'
+            ? 'image/heic'
+            : 'image/jpeg';
+
+      return {
+        uri,
+        fileName: `image_${Date.now()}_${index + 1}.${extension}`,
+        fileSize: 0,
+        mimeType,
+        mediaType: 'IMAGE',
+      };
+    });
+  }, []);
+
+  const getFileExtensionFromMimeType = useCallback((mimeType?: string) => {
+    switch (mimeType) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'image/heic':
+      case 'image/heif':
+        return 'heic';
+      case 'image/jpg':
+      case 'image/jpeg':
+      default:
+        return 'jpg';
+    }
+  }, []);
+
+  const handleConfirmCustomImages = useCallback((selectedUris: string[]) => {
+    const picked = buildPickedMediaFromUris(selectedUris);
+    if (picked.length === 0) {
+      return;
+    }
+
+    setPendingMediaList(picked);
+    setIsCustomImagePickerVisible(false);
+  }, [buildPickedMediaFromUris]);
+
   // ── Media Picker Functions ──────────────────────────────
 
   const handlePickImage = useCallback(async () => {
     setIsAttachMenuVisible(false);
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const oversized = result.assets.filter(a => (a.fileSize || 0) > 50 * 1024 * 1024);
-      if (oversized.length) {
-        Alert.alert('File quá lớn', `${oversized.length} ảnh vượt quá giới hạn 50MB và sẽ không được gửi.`);
+    if (isExpoGo) {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
+        return;
       }
-      const valid = result.assets.filter(a => (a.fileSize || 0) <= 50 * 1024 * 1024);
-      if (!valid.length) return;
-      const picked: PickedMedia[] = valid.map((asset) => ({
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: MAX_IMAGE_SELECTION,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.length) {
+        return;
+      }
+
+      const picked = result.assets.slice(0, MAX_IMAGE_SELECTION).map((asset, index) => ({
         uri: asset.uri,
-        fileName: asset.fileName || `image_${Date.now()}.jpg`,
+        fileName: asset.fileName || `image_${Date.now()}_${index + 1}.${getFileExtensionFromMimeType(asset.mimeType)}`,
         fileSize: asset.fileSize || 0,
         mimeType: asset.mimeType || 'image/jpeg',
         mediaType: 'IMAGE' as const,
         width: asset.width,
         height: asset.height,
       }));
+
       setPendingMediaList(picked);
+      return;
     }
-  }, []);
+
+    setIsCustomImagePickerVisible(true);
+  }, [getFileExtensionFromMimeType, isExpoGo]);
 
   const handlePickVideo = useCallback(async () => {
     setIsAttachMenuVisible(false);
@@ -4082,11 +4146,15 @@ export default function ChatDetailScreen() {
                     onPress={handleSendMedia}
                     disabled={isUploading}
                   >
-                    <Ionicons
-                      name={isUploading ? 'time-outline' : 'send'}
-                      size={26}
-                      color={isUploading ? '#7B808A' : COLORS.primary}
-                    />
+                    {isUploading ? (
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                    ) : (
+                      <Ionicons
+                        name="send"
+                        size={26}
+                        color={COLORS.primary}
+                      />
+                    )}
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
@@ -4237,6 +4305,13 @@ export default function ChatDetailScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+
+        <CustomImagePicker
+          isVisible={isCustomImagePickerVisible}
+          onClose={() => setIsCustomImagePickerVisible(false)}
+          onConfirm={handleConfirmCustomImages}
+          maxSelection={MAX_IMAGE_SELECTION}
+        />
 
         {/* Forward Message Modal */}
         <Modal
