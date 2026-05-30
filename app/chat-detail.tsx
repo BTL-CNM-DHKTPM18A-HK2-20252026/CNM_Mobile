@@ -1,5 +1,6 @@
 import { AttachMenuContent } from '@/components/chat/AttachMenuContent';
 import { ChatHeader } from '@/components/chat/ChatHeader';
+import CustomImagePicker from '@/components/chat/CustomImagePicker';
 import ExpandableText from '@/components/chat/ExpandableText';
 import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
 import { MediaViewer } from '@/components/chat/MediaViewer';
@@ -170,6 +171,7 @@ const PAGE_SIZE = 10;
 const SCROLL_TOP_THRESHOLD = 48;
 const AI_TYPING_USER_ID = 'FRUVIA_AI_ASSISTANT';
 const BLOCK_GAP_MS = 5 * 60 * 1000;
+const MAX_IMAGE_SELECTION = 30;
 const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -312,6 +314,7 @@ export default function ChatDetailScreen() {
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
+  const [isCustomImagePickerVisible, setIsCustomImagePickerVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Message[]>([]);
@@ -1775,41 +1778,51 @@ export default function ChatDetailScreen() {
     }
   };
 
+  const buildPickedMediaFromUris = useCallback((selectedUris: string[]): PickedMedia[] => {
+    return selectedUris.map((uri, index) => {
+      const cleanUri = uri.split('?')[0];
+      const decodedUri = (() => {
+        try {
+          return decodeURIComponent(cleanUri);
+        } catch {
+          return cleanUri;
+        }
+      })();
+      const fileExtensionMatch = decodedUri.match(/\.([a-zA-Z0-9]+)$/);
+      const extension = (fileExtensionMatch?.[1] || 'jpg').toLowerCase();
+      const mimeType = extension === 'png'
+        ? 'image/png'
+        : extension === 'webp'
+          ? 'image/webp'
+          : extension === 'heic'
+            ? 'image/heic'
+            : 'image/jpeg';
+
+      return {
+        uri,
+        fileName: `image_${Date.now()}_${index + 1}.${extension}`,
+        fileSize: 0,
+        mimeType,
+        mediaType: 'IMAGE',
+      };
+    });
+  }, []);
+
+  const handleConfirmCustomImages = useCallback((selectedUris: string[]) => {
+    const picked = buildPickedMediaFromUris(selectedUris);
+    if (picked.length === 0) {
+      return;
+    }
+
+    setPendingMediaList(picked);
+    setIsCustomImagePickerVisible(false);
+  }, [buildPickedMediaFromUris]);
+
   // ── Media Picker Functions ──────────────────────────────
 
   const handlePickImage = useCallback(async () => {
     setIsAttachMenuVisible(false);
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const oversized = result.assets.filter(a => (a.fileSize || 0) > 50 * 1024 * 1024);
-      if (oversized.length) {
-        Alert.alert('File quá lớn', `${oversized.length} ảnh vượt quá giới hạn 50MB và sẽ không được gửi.`);
-      }
-      const valid = result.assets.filter(a => (a.fileSize || 0) <= 50 * 1024 * 1024);
-      if (!valid.length) return;
-      const picked: PickedMedia[] = valid.map((asset) => ({
-        uri: asset.uri,
-        fileName: asset.fileName || `image_${Date.now()}.jpg`,
-        fileSize: asset.fileSize || 0,
-        mimeType: asset.mimeType || 'image/jpeg',
-        mediaType: 'IMAGE' as const,
-        width: asset.width,
-        height: asset.height,
-      }));
-      setPendingMediaList(picked);
-    }
+    setIsCustomImagePickerVisible(true);
   }, []);
 
   const handlePickVideo = useCallback(async () => {
@@ -4237,6 +4250,13 @@ export default function ChatDetailScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+
+        <CustomImagePicker
+          isVisible={isCustomImagePickerVisible}
+          onClose={() => setIsCustomImagePickerVisible(false)}
+          onConfirm={handleConfirmCustomImages}
+          maxSelection={MAX_IMAGE_SELECTION}
+        />
 
         {/* Forward Message Modal */}
         <Modal
