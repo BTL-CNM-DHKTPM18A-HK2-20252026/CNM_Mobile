@@ -67,7 +67,7 @@ export default function MoreScreen() {
 
       <ScrollView style={[styles.scrollView, { backgroundColor: colors.chatBackground }]} bounces={false}>
         {/* Profile Card */}
-        <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]} onPress={() => router.push('/profile')}>
+        <Pressable style={[styles.profileCard, { backgroundColor: colors.card }]} onPress={() => router.push('/personal-wall')}>
           <View style={styles.avatarContainer}>
             <Image 
               source={getAvatarSource(profile?.avatar_url)} 

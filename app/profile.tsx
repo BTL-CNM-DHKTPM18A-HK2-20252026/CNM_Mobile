@@ -118,38 +118,31 @@ export default function ProfileScreen() {
             style={styles.coverPhoto}
             defaultSource={require('@/assets/images/icon.png')}
           />
+          <View style={styles.coverOverlay} />
           <View style={[styles.headerOverlay, { paddingTop: insets.top + 12, height: 60 + insets.top }]}>
             <TouchableOpacity style={styles.iconButton} onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
             <View style={styles.iconButton} />
           </View>
-        </View>
 
-        {/* Avatar Section */}
-        <View style={[styles.avatarSection, { backgroundColor: colors.background }]}>
-          <TouchableOpacity onPress={handleChangeAvatar}>
-            <View style={[styles.avatarBorder, { borderColor: colors.card }]}> 
+          <View style={styles.profileHero}>
+            <View style={[styles.avatarBorder, { borderColor: 'rgba(255,255,255,0.95)' }]}>
               <Image
                 source={getAvatarSource(profile?.avatar_url)}
                 style={styles.avatar}
               />
-              <View style={styles.cameraIconBadge}>
-                <Ionicons name="camera" size={20} color="#fff" />
-              </View>
             </View>
-          </TouchableOpacity>
+            <View style={styles.heroTextWrap}>
+              <Text style={styles.heroName}>{profile?.full_name || t('profile.guest_user')}</Text>
+              <Text style={styles.heroBio} numberOfLines={2}>
+                {profile?.bio || t('profile.bio_default')}
+              </Text>
+            </View>
+          </View>
         </View>
 
         <View style={[styles.body, { backgroundColor: colors.background }]}> 
-          {/* Name */}
-          <Text style={[styles.name, { color: colors.text }]}>{profile?.full_name || t('profile.guest_user')}</Text>
-
-          {/* Bio */}
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {profile?.bio || t('profile.bio_default')}
-          </Text>
-
           {/* Edit Button */}
           <TouchableOpacity 
             style={[styles.editButton, { backgroundColor: COLORS.primary }]} 
@@ -245,12 +238,16 @@ const styles = StyleSheet.create({
   },
   coverPhotoContainer: {
     position: 'relative',
-    height: 220,
+    height: 235,
   },
   coverPhoto: {
     width: '100%',
     height: '100%',
     backgroundColor: '#e0e0e0',
+  },
+  coverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(26, 26, 26, 0.25)',
   },
   headerOverlay: {
     position: 'absolute',
@@ -272,41 +269,52 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     borderRadius: 20,
   },
-  avatarSection: {
-    alignItems: 'center',
-   
-    marginBottom: 20,
-    zIndex: 10,
+  profileHero: {
     position: 'absolute',
-    top: 160,
-    alignSelf: "center",
-    borderRadius: 60
+    left: 16,
+    right: 16,
+    bottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
   },
   avatarBorder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 70,
+    height: 70,
+    borderRadius: 38,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 4,
-    padding: 2,
+    borderWidth: 3,
     position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#fff',
   },
   avatar: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: '100%',
+    height: '100%',
+  },
+  heroName: {
+    marginLeft: 12,
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  heroTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  heroBio: {
+    marginTop: 4,
+    marginLeft: 12,
+    color: 'white',
+    fontSize: 13,
+    lineHeight: 18,
   },
   body: {
     paddingHorizontal: 16,
     paddingBottom: 20,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 60,
-    marginBottom: 8,
+    paddingTop: 14,
   },
   subtitle: {
     marginBottom: 16,
@@ -417,18 +425,5 @@ const styles = StyleSheet.create({
   dobSeparator: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  cameraIconBadge: {
-    position: 'absolute',
-    bottom: 5,
-    right: 5,
-    backgroundColor: COLORS.primary, // Hoặc màu xanh bạn thích
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#fff', // Tạo viền trắng xung quanh icon cho nổi bật
   },
 });
