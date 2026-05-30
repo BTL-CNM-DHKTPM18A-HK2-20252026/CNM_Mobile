@@ -115,9 +115,30 @@ export const chatService = {
   ) => {
     const timestamp = new Date().toISOString();
     const endpoint = '/messages';
+
+    // Ensure TEXT messages' content is JSON like the web client.
+    let outgoingContent = payload.content;
+    const msgType = (payload.messageType ?? 'TEXT').toUpperCase();
+    if (msgType === 'TEXT') {
+      const raw = String(payload.content ?? '');
+      let isJson = false;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          isJson = true;
+        }
+      } catch {
+        isJson = false;
+      }
+
+      if (!isJson) {
+        outgoingContent = JSON.stringify({ text: raw });
+      }
+    }
+
     const body: Record<string, unknown> = {
       conversationId,
-      content: payload.content,
+      content: outgoingContent,
       messageType: payload.messageType ?? 'TEXT',
     };
 

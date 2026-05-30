@@ -12,6 +12,7 @@ import ReplySnippet from '@/components/chat/MessageItem/ReplySnippet';
 import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
+import RichTextRenderer, { extractRichTextPlainText } from '@/components/chat/RichTextRenderer';
 import { ShareContactContent } from '@/components/chat/ShareContactContent';
 import { SystemMessageBubble } from '@/components/chat/SystemMessageBubble';
 import { COLORS } from '@/constants/theme';
@@ -26,6 +27,7 @@ import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import { serializePlainTextToTiptapJson } from '@/utils/chat/plainTextToTiptap';
 import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
 import { getSystemMessageContent, isSystemMessage } from '@/utils/chat/systemMessage';
 import { buildSectionedList, getRemainingGroupMemberSlots, isGroupAtCapacity, MAX_GROUP_MEMBERS } from '@/utils/group/groupMembers';
@@ -889,14 +891,16 @@ export default function ChatDetailScreen() {
       senderName === 'fruvia ai';
 
     const raw = message.content || '';
+    const richTextPlain = extractRichTextPlainText(raw);
+
     if (!isAiSender) {
-      return raw;
+      return richTextPlain || raw;
     }
 
-    let plain = raw;
+    let plain = richTextPlain || raw;
     try {
-      if (raw.trim().startsWith('{') && raw.trim().endsWith('}')) {
-        const parsed = JSON.parse(raw);
+      if (plain.trim().startsWith('{') && plain.trim().endsWith('}')) {
+        const parsed = JSON.parse(plain);
         if (parsed && typeof parsed === 'object') {
           const extract = (node: any): string => {
             if (!node) return '';
@@ -1668,7 +1672,7 @@ export default function ChatDetailScreen() {
 
       try {
         const response = await chatService.sendMessage(conversationId, {
-          content: part,
+          content: serializePlainTextToTiptapJson(part),
           messageType: 'TEXT',
           attachments: [],
           replyToMessageId: index === 0 ? replyToMessageId : undefined,
@@ -1712,8 +1716,9 @@ export default function ChatDetailScreen() {
 
     if (editingMessageId) {
       const nextContent = inputText.trim();
+      const serializedContent = serializePlainTextToTiptapJson(nextContent);
       try {
-        const response = await chatService.updateMessage(editingMessageId, nextContent);
+        const response = await chatService.updateMessage(editingMessageId, serializedContent);
         const mappedMessage = mapAnyPayloadToUiMessage(response);
 
         setMessages((prev) => prev.map((message) => {
@@ -1727,7 +1732,7 @@ export default function ChatDetailScreen() {
 
           return {
             ...message,
-            content: nextContent,
+            content: serializedContent,
             isEdited: true,
           };
         }));
@@ -1746,7 +1751,7 @@ export default function ChatDetailScreen() {
       return;
     }
 
-    const messageContent = inputText.trim();
+    const rawInputText = inputText.trim();
     const replyToMessageId = replyingTo?.messageId;
     setInputText('');
     setReplyingTo(null);
@@ -1757,7 +1762,7 @@ export default function ChatDetailScreen() {
         const now = new Date();
         const optimisticMessage: Message = {
           messageId: tempMessageId,
-          content: messageContent,
+          content: rawInputText,
           senderId: currentUserId ?? 'local-user',
           senderName: 'Me',
           createdAt: toLocalIsoString(now),
@@ -1770,7 +1775,7 @@ export default function ChatDetailScreen() {
 
         const locale = (i18n.resolvedLanguage || i18n.language || 'vi').toLowerCase();
         const aiResponse = await chatService.sendAiMessage({
-          content: messageContent,
+          content: inputText.trim(),
           conversationId,
           useRag: true,
           language: locale.startsWith('en') ? 'en' : 'vi',
@@ -1808,7 +1813,7 @@ export default function ChatDetailScreen() {
         return;
       }
 
-      const { failedParts } = await sendTextMessagesSequentially(messageContent, replyToMessageId);
+      const { failedParts } = await sendTextMessagesSequentially(rawInputText, replyToMessageId);
       if (failedParts.length > 0) {
         setInputText(failedParts.join('\n\n'));
       }
@@ -1819,7 +1824,7 @@ export default function ChatDetailScreen() {
         data: axiosError.response?.data,
         message: axiosError.message,
       });
-      setInputText(messageContent);
+      setInputText(rawInputText);
     } finally {
       if (isAiConversation) {
         setIsSendingAi(false);
@@ -2100,6 +2105,7 @@ export default function ChatDetailScreen() {
 
     const mediaItems = [...pendingMediaList];
     const caption = inputText.trim();
+    const serializedCaption = caption ? serializePlainTextToTiptapJson(caption) : undefined;
 
     setPendingMediaList([]);
     setInputText('');
@@ -2121,7 +2127,7 @@ export default function ChatDetailScreen() {
         senderName: 'Me',
         createdAt: toLocalIsoString(now),
         messageType: 'IMAGE_GROUP',
-        caption: caption || undefined,
+        caption: serializedCaption,
         attachments: mediaItems.map((m) => ({ url: m.uri })),
       };
 
@@ -2143,7 +2149,7 @@ export default function ChatDetailScreen() {
         const response = await chatService.sendMessage(conversationId, {
           content: s3Urls[0],
           messageType: 'IMAGE_GROUP',
-          caption: caption || undefined,
+          caption: serializedCaption,
           mediaUrls: s3Urls,
         });
 
@@ -2210,7 +2216,7 @@ export default function ChatDetailScreen() {
           messageType: chatFileService.toBackendMessageType(media.mediaType),
           fileName: media.fileName,
           fileSize: media.fileSize,
-          caption: i === 0 ? (caption || undefined) : undefined,
+          caption: i === 0 ? serializedCaption : undefined,
           videoDuration: media.duration,
         });
 
@@ -2262,21 +2268,7 @@ export default function ChatDetailScreen() {
 
   const handleCopySelectedMessage = useCallback(async () => {
     if (!selectedMessage) return;
-    let text = selectedMessage.content || '';
-    try {
-      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
-        const parsed = JSON.parse(text);
-        if (parsed && typeof parsed === 'object') {
-          const extract = (node: any): string => {
-            if (!node) return '';
-            if (node.type === 'text') return node.text ?? '';
-            if (Array.isArray(node.content)) return node.content.map(extract).join('');
-            return '';
-          };
-          text = extract(parsed).trim() || text;
-        }
-      }
-    } catch { /* not JSON */ }
+    const text = extractRichTextPlainText(selectedMessage.content || '') || selectedMessage.content || '';
     await Clipboard.setStringAsync(text);
     closeMessageActionMenu();
     Alert.alert('', 'Đã sao chép tin nhắn');
@@ -2288,21 +2280,7 @@ export default function ChatDetailScreen() {
     }
 
     setEditingMessageId(selectedMessage.messageId);
-    let text = selectedMessage.content || '';
-    try {
-      if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
-        const parsed = JSON.parse(text);
-        if (parsed && typeof parsed === 'object') {
-          const extract = (node: any): string => {
-            if (!node) return '';
-            if (node.type === 'text') return node.text ?? '';
-            if (Array.isArray(node.content)) return node.content.map(extract).join('');
-            return '';
-          };
-          text = extract(parsed).trim() || text;
-        }
-      }
-    } catch { /* not JSON */ }
+    const text = extractRichTextPlainText(selectedMessage.content || '') || selectedMessage.content || '';
     setInputText(text);
     closeMessageActionMenu();
   }, [closeMessageActionMenu, selectedMessage]);
@@ -3408,7 +3386,6 @@ export default function ChatDetailScreen() {
       : null;
     const showTimestamp = shouldShowMessageTimestamp(item, nextMessage);
     const timeLabel = formatMessageTime(item.createdAt);
-    const displayContent = getDisplayMessageContent(item);
     const reactionSummary = buildReactionSummary(item.reactions);
     const showDateSep = shouldShowDateSeparator(item, prevMessage);
     const dateSepLabel = showDateSep ? formatDateSeparator(item.createdAt) : null;
@@ -3846,13 +3823,20 @@ export default function ChatDetailScreen() {
         <>
           {replyBlock}
           {forwardedBanner}
-          <ExpandableText
-            text={displayContent}
-            previewWords={120}
-            previewLines={8}
-            textStyle={[styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }]}
-            actionTextStyle={isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }}
-          />
+          <View style={styles.richTextBubbleContent}>
+            <RichTextRenderer
+              value={item.content}
+              paragraphSpacing={6}
+              customStyles={{
+                container: styles.richTextContainer,
+                paragraph: styles.richTextParagraph,
+                text: [styles.messageText, isCurrentUserMessage ? styles.userMessageText : { color: colors.text }],
+                bold: { fontWeight: '700' },
+                italic: { fontStyle: 'italic' },
+                underline: { textDecorationLine: 'underline' },
+              }}
+            />
+          </View>
           {item.isEdited ? <Text style={[styles.editedLabel, isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }]}>{t('chat.edited', 'Đã chỉnh sửa')}</Text> : null}
         </>
       );
@@ -3998,7 +3982,7 @@ export default function ChatDetailScreen() {
                       </Text>
                     </View>
                     <Text style={[styles.searchResultContent, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {item.content}
+                      {getDisplayMessageContent(item)}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -5494,6 +5478,15 @@ const styles = StyleSheet.create({
   },
   otherBubble: {
     borderTopLeftRadius: 6,
+  },
+  richTextBubbleContent: {
+    alignSelf: 'stretch',
+  },
+  richTextContainer: {
+    alignSelf: 'stretch',
+  },
+  richTextParagraph: {
+    marginBottom: 4,
   },
   messageText: {
     fontSize: 14,
