@@ -4513,15 +4513,7 @@ export default function ChatDetailScreen() {
                     </View>
                   )}
 
-                  {isGroupConversation && (
-                    <TouchableOpacity
-                      style={styles.infoPanelAvatarCameraBadge}
-                      onPress={handleSelectInfoGroupAvatarSource}
-                      disabled={infoUpdatingGroupAvatar}
-                    >
-                      <Ionicons name="camera" size={16} color={colors.text} />
-                    </TouchableOpacity>
-                  )}
+                  {/* Camera badge removed — avatar change moved to quick action below */}
                 </View>
 
                 <View style={styles.infoPanelNameRow}>
@@ -4563,13 +4555,13 @@ export default function ChatDetailScreen() {
 
                     <TouchableOpacity
                       style={styles.infoPanelQuickAction}
-                      onPress={() => Alert.alert('Đổi hình nền', 'Chức năng đang phát triển')}
+                      onPress={handleSelectInfoGroupAvatarSource}
                     >
                       <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Ionicons name="color-wand-outline" size={22} color={colors.text} />
+                        <Ionicons name="camera" size={22} color={colors.text} />
                       </View>
-                      <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Đổi hình
-                        {'\n'}nền</Text>
+                      <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Đổi ảnh
+                        {'\n'}đại diện</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
