@@ -411,6 +411,9 @@ export default function ChatDetailScreen() {
   const [infoMemberMenuId, setInfoMemberMenuId] = useState<string | null>(null);
   const [infoShowTransferModal, setInfoShowTransferModal] = useState(false);
   const [infoTransferReason, setInfoTransferReason] = useState<'transfer' | 'leave'>('transfer');
+  const [infoTransferSearch, setInfoTransferSearch] = useState('');
+  const [infoTransferSelectedId, setInfoTransferSelectedId] = useState<string | null>(null);
+  const [infoTransferSelectedName, setInfoTransferSelectedName] = useState<string | null>(null);
   const [isInfoMediaGalleryVisible, setIsInfoMediaGalleryVisible] = useState(false);
   const [infoMediaGalleryStartIndex, setInfoMediaGalleryStartIndex] = useState(0);
   const [infoMediaGalleryIndex, setInfoMediaGalleryIndex] = useState(0);
@@ -4520,7 +4523,7 @@ export default function ChatDetailScreen() {
                   <Text style={[styles.infoPanelName, { color: colors.text }]} numberOfLines={2}>{conversationDisplayName}</Text>
                   {isGroupConversation && (
                     <TouchableOpacity style={styles.infoPanelNameEditBtn} onPress={handleOpenInfoEditNameModal}>
-                      <Ionicons name="create-outline" size={16} color={colors.text} />
+                      <Ionicons name="pencil" size={16} color={colors.text} />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -4715,19 +4718,7 @@ export default function ChatDetailScreen() {
                         );
                       })}
 
-                      {/* Leave / Dissolve buttons */}
-                      <TouchableOpacity style={styles.infoPanelDangerBtn} onPress={handleInfoLeaveGroup}>
-                        <Ionicons name="exit-outline" size={16} color="#F04343" />
-                        <Text style={styles.infoPanelDangerBtnText}>
-                          {infoIsAdmin ? 'Chuyển quyền & rời nhóm' : 'Rời nhóm'}
-                        </Text>
-                      </TouchableOpacity>
-                      {infoIsAdmin && (
-                        <TouchableOpacity style={[styles.infoPanelDangerBtn, { marginTop: 6 }]} onPress={handleInfoDissolveGroup}>
-                          <Ionicons name="warning-outline" size={16} color="#DC2626" />
-                          <Text style={[styles.infoPanelDangerBtnText, { color: '#DC2626' }]}>Giải tán nhóm</Text>
-                        </TouchableOpacity>
-                      )}
+                      {/* Leave / Dissolve buttons moved to bottom of info panel */}
 
                       {/* Transfer ownership modal */}
                       {infoShowTransferModal && (
@@ -4735,30 +4726,93 @@ export default function ChatDetailScreen() {
                           <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginBottom: 8 }]}>
                             {infoTransferReason === 'leave' ? 'Chọn trưởng nhóm kế tiếp' : 'Chọn người nhận quyền'}
                           </Text>
-                          {infoMembers.filter((m) => m.userId !== currentUserId).map((m: any) => {
-                            const mName = m.displayName || m.userName || 'Unknown';
-                            const mAvatar = m.avatarUrl || m.avatar;
-                            return (
-                              <TouchableOpacity
-                                key={m.userId}
-                                style={styles.infoPanelFriendRow}
-                                onPress={() => handleInfoTransferOwnership(m.userId, mName)}
-                              >
-                                {mAvatar ? (
-                                  <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelSmallAvatar} />
-                                ) : (
-                                  <View style={[styles.infoPanelSmallAvatar, styles.infoPanelDefaultAvatar]}>
-                                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{mName.charAt(0)}</Text>
-                                  </View>
-                                )}
-                                <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>{mName}</Text>
-                                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                              </TouchableOpacity>
-                            );
-                          })}
-                          <TouchableOpacity onPress={() => setInfoShowTransferModal(false)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
-                            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Hủy</Text>
-                          </TouchableOpacity>
+
+                          <TextInput
+                            value={infoTransferSearch}
+                            onChangeText={setInfoTransferSearch}
+                            placeholder="Tìm thành viên"
+                            placeholderTextColor={colors.textSecondary}
+                            style={[{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: colors.border, color: colors.text, marginBottom: 8 }]}
+                          />
+
+                          <View style={{ maxHeight: 260 }}>
+                            {(infoMembers.filter((m) => m.userId !== currentUserId)
+                              .filter((m) => {
+                                if (!infoTransferSearch.trim()) return true;
+                                const q = infoTransferSearch.trim().toLowerCase();
+                                const name = String(m.displayName || m.userName || '').toLowerCase();
+                                return name.includes(q);
+                              })
+                            ).map((m: any) => {
+                              const mName = m.displayName || m.userName || 'Unknown';
+                              const mAvatar = m.avatarUrl || m.avatar;
+                              const selected = infoTransferSelectedId === String(m.userId);
+                              return (
+                                <TouchableOpacity
+                                  key={m.userId}
+                                  style={[styles.infoPanelFriendRow, { backgroundColor: selected ? 'rgba(46,125,233,0.06)' : 'transparent' }]}
+                                  onPress={() => { setInfoTransferSelectedId(String(m.userId)); setInfoTransferSelectedName(mName); }}
+                                >
+                                  {mAvatar ? (
+                                    <Image source={getAvatarSource(mAvatar)} style={styles.infoPanelSmallAvatar} />
+                                  ) : (
+                                    <View style={[styles.infoPanelSmallAvatar, styles.infoPanelDefaultAvatar]}>
+                                      <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{mName.charAt(0)}</Text>
+                                    </View>
+                                  )}
+                                  <Text style={[styles.infoPanelMemberName, { color: colors.text }]} numberOfLines={1}>{mName}</Text>
+                                  {selected ? <Ionicons name="checkmark" size={18} color="#2E7DE9" /> : <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+
+                          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
+                            <TouchableOpacity onPress={() => { setInfoShowTransferModal(false); setInfoTransferSelectedId(null); setInfoTransferSelectedName(null); setInfoTransferSearch(''); }} style={{ paddingVertical: 8, paddingHorizontal: 12 }}>
+                              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Hủy</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              onPress={() => {
+                                if (!infoTransferSelectedId || !infoTransferSelectedName) {
+                                  Alert.alert('Chưa chọn', 'Vui lòng chọn thành viên để chuyển quyền.');
+                                  return;
+                                }
+                                Alert.alert(
+                                  'Xác nhận',
+                                  `Bạn muốn bổ nhiệm ${infoTransferSelectedName} làm trưởng nhóm và rời nhóm đúng không?`,
+                                  [
+                                    { text: 'Hủy', style: 'cancel' },
+                                    {
+                                      text: 'OK',
+                                      onPress: async () => {
+                                        try {
+                                          if (infoTransferReason === 'leave') {
+                                            await chatService.leaveConversation(conversationId!, infoTransferSelectedId);
+                                            setInfoShowTransferModal(false);
+                                            setIsInfoPanelVisible(false);
+                                            router.back();
+                                          } else {
+                                            await chatService.transferOwnership(conversationId!, infoTransferSelectedId);
+                                            await fetchInfoMembers();
+                                            setInfoShowTransferModal(false);
+                                          }
+                                          setInfoTransferSelectedId(null);
+                                          setInfoTransferSelectedName(null);
+                                          setInfoTransferSearch('');
+                                        } catch (err: any) {
+                                          Alert.alert('Lỗi', err?.message || 'Không thể chuyển quyền');
+                                        }
+                                      }
+                                    }
+                                  ]
+                                );
+                              }}
+                              style={{ paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#2E7DE9', borderRadius: 8 }}
+                            >
+                              <Text style={{ color: '#fff', fontWeight: '700' }}>{infoTransferReason === 'leave' ? 'Chuyển quyền & rời' : 'Chuyển quyền'}</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       )}
                     </View>
@@ -4908,6 +4962,22 @@ export default function ChatDetailScreen() {
                       );
                     })}
                   </View>
+                )}
+              </View>
+
+              {/* Footer actions: leave / dissolve group */}
+              <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                <TouchableOpacity style={styles.infoPanelDangerBtn} onPress={handleInfoLeaveGroup}>
+                  <Ionicons name="exit-outline" size={16} color="#F04343" />
+                  <Text style={styles.infoPanelDangerBtnText}>
+                    {infoIsAdmin ? 'Chuyển quyền & rời nhóm' : 'Rời nhóm'}
+                  </Text>
+                </TouchableOpacity>
+                {infoIsAdmin && (
+                  <TouchableOpacity style={[styles.infoPanelDangerBtn, { marginTop: 6 }]} onPress={handleInfoDissolveGroup}>
+                    <Ionicons name="warning-outline" size={16} color="#DC2626" />
+                    <Text style={[styles.infoPanelDangerBtnText, { color: '#DC2626' }]}>Giải tán nhóm</Text>
+                  </TouchableOpacity>
                 )}
               </View>
 
