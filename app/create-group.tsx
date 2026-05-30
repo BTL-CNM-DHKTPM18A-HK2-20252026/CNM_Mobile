@@ -1,24 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { COLORS } from '@/constants/theme';
+import { useTheme } from '@/context/ThemeContext';
+import { chatFileService, type PickedMedia } from '@/services/chatFileService';
+import { chatService } from '@/services/chatService';
+import { friendService } from '@/services/friendService';
+import { getAvatarSource } from '@/services/mediaUtils';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  FlatList,
-  Image,
   ActivityIndicator,
   Alert,
+  FlatList,
+  Image,
   StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { useTheme } from '@/context/ThemeContext';
-import { COLORS } from '@/constants/theme';
-import { friendService } from '@/services/friendService';
-import { chatService } from '@/services/chatService';
-import { getAvatarSource } from '@/services/mediaUtils';
 
 type FriendItem = {
   user_id: string;
@@ -63,11 +65,31 @@ export default function CreateGroupScreen() {
   const { colors, isDark } = useTheme();
 
   const [groupName, setGroupName] = useState('');
+  const [groupAvatarUri, setGroupAvatarUri] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState<FriendItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const handlePickGroupAvatar = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setGroupAvatarUri(result.assets[0].uri);
+    }
+  }, []);
 
   const fetchFriends = async () => {
     setLoading(true);
@@ -154,7 +176,22 @@ export default function CreateGroupScreen() {
     setSubmitting(true);
 
     try {
-      const response = await chatService.createGroupConversation(trimmedName, selectedIds);
+      let conversationAvatarUrl: string | undefined;
+
+      if (groupAvatarUri) {
+        const fileName = `group_avatar_${Date.now()}.jpg`;
+        const pickedMedia: PickedMedia = {
+          uri: groupAvatarUri,
+          fileName,
+          fileSize: 0,
+          mimeType: 'image/jpeg',
+          mediaType: 'IMAGE',
+        };
+
+        conversationAvatarUrl = await chatFileService.uploadMedia(pickedMedia);
+      }
+
+      const response = await chatService.createGroupConversation(trimmedName, selectedIds, conversationAvatarUrl);
       const payload = chatService.unwrapApiPayload<any>(response);
       const conversationId = String(payload?.conversationId ?? payload?.conversation_id ?? payload?.id ?? '');
 
@@ -164,8 +201,9 @@ export default function CreateGroupScreen() {
         return;
       }
 
+      const avatarQuery = conversationAvatarUrl ? `&avatar=${encodeURIComponent(conversationAvatarUrl)}` : '';
       router.replace(
-        `/chat-detail?id=${encodeURIComponent(conversationId)}&name=${encodeURIComponent(trimmedName)}&type=GROUP`
+        `/chat-detail?id=${encodeURIComponent(conversationId)}&name=${encodeURIComponent(trimmedName)}&type=GROUP${avatarQuery}`
       );
     } catch (error: any) {
       const message = error?.response?.data?.message ?? 'Không thể tạo nhóm. Vui lòng thử lại.';
@@ -236,18 +274,29 @@ export default function CreateGroupScreen() {
       </View>
 
       <View style={styles.nameRow}>
-        <View style={[styles.cameraIconWrap]}> 
-          <Ionicons name="camera" size={24} color={isDark ? colors.textSecondary : '#70757C'} />
-        </View>
+        <TouchableOpacity style={[styles.cameraIconWrap, { backgroundColor: colors.card }]} onPress={() => { void handlePickGroupAvatar(); }} activeOpacity={0.8}>
+          {groupAvatarUri ? (
+            <Image source={{ uri: groupAvatarUri }} style={styles.groupAvatarPreview} />
+          ) : (
+            <Ionicons name="camera" size={24} color={isDark ? colors.textSecondary : '#70757C'} />
+          )}
+          <View style={styles.cameraBadge}>
+            <Ionicons name="image-outline" size={10} color="#fff" />
+          </View>
+        </TouchableOpacity>
 
-        <TextInput
-          value={groupName}
-          onChangeText={setGroupName}
-          placeholder="Đặt tên nhóm"
-          placeholderTextColor={colors.textSecondary}
-          style={[styles.nameInput, { color: colors.text }]}
-          maxLength={100}
-        />
+        <View style={styles.nameInputWrap}>
+          <TextInput
+            value={groupName}
+            onChangeText={setGroupName}
+            placeholder="Đặt tên nhóm"
+            placeholderTextColor={colors.textSecondary}
+            style={[styles.nameInput, { color: colors.text }]}
+            maxLength={100}
+          />
+
+          <Text style={[styles.avatarHint, { color: colors.textSecondary }]}>Chạm để chọn ảnh nhóm</Text>
+        </View>
       </View>
 
       <View style={[styles.searchWrap, { backgroundColor: isDark ? colors.surface : '#F1F2F4' }]}> 
@@ -340,10 +389,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  groupAvatarPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  nameInputWrap: {
+    flex: 1,
   },
   nameInput: {
-    flex: 1,
     fontSize: 15,
+  },
+  avatarHint: {
+    marginTop: 4,
+    fontSize: 11,
   },
   searchWrap: {
     flexDirection: 'row',
