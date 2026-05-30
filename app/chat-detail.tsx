@@ -19,6 +19,7 @@ import { useChatSocket } from '@/hooks/useChatSocket';
 import useLocalDeleted from '@/hooks/useLocalDeleted';
 import useVoiceRecording from '@/hooks/useVoiceRecording';
 import api from '@/services/api';
+import { fetchConversationMembers } from '@/services/chatConversationMembers';
 import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
@@ -2439,12 +2440,20 @@ export default function ChatDetailScreen() {
   const fetchInfoMembers = useCallback(async () => {
     if (!conversationId || !isGroupConversation) return;
     try {
-      const res = chatService.unwrapApiPayload<any[]>(
-        await chatService.getConversationMembers(conversationId)
-      );
-      setInfoMembers(Array.isArray(res) ? res : []);
-    } catch { setInfoMembers([]); }
+      setInfoMembers(await fetchConversationMembers(conversationId));
+    } catch {
+      setInfoMembers([]);
+    }
   }, [conversationId, isGroupConversation]);
+
+  useEffect(() => {
+    if (!isGroupConversation || !conversationId) {
+      setInfoMembers([]);
+      return;
+    }
+
+    void fetchInfoMembers();
+  }, [conversationId, fetchInfoMembers, isGroupConversation]);
 
   const normalizeInfoMediaItems = useCallback((source: any[]) => {
     const items = Array.isArray(source) ? source : [];
