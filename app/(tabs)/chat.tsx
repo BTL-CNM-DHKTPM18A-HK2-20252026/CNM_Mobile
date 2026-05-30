@@ -1,8 +1,9 @@
+import { COLORS } from '@/constants/theme';
+import { usePresence } from '@/context/PresenceContext';
 import { chatService } from '@/services/chatService';
 import { getAvatarSource } from '@/services/mediaUtils';
-import { COLORS } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { usePresence } from '@/context/PresenceContext';
+import { Client, type StompSubscription } from '@stomp/stompjs';
 import { router, useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -11,6 +12,8 @@ import {
   FlatList,
   Image,
   Keyboard,
+  Modal,
+  Pressable,
   RefreshControl,
   StatusBar,
   StyleSheet,
@@ -20,7 +23,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Client, type StompSubscription } from '@stomp/stompjs';
 import { TextDecoder as PolyfillTextDecoder, TextEncoder as PolyfillTextEncoder } from 'text-encoding';
 
 function stripHtml(html: string): string {
@@ -281,6 +283,7 @@ export default function ChatScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ChatItem[]>(FALLBACK_ITEMS);
+  const [quickMenuVisible, setQuickMenuVisible] = useState(false);
 
   const filteredItems = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -540,6 +543,24 @@ export default function ChatScreen() {
     );
   };
 
+  const openQuickMenu = () => {
+    setQuickMenuVisible((prev) => !prev);
+  };
+
+  const closeQuickMenu = () => {
+    setQuickMenuVisible(false);
+  };
+
+  const handleAddFriendPress = () => {
+    closeQuickMenu();
+    router.push('/search');
+  };
+
+  const handleCreateGroupPress = () => {
+    closeQuickMenu();
+    router.push('/create-group');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#2E7DE9" />
@@ -562,11 +583,29 @@ export default function ChatScreen() {
             <Ionicons name="qr-code-outline" size={22} color="#E7F0FF" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.topActionButton} onPress={() => router.push('/search')}>
+          <TouchableOpacity style={styles.topActionButton} onPress={openQuickMenu}>
             <Ionicons name="add" size={30} color="#E7F0FF" />
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal visible={quickMenuVisible} transparent animationType="fade" onRequestClose={closeQuickMenu}>
+        <Pressable style={styles.quickMenuOverlay} onPress={closeQuickMenu}>
+          <View style={[styles.quickMenuCard, { top: insets.top + 50 }]}>
+            <TouchableOpacity style={styles.quickMenuItem} activeOpacity={0.75} onPress={handleAddFriendPress}>
+              <Ionicons name="person-add-outline" size={18} color="#2E7DE9" />
+              <Text style={styles.quickMenuText}>Thêm bạn</Text>
+            </TouchableOpacity>
+
+            <View style={styles.quickMenuDivider} />
+
+            <TouchableOpacity style={styles.quickMenuItem} activeOpacity={0.75} onPress={handleCreateGroupPress}>
+              <Ionicons name="people-outline" size={18} color="#2E7DE9" />
+              <Text style={styles.quickMenuText}>Tạo nhóm</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       {loading ? (
         <View style={styles.centerState}>
@@ -629,6 +668,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 2,
+  },
+  quickMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+  },
+  quickMenuCard: {
+    position: 'absolute',
+    right: 12,
+    width: 164,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  quickMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  quickMenuText: {
+    marginLeft: 10,
+    color: '#101317',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  quickMenuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E6EAF2',
+    marginHorizontal: 12,
   },
   errorBanner: {
     color: '#D14545',
