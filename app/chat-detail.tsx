@@ -12,6 +12,7 @@ import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
 import { ShareContactContent } from '@/components/chat/ShareContactContent';
+import { SystemMessageBubble } from '@/components/chat/SystemMessageBubble';
 import { COLORS } from '@/constants/theme';
 import { usePresence } from '@/context/PresenceContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -25,6 +26,7 @@ import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
+import { getSystemMessageContent, isSystemMessage } from '@/utils/chat/systemMessage';
 import { buildSectionedList, getRemainingGroupMemberSlots, isGroupAtCapacity, MAX_GROUP_MEMBERS } from '@/utils/group/groupMembers';
 import { Ionicons } from '@expo/vector-icons';
 import type { AxiosError } from 'axios';
@@ -3376,19 +3378,9 @@ export default function ChatDetailScreen() {
       || (currentDate.getTime() - prevDate.getTime() > 15 * 60 * 1000);
   };
 
-  const SystemMessageBubble = React.memo(({ content }: { content: string }) => {
-    return (
-      <View style={styles.systemMessageRow}>
-        <View style={styles.systemMessageBubble}>
-          <Text style={styles.systemMessageText}>{content}</Text>
-        </View>
-      </View>
-    );
-  });
-
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
-    if ((item.messageType || '').toUpperCase() === 'SYSTEM') {
-      return <SystemMessageBubble content={item.content || ''} />;
+    if (isSystemMessage(item)) {
+      return <SystemMessageBubble content={getSystemMessageContent(item)} />;
     }
 
     const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
@@ -5685,27 +5677,6 @@ const styles = StyleSheet.create({
   timestampRight: {
     marginRight: 4,
     alignSelf: 'flex-end',
-  },
-  systemMessageRow: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 6,
-    paddingHorizontal: 20,
-  },
-  systemMessageBubble: {
-    maxWidth: '88%',
-    backgroundColor: 'rgba(120, 128, 140, 0.14)',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  systemMessageText: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#6C7584',
-    textAlign: 'center',
-    fontWeight: '500',
   },
   recalledText: {
     fontSize: 12,
