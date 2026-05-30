@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View, type ImageStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MAX_SELECTION = 30;
@@ -31,7 +31,39 @@ type AssetGridItemProps = {
   onPress: () => void;
 };
 
-const AlbumSheetItem = memo(({ album, active, onPress }: AlbumSheetItemProps) => {
+type ThumbnailProps = {
+  uri: string;
+  imageStyle: ImageStyle;
+  containerStyle?: ViewStyle;
+};
+
+const Thumbnail = memo(function Thumbnail({ uri, imageStyle, containerStyle }: ThumbnailProps) {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setIsLoading(true);
+  }, [uri]);
+
+  return (
+    <View style={containerStyle}>
+      <Image
+        source={{ uri }}
+        style={imageStyle}
+        resizeMode="cover"
+        onLoadStart={() => setIsLoading(true)}
+        onLoadEnd={() => setIsLoading(false)}
+        onError={() => setIsLoading(false)}
+      />
+      {isLoading ? (
+        <View style={styles.thumbnailLoadingOverlay}>
+          <ActivityIndicator size="small" color="#E85A86" />
+        </View>
+      ) : null}
+    </View>
+  );
+});
+
+const AlbumSheetItem = memo(function AlbumSheetItem({ album, active, onPress }: AlbumSheetItemProps) {
   return (
     <Pressable onPress={onPress} style={[styles.albumItem, active && styles.albumItemActive]}>
       <View style={styles.albumThumb}>
@@ -50,10 +82,10 @@ const AlbumSheetItem = memo(({ album, active, onPress }: AlbumSheetItemProps) =>
   );
 });
 
-const AssetGridItem = memo(({ asset, selectedIndex, onPress }: AssetGridItemProps) => {
+const AssetGridItem = memo(function AssetGridItem({ asset, selectedIndex, onPress }: AssetGridItemProps) {
   return (
     <Pressable onPress={onPress} style={styles.assetCell}>
-      <Image source={{ uri: asset.uri }} style={styles.assetImage} resizeMode="cover" />
+      <Thumbnail uri={asset.uri} imageStyle={styles.assetImage} containerStyle={styles.assetImageWrap} />
       {typeof selectedIndex === 'number' ? (
         <View style={styles.assetSelectedBadge}>
           <Text style={styles.assetSelectedText}>{selectedIndex + 1}</Text>
@@ -76,7 +108,6 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
   const [albumMenuVisible, setAlbumMenuVisible] = useState(false);
 
   const currentAlbum = albums[selectedAlbumIndex] ?? null;
-  const selectedAssetIds = useMemo(() => new Set(selectedAssets.map((item) => item.id)), [selectedAssets]);
   const insets = useSafeAreaInsets();
 
   const ensurePermission = useCallback(async () => {
@@ -126,7 +157,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
       setLoadingAssets(true);
       try {
         console.log('[CustomImagePicker] loadAssets: start', { albumId: album?.id ?? null, reset, after });
-        const query: MediaLibrary.GetAssetsOptions = {
+        const query: MediaLibrary.AssetsOptions & { album?: string } = {
           first: PAGE_SIZE,
           mediaType: ['photo'],
           // request assets ordered by creation time (newest first)
@@ -135,7 +166,6 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
 
         // If a specific album is provided, pass its id (string) to the query.
         if (album && typeof (album as Album).id === 'string') {
-          // @ts-expect-error - MediaLibrary accepts album id or Album depending on platform
           query.album = (album as Album).id;
         }
 
@@ -348,7 +378,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
                 const index = selectedIndexById.get(item.id) ?? 0;
                 return (
                   <View style={styles.selectedThumbWrap}>
-                    <Image source={{ uri: item.uri }} style={styles.selectedThumb} />
+                    <Thumbnail uri={item.uri} imageStyle={styles.selectedThumb} containerStyle={styles.selectedThumbImageWrap} />
                     <View style={styles.selectedThumbBadge}>
                       <Text style={styles.selectedThumbBadgeText}>{index + 1}</Text>
                     </View>
@@ -460,6 +490,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#E5E7EB',
   },
+  assetImageWrap: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
   assetSelectedBadge: {
     position: 'absolute',
     top: 10,
@@ -515,9 +551,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     marginRight: 10,
   },
+  selectedThumbImageWrap: {
+    width: '100%',
+    height: '100%',
+  },
   selectedThumb: {
     width: '100%',
     height: '100%',
+  },
+  thumbnailLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   selectedThumbBadge: {
     position: 'absolute',

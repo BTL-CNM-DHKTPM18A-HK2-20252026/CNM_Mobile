@@ -4146,11 +4146,15 @@ export default function ChatDetailScreen() {
                     onPress={handleSendMedia}
                     disabled={isUploading}
                   >
-                    <Ionicons
-                      name={isUploading ? 'time-outline' : 'send'}
-                      size={26}
-                      color={isUploading ? '#7B808A' : COLORS.primary}
-                    />
+                    {isUploading ? (
+                      <ActivityIndicator size="small" color={COLORS.primary} />
+                    ) : (
+                      <Ionicons
+                        name="send"
+                        size={26}
+                        color={COLORS.primary}
+                      />
+                    )}
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
