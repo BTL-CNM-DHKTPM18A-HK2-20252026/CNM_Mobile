@@ -145,6 +145,7 @@ export default function ChatDetailScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [isSearchingLoading, setIsSearchingLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSearchMessages = useCallback(async (q: string) => {
     if (!q.trim() || !conversationId) return;
@@ -159,6 +160,18 @@ export default function ChatDetailScreen() {
         const mapped = content.map((item: any) => {
           // Backend trả về SearchResult<MessageDocument> -> trường 'document'
           const doc = item?.document ?? item;
+          const resolvedMessageId =
+            doc?.messageId ??
+            doc?.id ??
+            doc?._id ??
+            item?.messageId ??
+            item?.id ??
+            item?._id;
+
+          if (resolvedMessageId && !doc?.messageId) {
+            doc.messageId = resolvedMessageId;
+          }
+
           return mapChatPayloadToUiMessage(doc);
         });
         setSearchResults(mapped.filter(Boolean) as Message[]);
@@ -173,25 +186,31 @@ export default function ChatDetailScreen() {
     }
   }, [conversationId]);
 
-  const handleJumpToMessage = useCallback(async (msgId: string) => {
-    if (!msgId || !conversationId) return;
-    
-    // 1. Try to find in the currently loaded list
-    const index = messages.findIndex(m => String(m.messageId) === String(msgId));
-    if (index !== -1) {
-      setIsSearching(false);
-      setSearchQuery('');
-      setSearchResults([]);
-      setHighlightedMessageId(msgId);
-      flatListRef.current?.scrollToIndex({ index, animated: true });
-      setTimeout(() => setHighlightedMessageId(null), 2500);
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+
+    if (!isSearching || !searchQuery.trim()) {
+      setIsSearchingLoading(false);
+      if (!searchQuery.trim()) {
+        setSearchResults([]);
+      }
       return;
     }
 
-    // If not found, we might need a jump-to API or load more
-    // For now, let's just close search and show an alert if not found
-    alert('Tin nhắn nằm trong quá khứ xa, vui lòng cuộn lên để tìm.');
-  }, [messages]);
+    searchDebounceRef.current = setTimeout(() => {
+      void handleSearchMessages(searchQuery);
+    }, 320);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+    };
+  }, [handleSearchMessages, isSearching, searchQuery]);
 
   const handlePollSubmit = useCallback(async (data: {
     question: string;
@@ -227,8 +246,21 @@ export default function ChatDetailScreen() {
     if (isSearching) {
       setSearchQuery('');
       setSearchResults([]);
+      setIsSearchingLoading(false);
     }
   };
+
+  const closeSearchMode = useCallback(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+
+    setIsSearching(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setIsSearchingLoading(false);
+  }, []);
 
   const [pendingMediaList, setPendingMediaList] = useState<PickedMedia[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -2249,23 +2281,21 @@ export default function ChatDetailScreen() {
     }, 1800);
   }, []);
 
-  const handleJumpToPinnedMessage = useCallback(async (messageId: string) => {
+  const jumpToHistoricalMessage = useCallback(async (messageId: string) => {
     const normalizedMessageId = String(messageId || '').trim();
     if (!normalizedMessageId) {
-      return;
+      return false;
     }
-
-    setIsPinnedListVisible(false);
 
     const localTargetIndex = messages.findIndex((message) => String(message.messageId) === normalizedMessageId);
     if (localTargetIndex >= 0) {
       flatListRef.current?.scrollToIndex({ index: localTargetIndex, animated: true, viewPosition: 0.5 });
       highlightMessage(normalizedMessageId);
-      return;
+      return true;
     }
 
     if (!conversationId) {
-      return;
+      return false;
     }
 
     setIsJumpingToMessage(true);
@@ -2286,7 +2316,6 @@ export default function ChatDetailScreen() {
           }
         }
 
-        // Fallback: walk backward pages from latest in case around endpoint is delayed.
         const firstPageResponse = await chatService.getMessages(conversationId, 0, 40);
         const firstPageParsed = parsePageResult(firstPageResponse, 40);
         let fallbackMessages = sortMessages(mapChatPayloadListToUiMessages(firstPageParsed.payload));
@@ -2319,7 +2348,7 @@ export default function ChatDetailScreen() {
       const aroundMessages = await fetchAroundCandidates();
       if (aroundMessages.length === 0) {
         Alert.alert('Thông báo', 'Không tìm thấy đoạn hội thoại chứa tin nhắn này.');
-        return;
+        return false;
       }
 
       const aroundTargetIndex = aroundMessages.findIndex((message) => String(message.messageId) === normalizedMessageId);
@@ -2332,13 +2361,31 @@ export default function ChatDetailScreen() {
           highlightMessage(normalizedMessageId);
         });
       }
+
+      return true;
     } catch (error) {
       console.error('Failed to jump to historical message:', error);
       Alert.alert('Lỗi', 'Không thể tải đoạn hội thoại chứa tin nhắn này');
+      return false;
     } finally {
       setIsJumpingToMessage(false);
     }
-  }, [conversationId, highlightMessage, mergeUniqueMessages, messages, parsePageResult, sortMessages]);
+  }, [conversationId, highlightMessage, messages, mergeUniqueMessages, parsePageResult, sortMessages]);
+
+  const handleJumpToPinnedMessage = useCallback(async (messageId: string) => {
+    setIsPinnedListVisible(false);
+    await jumpToHistoricalMessage(messageId);
+  }, [jumpToHistoricalMessage]);
+
+  const handleJumpToMessage = useCallback(async (messageId: string) => {
+    const jumped = await jumpToHistoricalMessage(messageId);
+
+    if (jumped) {
+      setIsSearching(false);
+      setSearchQuery('');
+      setSearchResults([]);
+    }
+  }, [jumpToHistoricalMessage]);
 
   const handleUnpinFromPinnedList = useCallback(async (messageId: string) => {
     try {
@@ -3089,7 +3136,7 @@ const renderOlderMessagesLoading = () => {
               </>
             ) : (
               <View style={styles.searchBarHeader}>
-                <TouchableOpacity onPress={toggleSearchMode}>
+                <TouchableOpacity onPress={closeSearchMode} hitSlop={10}>
                   <Ionicons name="arrow-back" size={26} color="#FFFFFF" />
                 </TouchableOpacity>
                 <TextInput
@@ -3097,19 +3144,14 @@ const renderOlderMessagesLoading = () => {
                   placeholder="Tìm tin nhắn..."
                   placeholderTextColor="rgba(255,255,255,0.7)"
                   value={searchQuery}
-                  onChangeText={(txt) => {
-                    setSearchQuery(txt);
-                    if (txt.length > 0) {
-                      void handleSearchMessages(txt);
-                    } else {
-                      setSearchResults([]);
-                    }
-                  }}
+                  onChangeText={setSearchQuery}
                   autoFocus
                   selectionColor="#FFF"
+                  returnKeyType="search"
+                  clearButtonMode="never"
                 />
                 {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); }}>
+                  <TouchableOpacity onPress={() => { setSearchQuery(''); setSearchResults([]); setIsSearchingLoading(false); }} hitSlop={10}>
                     <Ionicons name="close-circle" size={20} color="#FFFFFF" />
                   </TouchableOpacity>
                 )}
@@ -3121,32 +3163,70 @@ const renderOlderMessagesLoading = () => {
         {/* Search Results Overlay */}
         {isSearching && searchQuery.length > 0 && (
           <View style={[styles.searchResultsOverlay, { backgroundColor: colors.background }]}>
-            {isSearchingLoading ? (
-              <ActivityIndicator style={{ marginTop: 20 }} color="#2F87F2" />
-            ) : searchResults.length === 0 ? (
-              <Text style={[styles.searchEmptyText, { color: colors.textSecondary }]}>Không tìm thấy kết quả</Text>
-            ) : (
-              <FlatList
-                data={searchResults}
-                keyExtractor={(item) => item.messageId}
-                renderItem={({ item }) => (
-                  <TouchableOpacity 
-                    style={[styles.searchResultItem, { borderBottomColor: colors.border }]}
-                    onPress={() => handleJumpToMessage(item.messageId)}
-                  >
-                    <View style={styles.searchResultHeader}>
-                      <Text style={[styles.searchResultSender, { color: colors.text }]} numberOfLines={1}>{item.senderName}</Text>
-                      <Text style={[styles.searchResultTime, { color: colors.textSecondary }]}>
-                        {parseMessageDate(item.createdAt)?.toLocaleDateString()}
+            <View style={[styles.searchResultsShell, { backgroundColor: colors.card }]}>
+              <View style={[styles.searchResultsHeader, { borderBottomColor: colors.border }]}>
+                <View style={styles.searchResultsHeaderText}>
+                  <Text style={[styles.searchResultsTitle, { color: colors.text }]}>Tìm trong lịch sử chat</Text>
+                  <Text style={[styles.searchResultsMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {searchQuery.trim() ? `"${searchQuery.trim()}"` : 'Nhập nội dung để bắt đầu tìm'}
+                  </Text>
+                </View>
+                {searchResults.length > 0 && !isSearchingLoading ? (
+                  <View style={[styles.searchResultsCountPill, { backgroundColor: colors.border }]}>
+                    <Text style={[styles.searchResultsCountText, { color: colors.text }]}>{searchResults.length}</Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {!searchQuery.trim() ? (
+                <View style={styles.searchEmptyState}>
+                  <Ionicons name="search-outline" size={28} color={colors.textSecondary} />
+                  <Text style={[styles.searchEmptyTitle, { color: colors.text }]}>Tìm tin nhắn trong quá khứ</Text>
+                  <Text style={[styles.searchEmptySubtitle, { color: colors.textSecondary }]}>Gõ vài từ khóa để tìm lại đoạn chat cũ và chạm vào kết quả để cuộn tới đúng vị trí.</Text>
+                </View>
+              ) : isSearchingLoading ? (
+                <View style={styles.searchLoadingState}>
+                  <ActivityIndicator color="#2F87F2" />
+                  <Text style={[styles.searchLoadingText, { color: colors.textSecondary }]}>Đang tìm trong lịch sử...</Text>
+                </View>
+              ) : searchResults.length === 0 ? (
+                <View style={styles.searchEmptyState}>
+                  <Ionicons name="sad-outline" size={28} color={colors.textSecondary} />
+                  <Text style={[styles.searchEmptyTitle, { color: colors.text }]}>Không tìm thấy kết quả</Text>
+                  <Text style={[styles.searchEmptySubtitle, { color: colors.textSecondary }]}>Thử đổi từ khóa khác hoặc tìm bằng một phần nội dung ngắn hơn.</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.messageId}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.searchResultsList}
+                  renderItem={({ item, index }) => (
+                    <TouchableOpacity 
+                      style={[
+                        styles.searchResultItem,
+                        { borderBottomColor: colors.border },
+                        isJumpingToMessage ? styles.searchResultItemDisabled : null,
+                        index === 0 ? styles.searchResultItemFirst : null,
+                      ]}
+                      onPress={() => { void handleJumpToMessage(item.messageId); }}
+                      disabled={isJumpingToMessage}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.searchResultHeader}>
+                        <Text style={[styles.searchResultSender, { color: colors.text }]} numberOfLines={1}>{item.senderName}</Text>
+                        <Text style={[styles.searchResultTime, { color: colors.textSecondary }]}>
+                          {parseMessageDate(item.createdAt)?.toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <Text style={[styles.searchResultContent, { color: colors.textSecondary }]} numberOfLines={2}>
+                        {getDisplayMessageContent(item)}
                       </Text>
-                    </View>
-                    <Text style={[styles.searchResultContent, { color: colors.textSecondary }]} numberOfLines={2}>
-                      {getDisplayMessageContent(item)}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-            )}
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+            </View>
           </View>
         )}
 
