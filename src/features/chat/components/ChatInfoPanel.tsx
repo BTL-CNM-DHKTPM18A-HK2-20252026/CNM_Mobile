@@ -28,11 +28,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchConversationMembers } from '@/services/chatConversationMembers';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { MAX_GROUP_MEMBERS, buildSectionedList, getRemainingGroupMemberSlots, isGroupAtCapacity } from '@/utils/group/groupMembers';
-import {
-  checkAddMembersPermission,
-  checkEditGroupInfoPermission,
-  type MemberRole,
-} from '@/utils/permissionHelper';
 import GroupPermissionsModal from '@chat/components/group/GroupPermissionsModal';
 import { SCREEN_WIDTH } from '@chat/constants/chatConstants';
 import { chatFileService } from '@chat/services/chatFileService';
@@ -45,6 +40,11 @@ import {
 } from '@chat/utils/chatHelpers';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
 import { friendService } from '@friends/services/friendService';
+import {
+  checkAddMembersPermission,
+  checkEditGroupInfoPermission,
+  type MemberRole,
+} from '../../../../utils/permissionHelper';
 
 interface ChatInfoPanelProps {
   visible: boolean;
@@ -769,7 +769,19 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
 
           {/* Group Members */}
           {props.isGroupConversation && (
-            <TouchableOpacity style={[styles.infoPanelSection, { borderBottomColor: colors.border }]} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}
+              activeOpacity={0.85}
+              onPress={() => {
+                router.push({
+                  pathname: '/member-detail',
+                  params: {
+                    members: encodeURIComponent(JSON.stringify(infoMembers)),
+                    currentUserId: props.currentUserId ?? '',
+                  },
+                });
+              }}
+            >
               <View style={styles.infoPanelSectionToggleLeft}>
                 <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
                 <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>Xem Thành viên ({infoMembers.length})</Text>
