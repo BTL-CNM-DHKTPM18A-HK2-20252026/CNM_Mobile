@@ -202,6 +202,10 @@ export const chatService = {
     return await api.post(`/messages/${messageId}/react`, { reactionType });
   },
 
+  clearMessageReactions: async (messageId: string) => {
+    return await api.delete(`/messages/${messageId}/reactions`);
+  },
+
   updateMessage: async (messageId: string, content: string) => {
     return await api.put(`/messages/${messageId}?content=${encodeURIComponent(content)}`, {});
   },

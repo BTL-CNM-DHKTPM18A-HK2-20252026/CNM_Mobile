@@ -1,5 +1,5 @@
-﻿import { StyleSheet, Dimensions } from 'react-native';
-import { COLORS } from '@/constants/theme';
+﻿import { COLORS } from '@/constants/theme';
+import { Dimensions, StyleSheet } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -129,7 +129,8 @@ export const chatDetailStyles = StyleSheet.create({
   },
   messagesList: {
     paddingHorizontal: 10,
-    paddingVertical: 12,
+    paddingVertical: 18,
+    paddingBottom: 80,
     flexGrow: 1,
     justifyContent: 'flex-end'
   },
@@ -189,13 +190,18 @@ export const chatDetailStyles = StyleSheet.create({
     backgroundColor: '#E8EDF3',
   },
   messageBubble: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 18,
     maxWidth: '85%',
     minWidth: 48,
-    minHeight: 34,
+    minHeight: 30,
     justifyContent: 'center' as const,
+  },
+  bubbleWrapper: {
+    position: 'relative' as const,
+    // reserve space at bottom for reaction badges
+    paddingBottom: 10,
   },
   userBubble: {
     backgroundColor: '#D0EAFF',
@@ -274,27 +280,29 @@ export const chatDetailStyles = StyleSheet.create({
     color: '#617287',
   },
   reactionRowLeft: {
+    position: 'absolute' as const,
+    left: 6,
+    bottom: 2,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
-    marginTop: -6,
-    marginLeft: 8,
-    alignSelf: 'flex-start',
+    gap: 6,
+    alignItems: 'center',
   },
   reactionRowRight: {
+    position: 'absolute' as const,
+    right: 6,
+    bottom: 2,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
-    marginTop: -6,
-    marginRight: 8,
-    alignSelf: 'flex-end',
+    gap: 6,
+    alignItems: 'center',
   },
   reactionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -302,10 +310,144 @@ export const chatDetailStyles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  reactionChipWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
   reactionChipText: {
-    fontSize: 9,
+    fontSize: 12,
     color: '#2D3640',
     fontWeight: '600',
+  },
+  reactionTotalText: {
+    fontSize: 11,
+    color: '#2D3640',
+    fontWeight: '700',
+    paddingLeft: 1,
+    paddingRight: 2,
+  },
+  clearButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 40,
+    fontSize: 15,
+  },
+  reactionViewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  reactionViewerSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    minHeight: '52%',
+    maxHeight: '80%',
+    paddingTop: 8,
+    overflow: 'hidden',
+  },
+  reactionViewerHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    alignSelf: 'center',
+    backgroundColor: '#D7DCE5',
+    marginBottom: 10,
+  },
+  reactionViewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+  },
+  reactionViewerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  reactionViewerTabs: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  reactionViewerTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  reactionViewerTabActive: {
+    backgroundColor: 'rgba(0, 104, 255, 0.10)',
+  },
+  reactionViewerTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  reactionViewerList: {
+    flex: 1,
+  },
+  reactionViewerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  reactionViewerAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#E8EDF3',
+  },
+  reactionViewerItemMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  reactionViewerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reactionViewerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  reactionViewerMeta: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  reactionViewerEmoji: {
+    fontSize: 14,
+  },
+  reactionViewerCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6C7480',
   },
   inputArea: {
     flexDirection: 'column',
