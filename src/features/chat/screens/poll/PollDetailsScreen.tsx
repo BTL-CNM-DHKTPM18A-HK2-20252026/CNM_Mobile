@@ -263,7 +263,10 @@ export default function PollDetailsScreen() {
 
   const hasVoted = selectedOptionIds.length > 0;
   const showResults = !poll?.hideResultsBeforeVote || hasVoted;
-
+    const isExpired = useMemo(() => {
+    if (!poll?.deadline) return false;
+    return new Date(poll.deadline).getTime() < Date.now();
+    }, [poll?.deadline]);
   const handleVote = async (optionId: string) => {
     if (!poll) return;
     if (poll.deadline && new Date(poll.deadline).getTime() < Date.now()) {
@@ -466,18 +469,21 @@ export default function PollDetailsScreen() {
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}> 
       <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.card }]}> 
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={{ color: '#0068FF', fontWeight: '600' }}>Quay lại</Text>
+            <Text style={{ color: '#0068FF', fontWeight: '600' }}>Quay lại</Text>
         </TouchableOpacity>
+        
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{poll.question}</Text>
+        
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          {isCreator ? (
+            {/* CẬP NHẬT: Chỉ hiện nút Chỉnh sửa nếu là Người tạo VÀ Poll chưa hết hạn */}
+            {isCreator && !isExpired ? (
             <TouchableOpacity onPress={openEditSettings} style={{ paddingHorizontal: 8 }}>
-              <Text style={{ color: '#0068FF', fontWeight: '600' }}>Chỉnh sửa</Text>
+                <Text style={{ color: '#0068FF', fontWeight: '600' }}>Chỉnh sửa</Text>
             </TouchableOpacity>
-          ) : null}
-          <View style={{ width: 8 }} />
+            ) : null}
+            <View style={{ width: 8 }} />
         </View>
-      </View>
+        </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>{totalVoters} người đã bình chọn</Text>
@@ -487,13 +493,19 @@ export default function PollDetailsScreen() {
         <TouchableOpacity style={styles.votersButton} onPress={() => setVotersModalVisible(true)}>
           <Text style={styles.votersButtonText}>Xem chi tiết người bình chọn</Text>
         </TouchableOpacity>
-
+        {isExpired ? (
+        <View style={[styles.expiredBanner, { backgroundColor: isDark ? '#3b1d1d' : '#FEE2E2' }]}>
+            <Text style={{ color: '#EF4444', fontWeight: '700', textAlign: 'center' }}>
+            ⚠️ Bình chọn này đã hết hạn, không thể thay đổi phiếu bầu.
+            </Text>
+        </View>
+        ) : null}
         {normalizedOptions.map((opt, idx) => {
           const votes = (opt.voterIds || []).length;
           const percent = totalVoters > 0 ? Math.round((votes / totalVoters) * 100) : 0;
           const isSelected = selectedOptionIds.includes(opt.optionId);
-          const canVote = !isSubmitting && (!poll.deadline || new Date(poll.deadline).getTime() >= Date.now()) && (poll.multipleChoices || !hasVoted || isSelected);
-
+          // CẬP NHẬT: Nếu đã hết hạn (isExpired = true) thì khóa hoàn toàn tương tác (disabled = true)
+  const canVote = !isExpired && !isSubmitting && (poll.multipleChoices || !hasVoted || isSelected);
           return (
             <TouchableOpacity
               key={opt.optionId || idx}
@@ -503,18 +515,30 @@ export default function PollDetailsScreen() {
               style={[
                 styles.optionRow,
                 {
-                  backgroundColor: isSelected ? (isDark ? '#18315c' : '#EAF3FF') : colors.card,
-                  borderColor: isSelected ? '#0068FF' : colors.border,
-                },
+                    backgroundColor: isSelected ? (isDark ? '#18315c' : '#EAF3FF') : colors.card,
+                    borderColor: isSelected ? '#0068FF' : colors.border,
+                    // Đổi độ mờ nhẹ của hàng nếu đã hết hạn và phương án đó không được chọn
+                    opacity: isExpired && !isSelected ? 0.7 : 1,
+                    },
               ]}
             >
               <View style={[styles.progressFill, { width: `${Math.max(2, percent)}%`, opacity: showResults ? 1 : 0 }]} />
 
               <View style={styles.optionMain}>
                 <View style={styles.optionTopRow}>
-                  <View style={[styles.optionIndicator, { borderColor: isSelected ? '#0068FF' : '#B9C4D4', backgroundColor: isSelected ? '#0068FF' : 'transparent' }]}>
+                  
+                {!isExpired ? (
+                    <View style={[styles.optionIndicator, { borderColor: isSelected ? '#0068FF' : '#B9C4D4', backgroundColor: isSelected ? '#0068FF' : 'transparent' }]}>
                     {isSelected ? <Text style={styles.optionIndicatorCheck}>✓</Text> : null}
-                  </View>
+                    </View>
+                ) : (
+                    // Nếu hết hạn, hiển thị một dấu chấm nhỏ hoặc icon cố định cho những phương án mà User đã vote trước đó
+                    isSelected ? (
+                    <View style={{ marginRight: 8 }}>
+                        <Text style={{ color: '#0068FF', fontWeight: '800', fontSize: 16 }}>✓</Text>
+                    </View>
+                    ) : null
+                )}
                   <Text style={[styles.optionText, { color: colors.text }]} numberOfLines={2}>{opt.content}</Text>
                   <Text style={styles.percentText}>{showResults ? `${percent}%` : ''}</Text>
                 </View>
@@ -529,7 +553,12 @@ export default function PollDetailsScreen() {
             </TouchableOpacity>
           );
         })}
-
+        {/* CẬP NHẬT: Ẩn luôn nút "Thêm phương án" nếu đã hết hạn */}
+        {poll.allowAddOptions && !isExpired ? (
+        <TouchableOpacity style={styles.addOptionButton} onPress={handleOpenAddOption} activeOpacity={0.85}>
+            <Text style={styles.addOptionText}>+ Thêm phương án</Text>
+        </TouchableOpacity>
+        ) : null}
         {poll.allowAddOptions ? (
           <TouchableOpacity style={styles.addOptionButton} onPress={handleOpenAddOption} activeOpacity={0.85}>
             <Text style={styles.addOptionText}>+ Thêm phương án</Text>
@@ -854,4 +883,11 @@ const styles = StyleSheet.create({
   settingLabel: { fontSize: 14, flex: 1 },
   votersButton: { marginTop: 8, marginBottom: 12, paddingVertical: 10, alignItems: 'center' },
   votersButtonText: { color: '#0068FF', fontWeight: '700' },
+  expiredBanner: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
 });
