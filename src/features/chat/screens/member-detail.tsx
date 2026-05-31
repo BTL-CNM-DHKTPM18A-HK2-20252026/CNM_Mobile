@@ -2,8 +2,8 @@ import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
-import { Alert, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Alert, FlatList, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type MemberRole = 'ADMIN' | 'DEPUTY' | 'MEMBER';
@@ -101,6 +101,17 @@ export default function MemberDetailScreen() {
       });
   }, [params.currentUserId, params.members]);
 
+  const [searchText, setSearchText] = useState('');
+  const searchRef = useRef<TextInput | null>(null);
+
+  const filteredMembers = useMemo(() => {
+    const q = String(searchText ?? '').trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) => {
+      return String(m.displayName ?? '').toLowerCase().includes(q) || String(m.addedByName ?? '').toLowerCase().includes(q);
+    });
+  }, [members, searchText]);
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: '#F7DCE4' }]} edges={['top', 'left', 'right', 'bottom']}>
       <StatusBar barStyle="light-content" backgroundColor="#E06B89" />
@@ -114,44 +125,35 @@ export default function MemberDetailScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>
             Thành viên
           </Text>
-
-          <View style={styles.headerActionGroup}>
-            <TouchableOpacity
-              onPress={() => Alert.alert('Thêm thành viên', 'Chức năng đang phát triển')}
-              style={styles.headerIconButton}
-              accessibilityLabel="Thêm thành viên"
-            >
-              <Ionicons name="person-add-outline" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => Alert.alert('Tìm thành viên', 'Chức năng đang phát triển')}
-              style={styles.headerIconButton}
-              accessibilityLabel="Tìm thành viên"
-            >
-              <Ionicons name="search" size={23} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
         </View>
 
         <View style={styles.content}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Thành viên ({members.length})</Text>
-            <TouchableOpacity
-              onPress={() => Alert.alert('Tùy chọn', 'Chức năng đang phát triển')}
-              style={styles.sectionMenuButton}
-              accessibilityLabel="Tùy chọn danh sách"
-            >
-              <Ionicons name="ellipsis-vertical" size={18} color="#D07A90" />
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>{members.length} thành viên </Text>
+            
           </View>
 
-          <View style={styles.listCard}>
-            {members.map((member, index) => {
-              const showFriendButton = !member.isCurrentUser && !member.isFriend && member.role !== 'ADMIN';
+          <View style={styles.searchContainer}>
+            <TextInput
+              ref={searchRef}
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Tìm thành viên..."
+              placeholderTextColor="#9A8A92"
+              style={[styles.searchInput, { color: '#2D2530' }]}
+              returnKeyType="search"
+            />
+          </View>
 
+          <FlatList
+            data={filteredMembers}
+            keyExtractor={(item) => String(item.userId)}
+            style={styles.listCard}
+            contentContainerStyle={{ paddingBottom: 30 }}
+            renderItem={({ item: member, index }) => {
+              const showFriendButton = !member.isCurrentUser && !member.isFriend && member.role !== 'ADMIN';
               return (
-                <View key={member.userId} style={[styles.memberRow, index !== members.length - 1 && styles.memberRowBorder]}>
+                <View style={[styles.memberRow, index !== filteredMembers.length - 1 && styles.memberRowBorder]}>
                   <View style={styles.avatarWrap}>
                     <Image source={getAvatarSource(member.avatarUrl)} style={styles.avatarImage} contentFit="cover" transition={120} />
                   </View>
@@ -186,8 +188,11 @@ export default function MemberDetailScreen() {
                   </View>
                 </View>
               );
-            })}
-          </View>
+            }}
+            ListEmptyComponent={() => (
+              <View style={styles.emptyWrap}><Text style={styles.emptyText}>Không tìm thấy thành viên</Text></View>
+            )}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -203,9 +208,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7DCE4',
   },
   header: {
-    minHeight: 104,
+    minHeight: 70,
     paddingHorizontal: 18,
-    paddingBottom: 18,
     backgroundColor: '#E56C8A',
     flexDirection: 'row',
     alignItems: 'center',
@@ -323,5 +327,25 @@ const styles = StyleSheet.create({
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchContainer: {
+    marginHorizontal: 18,
+    marginBottom: 8,
+  },
+  searchInput: {
+    height: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: 'rgba(211,140,157,0.12)',
+  },
+  emptyWrap: {
+    padding: 22,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#8A8086',
+    fontSize: 14,
   },
 });
