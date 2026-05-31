@@ -1,4 +1,13 @@
+import { useTheme } from '@/context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { ResizeMode, Video } from 'expo-av';
+import { File, Paths } from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
@@ -8,40 +17,29 @@ import {
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
-import { useTheme } from '@/context/ThemeContext';
-import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
-import { ResizeMode, Video } from 'expo-av';
-import * as ImagePicker from 'expo-image-picker';
-import * as MediaLibrary from 'expo-media-library';
-import { File, Paths } from 'expo-file-system';
-import * as FileSystemLegacy from 'expo-file-system/legacy';
-import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
-import { chatService } from '@chat/services/chatService';
-import { friendService } from '@friends/services/friendService';
-import { chatFileService } from '@chat/services/chatFileService';
 import { fetchConversationMembers } from '@/services/chatConversationMembers';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { MAX_GROUP_MEMBERS, buildSectionedList, getRemainingGroupMemberSlots, isGroupAtCapacity } from '@/utils/group/groupMembers';
-import { COLORS } from '@/constants/theme';
-import { SCREEN_WIDTH, SCREEN_HEIGHT } from '@chat/constants/chatConstants';
-import {
-  getMessageMillis, parseMessageDate, isLikelyUrl,
-  getDisplayFileNameFromValue, formatDateSeparator,
-} from '@chat/utils/chatHelpers';
-import type { Message, PinnedMessageItem } from '@chat/types/chatTypes';
-import { PinnedListContent } from '@/components/chat/PinnedListContent';
 import GroupPermissionsModal from '@chat/components/group/GroupPermissionsModal';
+import { SCREEN_WIDTH } from '@chat/constants/chatConstants';
+import { chatFileService } from '@chat/services/chatFileService';
+import { chatService } from '@chat/services/chatService';
+import type { Message, PinnedMessageItem } from '@chat/types/chatTypes';
+import {
+  getDisplayFileNameFromValue,
+  getMessageMillis,
+  isLikelyUrl
+} from '@chat/utils/chatHelpers';
+import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
+import { friendService } from '@friends/services/friendService';
 
 interface ChatInfoPanelProps {
   visible: boolean;
@@ -833,18 +831,20 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
           </View>
 
           {/* Footer */}
-          <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-            <TouchableOpacity style={styles.infoPanelDangerBtn} onPress={handleInfoLeaveGroup}>
-              <Ionicons name="exit-outline" size={16} color="#F04343" />
-              <Text style={styles.infoPanelDangerBtnText}>{infoIsAdmin ? 'Chuyển quyền & rời nhóm' : 'Rời nhóm'}</Text>
-            </TouchableOpacity>
-            {infoIsAdmin && (
-              <TouchableOpacity style={[styles.infoPanelDangerBtn, { marginTop: 6 }]} onPress={handleInfoDissolveGroup}>
-                <Ionicons name="warning-outline" size={16} color="#DC2626" />
-                <Text style={[styles.infoPanelDangerBtnText, { color: '#DC2626' }]}>Giải tán nhóm</Text>
+          {props.isGroupConversation && (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+              <TouchableOpacity style={styles.infoPanelDangerBtn} onPress={handleInfoLeaveGroup}>
+                <Ionicons name="exit-outline" size={16} color="#F04343" />
+                <Text style={styles.infoPanelDangerBtnText}>{infoIsAdmin ? 'Chuyển quyền & rời nhóm' : 'Rời nhóm'}</Text>
               </TouchableOpacity>
-            )}
-          </View>
+              {infoIsAdmin && (
+                <TouchableOpacity style={[styles.infoPanelDangerBtn, { marginTop: 6 }]} onPress={handleInfoDissolveGroup}>
+                  <Ionicons name="warning-outline" size={16} color="#DC2626" />
+                  <Text style={[styles.infoPanelDangerBtnText, { color: '#DC2626' }]}>Giải tán nhóm</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
 
