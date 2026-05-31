@@ -2,17 +2,17 @@ import { useTheme } from '@/context/ThemeContext';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,11 +39,70 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
   const [options, setOptions] = useState(['', '']);
   const [showSettings, setShowSettings] = useState(false);
   const [deadline, setDeadline] = useState('');
+  const [deadlineModalVisible, setDeadlineModalVisible] = useState(false);
+  const [deadlineDate, setDeadlineDate] = useState('');
+  const [deadlineTime, setDeadlineTime] = useState('');
   const [isPinned, setIsPinned] = useState(false);
   const [multipleChoices, setMultipleChoices] = useState(true);
   const [allowAddOptions, setAllowAddOptions] = useState(true);
   const [hideResultsBeforeVote, setHideResultsBeforeVote] = useState(false);
   const [hideVoters, setHideVoters] = useState(false);
+
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  };
+
+  const buildDeadlineFromState = () => {
+    const [datePart, timePart] = [deadlineDate.trim(), deadlineTime.trim()];
+    if (!datePart || !timePart) return undefined;
+
+    const dateMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const timeMatch = timePart.match(/^(\d{2}):(\d{2})$/);
+    if (!dateMatch || !timeMatch) return undefined;
+
+    const [, yearStr, monthStr, dayStr] = dateMatch;
+    const [, hourStr, minuteStr] = timeMatch;
+    const year = Number.parseInt(yearStr, 10);
+    const month = Number.parseInt(monthStr, 10);
+    const day = Number.parseInt(dayStr, 10);
+    const hour = Number.parseInt(hourStr, 10);
+    const minute = Number.parseInt(minuteStr, 10);
+
+    const next = new Date(year, month - 1, day, hour, minute, 0);
+    if (Number.isNaN(next.getTime())) return undefined;
+    return formatLocalDateTime(next);
+  };
+
+  const parseDeadlineToState = (value?: string | null) => {
+    if (!value) return { date: '', time: '' };
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return { date: '', time: '' };
+    }
+    const pad = (v: number) => String(v).padStart(2, '0');
+    return {
+      date: `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
+      time: `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`,
+    };
+  };
+
+  const openDeadlineModal = () => {
+    const next = parseDeadlineToState(deadline);
+    setDeadlineDate(next.date);
+    setDeadlineTime(next.time);
+    setDeadlineModalVisible(true);
+  };
+
+  const saveDeadline = () => {
+    const nextDeadline = buildDeadlineFromState();
+    if (!nextDeadline) {
+      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ ngày, giờ kết thúc bình chọn');
+      return;
+    }
+    setDeadline(nextDeadline);
+    setDeadlineModalVisible(false);
+  };
 
   const handleAddOption = () => {
     setOptions((prev) => [...prev, '']);
@@ -82,6 +141,9 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setQuestion('');
     setOptions(['', '']);
     setDeadline('');
+    setDeadlineModalVisible(false);
+    setDeadlineDate('');
+    setDeadlineTime('');
     setIsPinned(false);
     setMultipleChoices(true);
     setAllowAddOptions(true);
@@ -94,6 +156,9 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setQuestion('');
     setOptions(['', '']);
     setDeadline('');
+    setDeadlineModalVisible(false);
+    setDeadlineDate('');
+    setDeadlineTime('');
     setIsPinned(false);
     setMultipleChoices(true);
     setAllowAddOptions(true);
@@ -115,7 +180,7 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose}>
-              <Text style={[styles.cancelBtn, { color: colors.subText }]}>Huỷ</Text>
+              <Text style={[styles.cancelBtn, { color: colors.textSecondary }]}>Huỷ</Text>
             </TouchableOpacity>
             <Text style={[styles.title, { color: colors.text }]}>Tạo bình chọn</Text>
             <TouchableOpacity onPress={() => setShowSettings((s) => !s)}>
@@ -134,7 +199,7 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
                 { borderColor: colors.border, color: colors.text, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
               ]}
               placeholder="Nhập câu hỏi..."
-              placeholderTextColor={colors.subText}
+              placeholderTextColor={colors.textPlaceholder}
               value={question}
               onChangeText={setQuestion}
             />
@@ -143,14 +208,14 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
             <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>Phương án</Text>
             {options.map((opt, idx) => (
               <View key={idx} style={styles.optionRow}>
-                <Text style={[styles.optionNumber, { color: colors.subText }]}>{idx + 1}</Text>
+                <Text style={[styles.optionNumber, { color: colors.textSecondary }]}>{idx + 1}</Text>
                 <TextInput
                   style={[
                     styles.optionInput,
                     { borderColor: colors.border, color: colors.text, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
                   ]}
                   placeholder={`Phương án ${idx + 1}`}
-                  placeholderTextColor={colors.subText}
+                  placeholderTextColor={colors.textPlaceholder}
                   value={opt}
                   onChangeText={(val) => handleOptionChange(idx, val)}
                 />
@@ -168,11 +233,14 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
             {/* Settings */}
             {showSettings && (
               <View style={[styles.settingsSection, { borderTopColor: colors.border }]}>
-                <SettingRow label="Ghim bình chọn" value={isPinned} onValueChange={setIsPinned} colors={colors} />
+                <DeadlineSettingRow
+                  label="Hạn chót"
+                  value={deadline ? buildDeadlineFromState() ?? deadline : 'Chưa đặt'}
+                  onPress={openDeadlineModal}
+                  colors={colors}
+                />
                 <SettingRow label="Cho phép chọn nhiều" value={multipleChoices} onValueChange={setMultipleChoices} colors={colors} />
                 <SettingRow label="Cho thêm phương án" value={allowAddOptions} onValueChange={setAllowAddOptions} colors={colors} />
-                <SettingRow label="Ẩn kết quả trước khi vote" value={hideResultsBeforeVote} onValueChange={setHideResultsBeforeVote} colors={colors} />
-                <SettingRow label="Ẩn danh người vote" value={hideVoters} onValueChange={setHideVoters} colors={colors} />
               </View>
             )}
           </ScrollView>
@@ -187,6 +255,29 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
               <Text style={styles.submitText}>Tạo bình chọn</Text>
             </TouchableOpacity>
           </View>
+
+          <Modal visible={deadlineModalVisible} transparent animationType="fade" onRequestClose={() => setDeadlineModalVisible(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={[styles.deadlineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Hạn chót</Text>
+                <View style={styles.compactDeadlineRow}>
+                  <DeadlineField label="Ngày" value={deadlineDate} onChangeText={setDeadlineDate} placeholder="2026-06-01" colors={colors} style={styles.compactDeadlineField} />
+                  <DeadlineField label="Giờ" value={deadlineTime} onChangeText={setDeadlineTime} placeholder="18:30" colors={colors} style={styles.compactDeadlineField} />
+                </View>
+                <Text style={[styles.deadlinePreview, { color: colors.textSecondary }]}> 
+                  {buildDeadlineFromState() ? `Đã chọn: ${buildDeadlineFromState()}` : 'Nhập ngày (YYYY-MM-DD) và giờ (HH:MM)'}
+                </Text>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity onPress={() => setDeadlineModalVisible(false)} style={styles.modalBtn}>
+                    <Text style={{ color: colors.textSecondary }}>Huỷ</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={saveDeadline} style={styles.modalBtn}>
+                    <Text style={{ color: '#0068FF', fontWeight: '700' }}>Lưu</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
           </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
@@ -212,6 +303,60 @@ function SettingRow({
         onValueChange={onValueChange}
         trackColor={{ false: '#ddd', true: '#0068FF80' }}
         thumbColor={value ? '#0068FF' : '#f4f3f4'}
+      />
+    </View>
+  );
+}
+
+function DeadlineSettingRow({
+  label,
+  value,
+  onPress,
+  colors,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+  colors: any;
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.deadlineRow} activeOpacity={0.8}>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
+        <Text style={[styles.deadlineValue, { color: colors.textSecondary }]} numberOfLines={1}>
+          {value || 'Chưa đặt'}
+        </Text>
+      </View>
+      <Text style={{ color: '#0068FF', fontWeight: '600' }}>Chọn</Text>
+    </TouchableOpacity>
+  );
+}
+
+function DeadlineField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  colors,
+  style,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  colors: any;
+  style?: any;
+}) {
+  return (
+    <View style={[styles.deadlineField, style]}>
+      <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textPlaceholder}
+        keyboardType="number-pad"
+        style={[styles.deadlineFieldInput, { borderColor: colors.border, color: colors.text }]}
       />
     </View>
   );
@@ -307,6 +452,12 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
   },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -316,6 +467,10 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 14,
     flex: 1,
+  },
+  deadlineValue: {
+    fontSize: 12,
+    marginTop: 4,
   },
   footer: {
     borderTopWidth: 0.5,
@@ -332,5 +487,63 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  deadlineCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  deadlineGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  deadlineField: {
+    flex: 1,
+  },
+  compactDeadlineRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  compactDeadlineField: {
+    minWidth: 0,
+  },
+  deadlineFieldLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  deadlineFieldInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  deadlinePreview: {
+    marginTop: 10,
+    fontSize: 12,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
+  },
+  modalBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
 });
