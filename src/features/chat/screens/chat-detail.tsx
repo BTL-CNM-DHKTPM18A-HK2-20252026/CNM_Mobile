@@ -11,6 +11,11 @@ import ForwardedBanner from '@/components/chat/MessageItem/ForwardedBanner';
 import ReplySnippet from '@/components/chat/MessageItem/ReplySnippet';
 import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
+import PollCard from '@/components/chat/PollCard';
+import PollCreateModal from '@/components/chat/PollCreateModal';
+import LinkPreviewCard from '@chat/components/message/LinkPreviewCard';
+import CallHistoryCard from '@chat/components/message/CallHistoryCard';
+import MentionDropdown from '@chat/components/input/MentionDropdown';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
 import RichTextRenderer, { extractRichTextPlainText } from '@/components/chat/RichTextRenderer';
 import { ShareContactContent } from '@/components/chat/ShareContactContent';
@@ -69,7 +74,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CallOverlay } from '../components/CallOverlay';
+import { CallOverlay } from '@chat/components/CallOverlay';
 import {
   mapChatPayloadListToUiMessages,
   mapChatPayloadToUiMessage,
@@ -113,6 +118,9 @@ export default function ChatDetailScreen() {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [isMessageActionVisible, setIsMessageActionVisible] = useState(false);
   const [isPinnedListVisible, setIsPinnedListVisible] = useState(false);
+  const [isPollModalVisible, setIsPollModalVisible] = useState(false);
+  const [isMentionDropdownVisible, setIsMentionDropdownVisible] = useState(false);
+  const [mentionSearchText, setMentionSearchText] = useState('');
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessageItem[]>([]);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
@@ -169,6 +177,35 @@ export default function ChatDetailScreen() {
     // For now, let's just close search and show an alert if not found
     alert('Tin nhắn nằm trong quá khứ xa, vui lòng cuộn lên để tìm.');
   }, [messages]);
+
+  const handlePollSubmit = useCallback(async (data: {
+    question: string;
+    options: string[];
+    deadline?: string;
+    isPinned?: boolean;
+    multipleChoices?: boolean;
+    allowAddOptions?: boolean;
+    hideResultsBeforeVote?: boolean;
+    hideVoters?: boolean;
+  }) => {
+    try {
+      await chatService.createPoll({
+        conversationId,
+        question: data.question,
+        options: data.options,
+        deadline: data.deadline,
+        isPinned: data.isPinned,
+        multipleChoices: data.multipleChoices,
+        allowAddOptions: data.allowAddOptions,
+        hideResultsBeforeVote: data.hideResultsBeforeVote,
+        hideVoters: data.hideVoters,
+      } as any);
+      setIsPollModalVisible(false);
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ message?: string }>;
+      Alert.alert(t('common.error', 'Lỗi'), axiosErr?.response?.data?.message || t('chat.poll.createError', 'Không thể tạo cuộc thăm dò'));
+    }
+  }, [conversationId, t]);
 
   const toggleSearchMode = () => {
     setIsSearching(!isSearching);
@@ -229,7 +266,7 @@ export default function ChatDetailScreen() {
   const peerAvatarSource = useMemo(() => getAvatarSource(conversationAvatarUrl), [conversationAvatarUrl]);
   const normalizedName = String(conversationDisplayName ?? '').trim().toLowerCase();
   const normalizedType = String(type ?? '').trim().toUpperCase();
-  const isAiConversation = normalizedType === 'AI' || normalizedName === 'fruvia chat ai' || normalizedName === 'fruvia ai';
+  const isAiConversation = normalizedType === 'AI' || normalizedName === 'fruvia chat ai' || normalizedName === 'fruvia ai' || normalizedName === 'fruvia chatbot';
   const isCloudConversation = normalizedType === 'CLOUD' || normalizedName === 'cloud của tôi';
   const isPrivateConversation = normalizedType === 'PRIVATE' || normalizedType === 'DIRECT';
   const isGroupConversation = normalizedType === 'GROUP';
@@ -565,7 +602,7 @@ export default function ChatDetailScreen() {
     const isAiSender =
       isAiConversation ||
       String(message.senderId) === AI_TYPING_USER_ID ||
-      senderName === 'fruvia ai';
+      senderName === 'fruvia ai' || senderName === 'fruvia chatbot';
 
     const raw = message.content || '';
     const richTextPlain = extractRichTextPlainText(raw);
@@ -1164,14 +1201,14 @@ export default function ChatDetailScreen() {
         const rawConversationName = String(item?.conversationName ?? item?.name ?? '').trim();
         const normalizedRawName = rawConversationName.toLowerCase();
         const isSelfConversation = conversationTypeRaw === 'SELF';
-        const isAiConversation = isSelfConversation && (normalizedRawName === 'fruvia ai' || normalizedRawName === 'fruvia chat ai');
+        const isAiConversation = isSelfConversation && (normalizedRawName === 'fruvia ai' || normalizedRawName === 'fruvia chat ai' || normalizedRawName === 'fruvia chatbot');
         const isCloudConversation = isSelfConversation && !isAiConversation;
 
         const rawName = String(
           (isDirectConversation
             ? getMemberName(otherMember)
             : undefined)
-            ?? (isAiConversation ? 'Fruvia AI' : (isCloudConversation ? 'Cloud của tôi' : undefined))
+            ?? (isAiConversation ? 'Fruvia Chatbot' : (isCloudConversation ? 'Cloud của tôi' : undefined))
             ?? item?.conversationName
             ?? item?.name
             ?? getMemberName(members?.[0])
@@ -1481,7 +1518,7 @@ export default function ChatDetailScreen() {
             messageId: `ai-fallback-${Date.now()}`,
             content: fallbackAiText,
             senderId: 'FRUVIA_AI_ASSISTANT',
-            senderName: 'Fruvia AI',
+            senderName: 'Fruvia Chatbot',
             createdAt: nowIso,
           }]));
           requestScrollToLatest(true);
@@ -1512,9 +1549,33 @@ export default function ChatDetailScreen() {
   const handleInputChange = (value: string) => {
     setInputText(value);
 
+    // Detect @mention
+    const cursorPos = value.length;
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const atMatch = textBeforeCursor.match(/@(\S*)$/);
+    if (atMatch) {
+      setMentionSearchText(atMatch[1]);
+      setIsMentionDropdownVisible(true);
+    } else {
+      setIsMentionDropdownVisible(false);
+      setMentionSearchText('');
+    }
+
     if (canUseRealtimeIndicators && currentUserId && value.trim().length > 0 && conversationId) {
       sendTyping(conversationId, currentUserId);
     }
+  };
+
+  const handleMentionSelect = (user: { userId: string; displayName: string }) => {
+    // Replace @query with @displayName
+    const atMatch = inputText.match(/@(\S*)$/);
+    if (atMatch) {
+      const beforeAt = inputText.slice(0, atMatch.index);
+      const afterMention = `@${user.displayName} `;
+      setInputText(beforeAt + afterMention);
+    }
+    setIsMentionDropdownVisible(false);
+    setMentionSearchText('');
   };
 
   const buildPickedMediaFromUris = useCallback((selectedUris: string[]): PickedMedia[] => {
@@ -2617,6 +2678,48 @@ const renderOlderMessagesLoading = () => {
         );
       }
 
+      // POLL render
+      if ((item.messageType || '').toUpperCase() === 'POLL') {
+        let pollData: any = null;
+        try { pollData = item.poll || JSON.parse(item.content || '{}'); } catch { pollData = item.poll || null; }
+        return (
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            {pollData ? (
+              <PollCard
+                poll={pollData}
+                currentUserId={currentUserId ?? undefined}
+                conversationId={conversationId}
+              />
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: colors.card, borderRadius: 12, marginVertical: 4 }}>
+                <Ionicons name="stats-chart-outline" size={18} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, marginLeft: 6, fontSize: 13 }}>📊 Cuộc thăm dò ý kiến</Text>
+              </View>
+            )}
+          </>
+        );
+      }
+
+      // CALL render
+      if (msgType === 'CALL' || msgType === 'CALL_HISTORY') {
+        let callData: any = {};
+        try { callData = JSON.parse(item.content || '{}'); } catch { callData = {}; }
+        return (
+          <>
+            {replyBlock}
+            {forwardedBanner}
+            <CallHistoryCard
+              callType={callData.callType ?? 'VOICE'}
+              durationSeconds={callData.durationSeconds ?? callData.duration ?? 0}
+              status={callData.status}
+              isCaller={item.senderId === currentUserId}
+            />
+          </>
+        );
+      }
+
       // SHARE_CONTACT render
       if ((item.messageType || '').toUpperCase() === 'SHARE_CONTACT') {
         let contact: { userId?: string; fullName?: string; phoneNumber?: string; avatar?: string } = {};
@@ -2661,6 +2764,11 @@ const renderOlderMessagesLoading = () => {
       }
 
       // Default: TEXT message
+      // Extract URLs for link preview
+      const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
+      const detectedUrls = item.content.match(urlRegex) || [];
+      const linkPreviewUrls = detectedUrls.slice(0, 2); // Max 2 link previews
+
       return (
         <>
           {replyBlock}
@@ -2679,6 +2787,9 @@ const renderOlderMessagesLoading = () => {
               }}
             />
           </View>
+          {linkPreviewUrls.map((url: string, i: number) => (
+            <LinkPreviewCard key={`link-${i}`} url={url} />
+          ))}
           {item.isEdited ? <Text style={[styles.editedLabel, isCurrentUserMessage ? styles.userEditedLabel : { color: colors.textSecondary }]}>{t('chat.edited', 'Đã chỉnh sửa')}</Text> : null}
         </>
       );
@@ -3092,6 +3203,15 @@ const renderOlderMessagesLoading = () => {
           </SafeAreaView>
         </MessageInput>
 
+        {/* Mention Dropdown */}
+        <MentionDropdown
+          visible={isMentionDropdownVisible}
+          conversationId={conversationId}
+          searchText={mentionSearchText}
+          onSelect={handleMentionSelect}
+          onClose={() => { setIsMentionDropdownVisible(false); setMentionSearchText(''); }}
+        />
+
         <Modal
           visible={isMessageActionVisible}
           transparent
@@ -3216,12 +3336,20 @@ const renderOlderMessagesLoading = () => {
                 onPickFile={handlePickFile}
                 onTakePhoto={handleTakePhoto}
                 onShareContact={() => { setIsAttachMenuVisible(false); setIsShareContactVisible(true); }}
+                onCreatePoll={() => { setIsAttachMenuVisible(false); setIsPollModalVisible(true); }}
                 colors={colors}
                 styles={styles}
               />
             </Pressable>
           </Pressable>
         </Modal>
+
+        {/* Poll Create Modal */}
+        <PollCreateModal
+          visible={isPollModalVisible}
+          onClose={() => setIsPollModalVisible(false)}
+          onSubmit={handlePollSubmit}
+        />
 
         <CustomImagePicker
           isVisible={isCustomImagePickerVisible}

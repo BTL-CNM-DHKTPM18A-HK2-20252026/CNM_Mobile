@@ -41,6 +41,7 @@ import {
 } from '@chat/utils/chatHelpers';
 import type { Message, PinnedMessageItem } from '@chat/types/chatTypes';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
+import GroupPermissionsModal from '@chat/components/group/GroupPermissionsModal';
 
 interface ChatInfoPanelProps {
   visible: boolean;
@@ -100,6 +101,8 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   const [infoEditNameValue, setInfoEditNameValue] = useState('');
   const [infoUpdatingGroupName, setInfoUpdatingGroupName] = useState(false);
   const [infoUpdatingGroupAvatar, setInfoUpdatingGroupAvatar] = useState(false);
+  const [infoPermissionsVisible, setInfoPermissionsVisible] = useState(false);
+  const [currentPermissions, setCurrentPermissions] = useState<any>({});
 
   const infoVideoThumbGeneratingRef = useRef<Set<string>>(new Set());
   const infoMediaGalleryRef = useRef<FlatList>(null);
@@ -586,6 +589,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   }, [infoMediaGalleryStartIndex, infoMediaItems.length, isInfoMediaGalleryVisible]);
 
   return (
+    <>
     <Modal visible={props.visible} animationType="slide" onRequestClose={props.onClose}>
       <SafeAreaView style={[styles.infoPanelContainer, { backgroundColor: colors.background }]}>
         <View style={[styles.infoPanelHeader, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
@@ -647,6 +651,12 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
                   </View>
                   <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Tắt {'\n'}thông báo</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.infoPanelQuickAction} onPress={() => setInfoPermissionsVisible(true)}>
+                  <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Ionicons name="settings-outline" size={22} color={colors.text} />
+                  </View>
+                  <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Phân {'\n'}quyền</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -654,7 +664,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
           {/* AI Info */}
           {props.isAiConversation && (
             <View style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.infoPanelSectionTitle, { color: colors.text }]}>Khả năng của Fruvia AI</Text>
+              <Text style={[styles.infoPanelSectionTitle, { color: colors.text }]}>Khả năng của Fruvia Chatbot</Text>
               {['Trả lời câu hỏi thông minh về mọi chủ đề', 'Tạo hình ảnh từ mô tả văn bản', 'Hỗ trợ phân tích tài liệu và file cá nhân'].map((cap) => (
                 <Text key={cap} style={[styles.infoPanelCapItem, { color: colors.textSecondary }]}>• {cap}</Text>
               ))}
@@ -1041,5 +1051,14 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
         </SafeAreaView>
       </Modal>
     </Modal>
+
+      {/* Group Permissions Modal */}
+      <GroupPermissionsModal
+        visible={infoPermissionsVisible}
+        onClose={() => setInfoPermissionsVisible(false)}
+        conversationId={props.conversationId}
+        currentPermissions={currentPermissions}
+      />
+    </>
   );
 }

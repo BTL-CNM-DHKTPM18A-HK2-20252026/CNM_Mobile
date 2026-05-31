@@ -69,15 +69,31 @@ function normalizeToChatItems(data: any[]): ChatItem[] {
     return [];
   }
 
-  return data.map((item) => ({
-    id: item.conversationId,
-    title: item.conversationName || (item.members && item.members.length > 0 ? item.members[0].displayName : 'Unknown'),
-    lastMessage: item.lastMessageContent || 'No messages',
-    avatar: item.conversationAvatarUrl || (item.members && item.members.length > 0 ? item.members[0].avatarUrl : DEFAULT_USER_AVATAR),
-    time: item.lastMessageTime ? formatTimestamp(item.lastMessageTime) : 'New',
-    unreadCount: item.unreadCount || 0,
-    type: item.conversationType === 'PRIVATE' ? 'Default' : 'Cloud', // Adjust based on type
-  }));
+  return data.map((item) => {
+    const conversationTypeRaw = String(item.conversationType ?? '').toUpperCase();
+    const conversationName = String(item.conversationName ?? '').trim().toLowerCase();
+
+    let type: ChatItem['type'] = 'Default';
+    if (conversationTypeRaw === 'SELF') {
+      if (conversationName === 'fruvia ai' || conversationName === 'fruvia chat ai' || conversationName === 'fruvia chatbot') {
+        type = 'AI';
+      } else {
+        type = 'Cloud';
+      }
+    } else if (conversationTypeRaw === 'GROUP') {
+      type = 'Default'; // group hiển thị như chat thường
+    }
+
+    return {
+      id: item.conversationId,
+      title: item.conversationName || (item.members && item.members.length > 0 ? item.members[0].displayName : 'Unknown'),
+      lastMessage: item.lastMessageContent || 'No messages',
+      avatar: item.conversationAvatarUrl || (item.members && item.members.length > 0 ? item.members[0].avatarUrl : DEFAULT_USER_AVATAR),
+      time: item.lastMessageTime ? formatTimestamp(item.lastMessageTime) : 'New',
+      unreadCount: item.unreadCount || 0,
+      type,
+    };
+  });
 }
 
 export default function ChatUI() {

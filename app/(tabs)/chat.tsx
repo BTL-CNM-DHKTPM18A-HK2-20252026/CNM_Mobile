@@ -82,8 +82,8 @@ const DEFAULT_CLOUD_ITEM: ChatItem = {
 
 const DEFAULT_AI_ITEM: ChatItem = {
   id: 'default-ai',
-  title: 'Fruvia AI',
-  lastMessage: 'Hỏi đáp với Fruvia AI',
+  title: 'Fruvia Chatbot',
+  lastMessage: 'Hỏi đáp với Fruvia Chatbot',
   avatarUrl: null,
   timeText: 'Mới',
   unreadCount: 0,
@@ -130,7 +130,7 @@ const WEEK_DAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
 function isAiConversationName(name: string): boolean {
   const normalized = name.trim().toLowerCase();
-  return normalized === 'fruvia ai' || normalized === 'fruvia chat ai';
+  return normalized === 'fruvia ai' || normalized === 'fruvia chat ai' || normalized === 'fruvia chatbot';
 }
 
 function toTimeText(value: unknown): string {
@@ -200,7 +200,7 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
 
     const title =
       isAiConversation
-        ? 'Fruvia AI'
+        ? 'Fruvia Chatbot'
         : isCloudConversation
         ? 'Cloud của tôi'
         : conversationTypeRaw === 'PRIVATE'

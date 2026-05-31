@@ -30,6 +30,8 @@ export interface Message {
   forwardedFromSenderName?: string;
   // IMAGE_GROUP attachments
   attachments?: { url: string; fileName?: string; fileSize?: number; thumbnailUrl?: string }[];
+  // POLL
+  poll?: any;
 }
 
 export interface PinnedMessageItem {
