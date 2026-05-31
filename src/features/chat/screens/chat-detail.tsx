@@ -13,9 +13,6 @@ import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
 import PollCard from '@/components/chat/PollCard';
 import PollCreateModal from '@/components/chat/PollCreateModal';
-import LinkPreviewCard from '@chat/components/message/LinkPreviewCard';
-import CallHistoryCard from '@chat/components/message/CallHistoryCard';
-import MentionDropdown from '@chat/components/input/MentionDropdown';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
 import RichTextRenderer, { extractRichTextPlainText } from '@/components/chat/RichTextRenderer';
 import { ShareContactContent } from '@/components/chat/ShareContactContent';
@@ -27,7 +24,6 @@ import { useChatSocket } from '@/hooks/useChatSocket';
 import useLocalDeleted from '@/hooks/useLocalDeleted';
 import useVoiceRecording from '@/hooks/useVoiceRecording';
 import api from '@/services/api';
-import { fetchConversationMembers } from '@/services/chatConversationMembers';
 import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
@@ -35,17 +31,17 @@ import { getAvatarSource } from '@/services/mediaUtils';
 import { serializePlainTextToTiptapJson } from '@/utils/chat/plainTextToTiptap';
 import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
 import { getSystemMessageContent, isSystemMessage } from '@/utils/chat/systemMessage';
-import { buildSectionedList, getRemainingGroupMemberSlots, isGroupAtCapacity, MAX_GROUP_MEMBERS } from '@/utils/group/groupMembers';
+import { CallOverlay } from '@chat/components/CallOverlay';
+import MentionDropdown from '@chat/components/input/MentionDropdown';
+import CallHistoryCard from '@chat/components/message/CallHistoryCard';
+import LinkPreviewCard from '@chat/components/message/LinkPreviewCard';
 import { Ionicons } from '@expo/vector-icons';
+import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
 import type { AxiosError } from 'axios';
 import { ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as DocumentPicker from 'expo-document-picker';
-import { File, Paths } from 'expo-file-system';
-import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -55,7 +51,6 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
-  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -67,37 +62,46 @@ import {
   Pressable,
   ScrollView,
   StatusBar,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CallOverlay } from '@chat/components/CallOverlay';
 import {
   mapChatPayloadListToUiMessages,
   mapChatPayloadToUiMessage,
-  type ChatUiMessage,
-  type ChatUiReaction,
+  type ChatUiMessage
 } from '../services/chatMessageAdapter';
-import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
 import { webrtcService } from '../services/webrtcService';
 
 
-import type { Message, PinnedMessageItem, ForwardConversationItem, MessagePageResponse, ApiWrappedPayload } from '../types/chatTypes';
-import {
-  BROKER_URL, PAGE_SIZE, SCROLL_TOP_THRESHOLD, AI_TYPING_USER_ID, BLOCK_GAP_MS,
-  MAX_IMAGE_SELECTION, REACTION_EMOJIS, isExpoGo, EMOJI_LIST,
-  SCREEN_WIDTH, SCREEN_HEIGHT,
-} from '../constants/chatConstants';
-import {
-  emojiToReactionType, buildReactionSummary, pad2, toLocalIsoString,
-  parseMessageDate, getMessageMillis, isLikelyUrl, getDisplayFileNameFromValue,
-  getReplySnippet, getForwardAttachmentUrls, stripAiMarkdownMarkers,
-  formatMessageTime, formatDateSeparator, getFileExtensionFromMimeType,
-} from '../utils/chatHelpers';
 import ChatInfoPanel from '../components/ChatInfoPanel';
+import {
+  AI_TYPING_USER_ID, BLOCK_GAP_MS,
+  BROKER_URL,
+  isExpoGo,
+  MAX_IMAGE_SELECTION,
+  PAGE_SIZE,
+  REACTION_EMOJIS,
+  SCROLL_TOP_THRESHOLD
+} from '../constants/chatConstants';
+import type { ApiWrappedPayload, ForwardConversationItem, Message, MessagePageResponse, PinnedMessageItem } from '../types/chatTypes';
+import {
+  buildReactionSummary,
+  emojiToReactionType,
+  formatDateSeparator,
+  formatMessageTime,
+  getDisplayFileNameFromValue,
+  getFileExtensionFromMimeType,
+  getForwardAttachmentUrls,
+  getMessageMillis,
+  getReplySnippet,
+  isLikelyUrl,
+  parseMessageDate,
+  stripAiMarkdownMarkers,
+  toLocalIsoString
+} from '../utils/chatHelpers';
 
 export default function ChatDetailScreen() {
   const router = useRouter();
@@ -268,7 +272,9 @@ export default function ChatDetailScreen() {
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const loadingOlderRef = useRef(false);
-  const shouldScrollToLatestRef = useRef(false);
+  const pendingScrollToLatestRef = useRef(false);
+  const pendingScrollToLatestAnimatedRef = useRef(false);
+  const isAtLatestMessageRef = useRef(true);
   const generatingVideoThumbRef = useRef<Set<string>>(new Set());
   const peerAvatarSource = useMemo(() => getAvatarSource(conversationAvatarUrl), [conversationAvatarUrl]);
   const normalizedName = String(conversationDisplayName ?? '').trim().toLowerCase();
@@ -332,24 +338,16 @@ export default function ChatDetailScreen() {
 
   const logChatDebug = useCallback((_label: string, _payload: unknown) => {}, []);
 
-  const scrollToLatest = useCallback((animated: boolean) => {
-    requestAnimationFrame(() => {
-      flatListRef.current?.scrollToEnd({ animated });
-    });
-  }, []);
-
   const requestScrollToLatest = useCallback((animated: boolean) => {
-    shouldScrollToLatestRef.current = true;
-    requestAnimationFrame(() => {
-      flatListRef.current?.scrollToEnd({ animated });
-    });
+    pendingScrollToLatestRef.current = true;
+    pendingScrollToLatestAnimatedRef.current = animated;
   }, []);
 
   const sortMessages = useCallback((msgs: Message[]): Message[] => {
     return [...msgs].sort((a, b) => {
       const timeA = parseMessageDate(a.createdAt)?.getTime() ?? Number.NaN;
       const timeB = parseMessageDate(b.createdAt)?.getTime() ?? Number.NaN;
-      return timeA - timeB; // ascending: cũ → mới
+      return timeB - timeA; // descending: mới → cũ
     });
   }, []);
 
@@ -1012,7 +1010,7 @@ export default function ChatDetailScreen() {
       let nextHasMoreOlder = hasMore;
 
       if (!silent && nextMessages.length > 0 && nextMessages.length < PAGE_SIZE) {
-        let cursorId = nextMessages[0].messageId;
+        let cursorId = nextMessages[nextMessages.length - 1].messageId;
 
         while (nextMessages.length < PAGE_SIZE && cursorId) {
           const remainingSlots = PAGE_SIZE - nextMessages.length;
@@ -1035,7 +1033,7 @@ export default function ChatDetailScreen() {
           }
 
           nextMessages = mergeUniqueMessages(nextMessages, olderSorted);
-          cursorId = nextMessages[0]?.messageId ?? cursorId;
+          cursorId = nextMessages[nextMessages.length - 1]?.messageId ?? cursorId;
           nextHasMoreOlder = olderHasMore;
 
           if (olderSorted.length < remainingSlots) {
@@ -1071,12 +1069,13 @@ export default function ChatDetailScreen() {
         const filteredNext = nextMessages.filter(m => !localDeleted.isDeleted(String(m.messageId)));
         setMessages((prev) => (isSameMessageList(prev, filteredNext) ? prev : filteredNext));
         setHasMoreOlder(nextHasMoreOlder);
-        shouldScrollToLatestRef.current = true;
+        pendingScrollToLatestRef.current = true;
+        pendingScrollToLatestAnimatedRef.current = false;
       }
 
-      const lastMessage = nextMessages[nextMessages.length - 1];
-      if (uid && lastMessage?.messageId && canUseRealtimeIndicators) {
-        sendReadReceipt(conversationId, uid, lastMessage.messageId);
+      const latestMessage = nextMessages[0];
+      if (uid && latestMessage?.messageId && canUseRealtimeIndicators) {
+        sendReadReceipt(conversationId, uid, latestMessage.messageId);
       }
     } catch (error) {
       if (!silent) {
@@ -1102,7 +1101,7 @@ export default function ChatDetailScreen() {
       return;
     }
 
-    const oldestLoadedMessageId = messages[0]?.messageId;
+    const oldestLoadedMessageId = messages[messages.length - 1]?.messageId;
     if (!oldestLoadedMessageId) {
       return;
     }
@@ -1310,13 +1309,6 @@ export default function ChatDetailScreen() {
   }, [isShareContactVisible]);
 
   useEffect(() => {
-    if (shouldScrollToLatestRef.current && messages.length > 0) {
-      shouldScrollToLatestRef.current = false;
-      scrollToLatest(false);
-    }
-  }, [messages.length, scrollToLatest]);
-
-  useEffect(() => {
     messages.forEach((message) => {
       const isVideoMessage = (message.messageType || '').toUpperCase() === 'VIDEO';
       if (!isVideoMessage || message.isRecalled) {
@@ -1376,10 +1368,33 @@ export default function ChatDetailScreen() {
   }, [currentUserId, loadInitialMessages]);
 
   const handleMessageListScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (event.nativeEvent.contentOffset.y <= SCROLL_TOP_THRESHOLD) {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const offsetY = contentOffset.y;
+    const olderEdgeOffset = Math.max(0, contentSize.height - layoutMeasurement.height - SCROLL_TOP_THRESHOLD);
+
+    isAtLatestMessageRef.current = offsetY <= SCROLL_TOP_THRESHOLD;
+
+    if (offsetY >= olderEdgeOffset) {
       void loadOlderMessages();
     }
   };
+
+  const handleMessageListContentSizeChange = useCallback(() => {
+    if (!pendingScrollToLatestRef.current) {
+      return;
+    }
+
+    if (!isAtLatestMessageRef.current) {
+      pendingScrollToLatestRef.current = false;
+      pendingScrollToLatestAnimatedRef.current = false;
+      return;
+    }
+
+    pendingScrollToLatestRef.current = false;
+    const animated = pendingScrollToLatestAnimatedRef.current;
+    pendingScrollToLatestAnimatedRef.current = false;
+    flatListRef.current?.scrollToOffset({ offset: 0, animated });
+  }, []);
 
   const sendTextMessagesSequentially = useCallback(async (content: string, replyToMessageId?: string) => {
     if (!conversationId) {
@@ -2192,7 +2207,7 @@ export default function ChatDetailScreen() {
           return fallbackMessages;
         }
 
-        let cursorId = fallbackMessages[0]?.messageId;
+        let cursorId = fallbackMessages[fallbackMessages.length - 1]?.messageId;
         for (let page = 0; page < 8 && cursorId; page += 1) {
           const olderResponse = await chatService.getMessagesBefore(conversationId, cursorId, 40);
           const olderParsed = parsePageResult(olderResponse, 40);
@@ -2207,7 +2222,7 @@ export default function ChatDetailScreen() {
             return fallbackMessages;
           }
 
-          cursorId = fallbackMessages[0]?.messageId;
+          cursorId = fallbackMessages[fallbackMessages.length - 1]?.messageId;
         }
 
         return [] as Message[];
@@ -2305,18 +2320,18 @@ const renderOlderMessagesLoading = () => {
     }
 
     const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
-    const prevMessage = index > 0 ? displayMessages[index - 1] : undefined;
-    const nextMessage = index < displayMessages.length - 1 ? displayMessages[index + 1] : undefined;
-    const showAvatar = !isCurrentUserMessage && isFirstInMessageBlock(item, prevMessage);
+    const newerMessage = index > 0 ? messages[index - 1] : undefined;
+    const olderMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
+    const showAvatar = !isCurrentUserMessage && isFirstInMessageBlock(item, olderMessage);
     const showSenderName = isGroupConversation && showAvatar;
     const senderDisplayName = (item.senderName || '').trim() || t('chat.unknown_user', 'Người dùng');
     const senderAvatarSource = showAvatar
       ? getAvatarSource(item.senderAvatarUrl || (isGroupConversation ? undefined : conversationAvatarUrl))
       : null;
-    const showTimestamp = shouldShowMessageTimestamp(item, nextMessage);
+    const showTimestamp = shouldShowMessageTimestamp(item, newerMessage);
     const timeLabel = formatMessageTime(item.createdAt);
     const reactionSummary = buildReactionSummary(item.reactions);
-    const showDateSep = shouldShowDateSeparator(item, prevMessage);
+    const showDateSep = shouldShowDateSeparator(item, olderMessage);
     const dateSepLabel = showDateSep ? formatDateSeparator(item.createdAt) : null;
 
     const msgType = (item.messageType || 'TEXT').toUpperCase();
@@ -3026,18 +3041,17 @@ const renderOlderMessagesLoading = () => {
           messages={messages}
           renderItem={renderMessage as any}
           contentContainerStyle={styles.messagesList}
+          inverted={true}
           scrollEnabled={true}
           keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={renderOlderMessagesLoading}
+          ListFooterComponent={renderOlderMessagesLoading}
           onScroll={handleMessageListScroll}
+          onContentSizeChange={handleMessageListContentSizeChange}
           scrollEventThrottle={16}
           removeClippedSubviews={Platform.OS === 'android'}
           initialNumToRender={15}
           maxToRenderPerBatch={10}
           windowSize={10}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-          }}
           onScrollToIndexFailed={(info: any) => {
             flatListRef.current?.scrollToOffset({
               offset: info.averageItemLength * info.index,
