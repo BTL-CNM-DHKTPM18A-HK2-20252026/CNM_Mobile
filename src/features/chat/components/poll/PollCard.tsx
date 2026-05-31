@@ -245,17 +245,19 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 12,
+    alignSelf: 'center',
+    width: '94%',
+    maxWidth: 360,
+    borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
-    marginVertical: 4,
-    maxWidth: 320,
+    marginVertical: 6,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   headerIcon: {
     fontSize: 22,
@@ -264,13 +266,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1,
     color: 'rgba(255,255,255,0.9)',
   },
   headerQuestion: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
     color: '#fff',
     marginTop: 2,
@@ -295,20 +297,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   optionsContainer: {
-    padding: 12,
-    paddingBottom: 8,
+    padding: 14,
+    paddingBottom: 10,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    minHeight: 56,
+    borderRadius: 10,
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   progressBar: {
     position: 'absolute',
@@ -357,8 +360,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0068FF',
   },
   optionText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     flex: 1,
   },
   voterInline: {
@@ -366,7 +369,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   percentText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0068FF',
     zIndex: 1,

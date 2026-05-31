@@ -3023,6 +3023,34 @@ const renderOlderMessagesLoading = () => {
 
     const mediaContent = renderMediaContent();
 
+    // POLL: render centered in its row instead of inside the normal message bubble
+    if (msgType === 'POLL') {
+      return (
+        <View style={[styles.messageContainer, { marginBottom: isLastInMessageBlock ? (showTimestamp ? 12 : 6) : 2 }]}> 
+          {dateSepLabel ? (
+            <View style={styles.dateSeparator}>
+              <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
+            </View>
+          ) : null}
+
+          <View style={{ alignItems: 'center', paddingHorizontal: 10 }}>
+            <TouchableOpacity
+              activeOpacity={1}
+              onLongPress={() => openMessageActionMenu(item)}
+              delayLongPress={220}
+              style={{ alignSelf: 'center', width: '100%', maxWidth: 360 }}
+            >
+              {mediaContent}
+            </TouchableOpacity>
+          </View>
+
+          {showTimestamp ? (
+            <Text style={[styles.timestamp, isCurrentUserMessage ? styles.timestampRight : styles.timestampLeft]}>{timeLabel}</Text>
+          ) : null}
+        </View>
+      );
+    }
+
     // STICKER: render without bubble wrapper
     if (isStickerMsg) {
       return (
