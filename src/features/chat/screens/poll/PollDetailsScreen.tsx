@@ -1,3 +1,4 @@
+import DeadlinePicker from '@/components/chat/DeadlinePicker';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -38,6 +39,19 @@ export default function PollDetailsScreen() {
   const [editDeadlineHour, setEditDeadlineHour] = useState('');
   const [editDeadlineMinute, setEditDeadlineMinute] = useState('');
   const [editDeadlineSecond, setEditDeadlineSecond] = useState('00');
+  const [deadlineDate, setDeadlineDate] = useState('');
+  const [deadlineTime, setDeadlineTime] = useState('');
+  const [deadlinePickerVisible, setDeadlinePickerVisible] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const next = new Date();
+    next.setHours(0, 0, 0, 0);
+    return next;
+  });
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [timeHour, setTimeHour] = useState('12');
+  const [timeMinute, setTimeMinute] = useState('00');
+  const [timeAmPm, setTimeAmPm] = useState<'AM' | 'PM'>('PM');
 
   const formatLocalDateTime = (date: Date) => {
     const pad = (value: number) => String(value).padStart(2, '0');
@@ -75,6 +89,46 @@ export default function PollDetailsScreen() {
       minute: pad(parsed.getMinutes()),
       second: pad(parsed.getSeconds()),
     };
+  };
+
+  const formatDateValue = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+
+  const formatDateLabel = (value: string) => {
+    const parsed = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return value;
+    const pad = (v: number) => String(v).padStart(2, '0');
+    return `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}/${parsed.getFullYear()}`;
+  };
+
+  const formatTime12From24 = (time24: string) => {
+    const m = time24.match(/^(\d{2}):(\d{2})$/);
+    if (!m) return time24;
+    let hh = Number.parseInt(m[1], 10);
+    const mm = m[2];
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    hh = hh % 12 === 0 ? 12 : hh % 12;
+    return `${String(hh).padStart(2, '0')}:${mm} ${ampm}`;
+  };
+
+  const buildDeadlineFromDateTime = () => {
+    const [datePart, timePart] = [deadlineDate.trim(), deadlineTime.trim()];
+    if (!datePart || !timePart) return undefined;
+    const dateMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const timeMatch = timePart.match(/^(\d{2}):(\d{2})$/);
+    if (!dateMatch || !timeMatch) return undefined;
+    const [, yearStr, monthStr, dayStr] = dateMatch;
+    const [, hourStr, minuteStr] = timeMatch;
+    const year = Number.parseInt(yearStr, 10);
+    const month = Number.parseInt(monthStr, 10);
+    const day = Number.parseInt(dayStr, 10);
+    const hour = Number.parseInt(hourStr, 10);
+    const minute = Number.parseInt(minuteStr, 10);
+    const next = new Date(year, month - 1, day, hour, minute, 0);
+    if (Number.isNaN(next.getTime())) return undefined;
+    return formatLocalDateTime(next);
   };
 
   useEffect(() => {
@@ -276,6 +330,25 @@ export default function PollDetailsScreen() {
     setEditDeadlineHour(deadlineState.hour);
     setEditDeadlineMinute(deadlineState.minute);
     setEditDeadlineSecond(deadlineState.second);
+    // initialize picker-friendly state
+    if (deadlineState.year && deadlineState.month && deadlineState.day) {
+      setDeadlineDate(`${deadlineState.year}-${deadlineState.month}-${deadlineState.day}`);
+      const hh = deadlineState.hour || '00';
+      const mm = deadlineState.minute || '00';
+      setDeadlineTime(`${hh}:${mm}`);
+      // set wheel state
+      let hourNum = Number.parseInt(hh, 10) || 0;
+      const ampm: 'AM' | 'PM' = hourNum >= 12 ? 'PM' : 'AM';
+      hourNum = hourNum % 12 === 0 ? 12 : hourNum % 12;
+      setTimeHour(String(hourNum).padStart(2, '0'));
+      setTimeMinute(mm.padStart(2, '0'));
+      setTimeAmPm(ampm);
+      const parsedMonth = new Date(Number.parseInt(deadlineState.year, 10), Number.parseInt(deadlineState.month, 10) - 1, 1);
+      if (!Number.isNaN(parsedMonth.getTime())) setCalendarMonth(parsedMonth);
+    } else {
+      setDeadlineDate('');
+      setDeadlineTime('');
+    }
     setIsEditingSettings(true);
   };
 
@@ -404,7 +477,7 @@ export default function PollDetailsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={[styles.meta, { color: colors.subText }]}>{totalVoters} người đã bình chọn</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>{totalVoters} người đã bình chọn</Text>
 
         <Text style={[styles.pollType, { color: colors.textSecondary }]}> {poll.multipleChoices ? 'Chọn được nhiều phương án' : 'Chọn một phương án'} </Text>
 
@@ -465,13 +538,13 @@ export default function PollDetailsScreen() {
               value={newOptionText}
               onChangeText={setNewOptionText}
               placeholder="Nhập nội dung phương án"
-              placeholderTextColor={colors.subText}
+              placeholderTextColor={colors.textPlaceholder}
               style={[styles.modalInput, { borderColor: colors.border, color: colors.text }]}
               multiline
             />
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setAddingOption(false)} style={styles.modalBtn}>
-                <Text style={{ color: colors.subText }}>Huỷ</Text>
+                <Text style={{ color: colors.textSecondary }}>Huỷ</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleSubmitNewOption} style={[styles.modalBtn, { opacity: addOptionLoading ? 0.6 : 1 }]} disabled={addOptionLoading}>
                 <Text style={{ color: '#0068FF', fontWeight: '700' }}>{addOptionLoading ? '...' : 'Thêm'}</Text>
@@ -490,23 +563,21 @@ export default function PollDetailsScreen() {
               <ToggleRow label="Cho phép thêm phương án" value={editAllowAddOptions} onPress={() => setEditAllowAddOptions((s) => !s)} colors={colors} />
 
               <Text style={[styles.settingLabel, { color: colors.text, marginTop: 10, marginBottom: 6 }]}>Hạn chót</Text>
-              <View style={styles.deadlineGrid}>
-                <DeadlineField label="Năm" value={editDeadlineYear} onChangeText={setEditDeadlineYear} placeholder="2026" colors={colors} />
-                <DeadlineField label="Tháng" value={editDeadlineMonth} onChangeText={setEditDeadlineMonth} placeholder="06" colors={colors} />
-                <DeadlineField label="Ngày" value={editDeadlineDay} onChangeText={setEditDeadlineDay} placeholder="01" colors={colors} />
-                <DeadlineField label="Giờ" value={editDeadlineHour} onChangeText={setEditDeadlineHour} placeholder="18" colors={colors} />
-                <DeadlineField label="Phút" value={editDeadlineMinute} onChangeText={setEditDeadlineMinute} placeholder="30" colors={colors} />
-                <DeadlineField label="Giây" value={editDeadlineSecond} onChangeText={setEditDeadlineSecond} placeholder="00" colors={colors} />
-              </View>
-
-              <Text style={[styles.deadlinePreview, { color: colors.textSecondary }]}> 
-                {buildDeadlineFromState() ? `Đã chọn: ${buildDeadlineFromState()}` : 'Chưa chọn hoặc nhập chưa đủ hạn chót'}
-              </Text>
+              <TouchableOpacity
+                onPress={() => setDeadlinePickerVisible(true)}
+                style={{ paddingVertical: 10 }}
+                activeOpacity={0.85}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>{deadlineDate && deadlineTime ? `${formatTime12From24(deadlineTime)} ${formatDateLabel(deadlineDate)}` : (poll.deadline ? (new Date(poll.deadline).toString()) : 'Chưa đặt')}</Text>
+                  <Text style={{ color: '#0068FF', fontWeight: '600' }}>Chọn</Text>
+                </View>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setIsEditingSettings(false)} style={styles.modalBtn}>
-                <Text style={{ color: colors.subText }}>Huỷ</Text>
+                <Text style={{ color: colors.textSecondary }}>Huỷ</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={submitEditSettings} style={[styles.modalBtn, { opacity: isSubmitting ? 0.6 : 1 }]} disabled={isSubmitting}>
                 <Text style={{ color: '#0068FF', fontWeight: '700' }}>{isSubmitting ? '...' : 'Lưu'}</Text>
@@ -515,6 +586,137 @@ export default function PollDetailsScreen() {
           </View>
         </View>
       </Modal>
+      <DeadlinePicker
+        visible={deadlinePickerVisible}
+        initial={poll?.deadline ?? undefined}
+        onClose={() => setDeadlinePickerVisible(false)}
+        onConfirm={(iso: string | undefined) => {
+          if (iso) {
+            const parsed = parseDeadlineToState(iso);
+            setEditDeadlineYear(parsed.year);
+            setEditDeadlineMonth(parsed.month);
+            setEditDeadlineDay(parsed.day);
+            setEditDeadlineHour(parsed.hour);
+            setEditDeadlineMinute(parsed.minute);
+            setEditDeadlineSecond(parsed.second);
+          }
+          setDeadlinePickerVisible(false);
+        }}
+      />
+
+        <Modal visible={timePickerVisible} transparent animationType="fade" onRequestClose={() => setTimePickerVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Chọn giờ</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+                <View style={{ width: '30%', maxHeight: 200 }}>
+                  <ScrollView>
+                    {Array.from({ length: 12 }).map((_, i) => {
+                      const hh = String(i + 1).padStart(2, '0');
+                      const selected = timeHour === hh;
+                      return (
+                        <TouchableOpacity key={hh} onPress={() => setTimeHour(hh)} style={{ paddingVertical: 10, alignItems: 'center', backgroundColor: selected ? '#0068FF14' : 'transparent', borderRadius: 8 }}>
+                          <Text style={{ color: selected ? '#0068FF' : colors.text }}>{hh}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+                <View style={{ width: '30%', maxHeight: 200 }}>
+                  <ScrollView>
+                    {['00', '15', '30', '45'].map((mm) => {
+                      const selected = timeMinute === mm;
+                      return (
+                        <TouchableOpacity key={mm} onPress={() => setTimeMinute(mm)} style={{ paddingVertical: 10, alignItems: 'center', backgroundColor: selected ? '#0068FF14' : 'transparent', borderRadius: 8 }}>
+                          <Text style={{ color: selected ? '#0068FF' : colors.text }}>{mm}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+                <View style={{ width: '30%', maxHeight: 200 }}>
+                  <ScrollView>
+                    {['AM', 'PM'].map((ap) => {
+                      const selected = timeAmPm === ap;
+                      return (
+                        <TouchableOpacity key={ap} onPress={() => setTimeAmPm(ap as 'AM' | 'PM')} style={{ paddingVertical: 10, alignItems: 'center', backgroundColor: selected ? '#0068FF14' : 'transparent', borderRadius: 8 }}>
+                          <Text style={{ color: selected ? '#0068FF' : colors.text }}>{ap}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+              <View style={styles.modalActions}>
+                <TouchableOpacity onPress={() => setTimePickerVisible(false)} style={styles.modalBtn}>
+                  <Text style={{ color: colors.textSecondary }}>Huỷ</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    let hh = Number.parseInt(timeHour, 10);
+                    if (timeAmPm === 'PM' && hh < 12) hh += 12;
+                    if (timeAmPm === 'AM' && hh === 12) hh = 0;
+                    const hhStr = String(hh).padStart(2, '0');
+                    setDeadlineTime(`${hhStr}:${timeMinute}`);
+                    setTimePickerVisible(false);
+                  }}
+                  style={styles.modalBtn}
+                >
+                  <Text style={{ color: '#0068FF', fontWeight: '700' }}>Chọn</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={calendarVisible} transparent animationType="fade" onRequestClose={() => setCalendarVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#0068FF14' }}>
+                  <Text style={{ color: '#0068FF', fontSize: 18 }}>‹</Text>
+                </TouchableOpacity>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>{`${calendarMonth.getMonth() + 1}/${calendarMonth.getFullYear()}`}</Text>
+                <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#0068FF14' }}>
+                  <Text style={{ color: '#0068FF', fontSize: 18 }}>›</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                  {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((item) => (
+                <Text key={item} style={{ width: 34, textAlign: 'center', fontSize: 12, fontWeight: '600', color: colors.textSecondary }}>{item}</Text>
+              ))}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {(() => {
+                  const start = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+                  const end = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+                  const daysInMonth = end.getDate();
+                  const firstDay = (start.getDay() + 6) % 7;
+                  const cells: any[] = [];
+                  for (let i = 0; i < firstDay; i += 1) cells.push({ empty: true, key: `e-${i}` });
+                  for (let d = 1; d <= daysInMonth; d += 1) cells.push({ date: new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), d), key: `${d}` });
+                  return cells.map((item) => {
+                    if (item.empty) return <View key={item.key} style={{ width: '14.2857%', aspectRatio: 1 }} />;
+                    const value = formatDateValue(item.date);
+                    const selected = deadlineDate === value;
+                    const today = formatDateValue(new Date()) === value;
+                    return (
+                      <TouchableOpacity key={item.key} onPress={() => { setDeadlineDate(value); setCalendarVisible(false); }} style={{ width: '14.2857%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: selected ? '#0068FF' : 'transparent', backgroundColor: selected ? '#0068FF14' : 'transparent' }}>
+                        <Text style={{ color: selected ? '#0068FF' : colors.text, fontWeight: '600' }}>{item.date.getDate()}</Text>
+                        {today ? <View style={{ marginTop: 4, width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#0068FF' }} /> : null}
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
+              </View>
+              <View style={styles.modalActions}>
+                <TouchableOpacity onPress={() => setCalendarVisible(false)} style={styles.modalBtn}>
+                  <Text style={{ color: colors.textSecondary }}>Đóng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
     </SafeAreaView>
   );
 }
@@ -535,7 +737,7 @@ function ToggleRow({
       <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
       <TouchableOpacity onPress={onPress} style={[styles.togglePill, value ? styles.togglePillOn : styles.togglePillOff]}>
         <View style={[styles.toggleKnob, value ? styles.toggleKnobOn : styles.toggleKnobOff]} />
-        <Text style={[styles.toggleText, { color: value ? '#fff' : colors.subText }]}>{value ? 'ON' : 'OFF'}</Text>
+        <Text style={[styles.toggleText, { color: value ? '#fff' : colors.textSecondary }]}>{value ? 'ON' : 'OFF'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -634,4 +836,5 @@ const styles = StyleSheet.create({
   deadlineField: { width: '31%' },
   deadlineFieldLabel: { fontSize: 12, marginBottom: 4 },
   deadlineFieldInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 10, fontSize: 14, textAlign: 'center' },
+  settingLabel: { fontSize: 14, flex: 1 },
 });
