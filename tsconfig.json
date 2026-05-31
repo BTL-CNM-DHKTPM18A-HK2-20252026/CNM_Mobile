@@ -3,16 +3,26 @@
   "compilerOptions": {
     "jsx": "react",
     "strict": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@features/*": ["src/features/*"],
+      "@shared/*": ["src/shared/*"],
+      "@chat/*": ["src/features/chat/*"],
+      "@auth/*": ["src/features/auth/*"],
+      "@social/*": ["src/features/social/*"],
+      "@friends/*": ["src/features/friends/*"],
+      "@user/*": ["src/features/user/*"],
+      "@notification/*": ["src/features/notification/*"]
     }
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     "**/*.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ]

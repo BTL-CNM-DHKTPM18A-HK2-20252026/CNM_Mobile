@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { webrtcService, CallState, CallInfo } from '../services/webrtcService';
+import { webrtcService, CallState, CallInfo } from '@chat/services/webrtcService';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@react-navigation/native';
 

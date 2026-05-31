@@ -1,0 +1,30 @@
+import React from 'react';
+import { Text, TouchableOpacity } from 'react-native';
+
+interface Props {
+  senderLabel: string;
+  snippet: string;
+  onPress: () => void;
+  isCurrentUserMessage?: boolean;
+  styles: any;
+  colors?: any;
+}
+
+export const ReplySnippet: React.FC<Props> = ({ senderLabel, snippet, onPress, isCurrentUserMessage, styles }) => {
+  return (
+    <TouchableOpacity
+      style={[styles.replySnippetBlock, isCurrentUserMessage ? styles.replySnippetBlockUser : styles.replySnippetBlockOther]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.replySnippetSender, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]} numberOfLines={1}>
+        {senderLabel}
+      </Text>
+      <Text style={[styles.replySnippetText, { color: isCurrentUserMessage ? 'rgba(255,255,255,0.8)' : '#7a7a7a' }]} numberOfLines={2}>
+        {snippet}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+export default ReplySnippet;
