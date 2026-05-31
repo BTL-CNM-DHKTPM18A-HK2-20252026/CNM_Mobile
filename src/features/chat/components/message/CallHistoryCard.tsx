@@ -1,13 +1,12 @@
+import { useTheme } from '@/context/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/context/ThemeContext';
-import { useTranslation } from 'react-i18next';
 
 interface CallHistoryCardProps {
   callType?: string; // 'VOICE' | 'VIDEO' | 'GROUP_VOICE' | 'GROUP_VIDEO'
@@ -60,60 +59,49 @@ export default function CallHistoryCard({ callType, durationSeconds, status, isC
   }
 
   const durationText = durationSeconds ? formatDuration(durationSeconds) : '';
-  const directionText = isCaller
-    ? t('chat.call.outgoing', 'Đã gọi')
-    : t('chat.call.incoming', 'Đã nhận');
+  const bubbleText = isMissed ? label : durationText || t('chat.call.incoming', 'Đã nhận');
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.bubble, { backgroundColor: colors.card }]}>
       <View style={[styles.iconWrap, { backgroundColor: `${iconColor}18` }]}>
-        <Ionicons name={icon} size={20} color={iconColor} />
+        <Ionicons name={icon} size={18} color={iconColor} />
       </View>
-      <View style={styles.info}>
-        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {[directionText, durationText].filter(Boolean).join(' · ')}
-        </Text>
-      </View>
-      {!isMissed && durationSeconds ? (
-        <Text style={[styles.duration, { color: colors.textSecondary }]}>{formatDuration(durationSeconds)}</Text>
-      ) : null}
+      <Text
+        style={[
+          styles.bubbleText,
+          { color: isMissed ? iconColor : colors.textSecondary },
+        ]}
+        numberOfLines={1}
+      >
+        {bubbleText}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  bubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 10,
-    maxWidth: 280,
-    marginTop: 2,
+    alignSelf: 'flex-start',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 32,
+    maxWidth: '100%',
+    overflow: 'hidden',
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
-  info: {
-    flex: 1,
-  },
-  label: {
+  bubbleText: {
     fontSize: 14,
     fontWeight: '600',
-  },
-  meta: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  duration: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 8,
+    lineHeight: 18,
   },
 });
