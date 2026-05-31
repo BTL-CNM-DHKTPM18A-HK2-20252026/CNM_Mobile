@@ -1,33 +1,30 @@
-import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface PollCardProps {
   poll: any;
   currentUserId?: string;
   conversationId: string;
+  messageId?: string;
   onClose?: () => void;
 }
 
-export default function PollCard({ poll, currentUserId, conversationId, onClose }: PollCardProps) {
+import { useRouter } from 'expo-router';
+
+export default function PollCard({ poll, currentUserId, conversationId, messageId, onClose }: PollCardProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const router = useRouter();
 
   if (!poll) return null;
 
@@ -113,11 +110,24 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
         <Text style={[styles.settingsText, { color: colors.subText }]}>
           {poll.multipleChoices ? 'Chọn nhiều phương án' : 'Chọn một phương án'}
         </Text>
-        {poll.hideVoters && (
-          <Text style={[styles.badge, { backgroundColor: isDark ? '#333' : '#e0e0e0', color: colors.subText }]}>
-            Ẩn danh
-          </Text>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {poll.hideVoters && (
+            <Text style={[styles.badge, { backgroundColor: isDark ? '#333' : '#e0e0e0', color: colors.subText }]}>Ẩn danh</Text>
+          )}
+          <TouchableOpacity onPress={() => {
+            if (!messageId) return;
+            router.push({
+              pathname: '/poll-details',
+              params: {
+                messageId: String(messageId),
+                conversationId: String(conversationId),
+                poll: JSON.stringify(poll),
+              },
+            });
+          }}>
+            <Text style={{ color: '#0B74FF', fontWeight: '700' }}>{(poll && poll.options) ? (new Set((poll.options || []).flatMap((o: any) => o.voterIds || [])).size) : 0} người bình chọn</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Options */}
