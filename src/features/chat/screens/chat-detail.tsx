@@ -2918,10 +2918,7 @@ const renderOlderMessagesLoading = () => {
                   {...({ poll: pollData, currentUserId: currentUserId || undefined, conversationId, messageId: String(item.messageId), readOnly: true } as any)}
                 />
               ) : null}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: colors.card, borderRadius: 12, marginVertical: 4 }}>
-                <Ionicons name="stats-chart-outline" size={18} color={colors.textSecondary} />
-                <Text style={{ color: colors.textSecondary, marginLeft: 6, fontSize: 13 }}>📊 Cuộc thăm dò ý kiến</Text>
-              </View>
+              
           </>
         );
       }

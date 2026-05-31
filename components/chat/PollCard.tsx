@@ -1,6 +1,6 @@
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -78,13 +78,35 @@ export default function PollCard({ poll, currentUserId, conversationId, messageI
     }
   };
 
+  // Show only top 3 options in the preview: by percent desc, tie-breaker by original order
+  const displayOptions = useMemo(() => {
+    const opts = Array.isArray(poll.options) ? poll.options : [];
+    if (opts.length <= 3) return opts;
+
+    // If results are hidden, just show the first 3 options in original order
+    if (!showResults) return opts.slice(0, 3);
+
+    const withMeta = opts.map((o: any, i: number) => {
+      const optVotes = o.voterIds?.length || 0;
+      const percent = totalUniqueVoters > 0 ? Math.round((optVotes / totalUniqueVoters) * 100) : 0;
+      return { opt: o, idx: i, percent, votes: optVotes } as { opt: any; idx: number; percent: number; votes: number };
+    }) as { opt: any; idx: number; percent: number; votes: number }[];
+
+    withMeta.sort((a: { opt: any; idx: number; percent: number; votes: number }, b: { opt: any; idx: number; percent: number; votes: number }) => {
+      if (b.percent !== a.percent) return b.percent - a.percent; // higher percent first
+      return a.idx - b.idx; // tie-break by original index (ascending)
+    });
+
+    return withMeta.slice(0, 3).map((m: { opt: any; idx: number; percent: number; votes: number }) => m.opt);
+  }, [poll.options, showResults, totalUniqueVoters]);
+
   return (
     <View style={[styles.container, { borderColor: colors.border, backgroundColor: colors.card }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: '#0068FF' }]}>
         <Text style={styles.headerIcon}>📊</Text>
         <View style={styles.headerText}>
-          <Text style={styles.headerLabel}>BÌNH CHỌN NHÓM</Text>
+          <Text style={styles.headerLabel}>CUỘC BÌNH CHỌN</Text>
           <Text style={styles.headerQuestion} numberOfLines={2}>{poll.question}</Text>
         </View>
       </View>
@@ -116,7 +138,7 @@ export default function PollCard({ poll, currentUserId, conversationId, messageI
 
       {/* Options */}
       <View style={styles.optionsContainer}>
-        {(poll.options || []).map((opt: any, idx: number) => {
+        {(displayOptions || []).map((opt: any, idx: number) => {
           const optVotes = opt.voterIds?.length || 0;
           const percent = showResults ? (totalUniqueVoters > 0 ? Math.round((optVotes / totalUniqueVoters) * 100) : 0) : 0;
           const isSelected = selectedOptionIds.includes(opt.optionId);
@@ -126,10 +148,7 @@ export default function PollCard({ poll, currentUserId, conversationId, messageI
               key={opt.optionId}
               style={[
                 styles.optionRow,
-                {
-                  borderColor: isSelected ? '#0068FF' : colors.border,
-                  backgroundColor: isSelected ? (isDark ? '#1a2744' : '#f0f6ff') : colors.card,
-                },
+                { borderColor: colors.border, backgroundColor: colors.card },
               ]}
               onPress={readOnly ? undefined : () => handleOptionClick(opt.optionId)}
               disabled={isSubmitting || Boolean(readOnly)}
