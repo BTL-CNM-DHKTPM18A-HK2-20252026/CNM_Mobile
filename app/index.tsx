@@ -1,12 +1,11 @@
-import React, { useState, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, FlatList, Dimensions, NativeScrollEvent, NativeSyntheticEvent, Modal, StatusBar } from 'react-native';
-import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useTranslation } from 'react-i18next';
 import { COLORS, SIZES } from '@/constants/theme';
 import { authService } from '@/services/authService';
-import { useEffect } from 'react';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Dimensions, FlatList, NativeScrollEvent, NativeSyntheticEvent, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 

@@ -1,12 +1,13 @@
-import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { PresenceProvider } from '@/context/PresenceContext';
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import '@/i18n';
+import { authService } from '@/services/authService';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavigationProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import 'react-native-reanimated';
-import { authService } from '@/services/authService';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const AUTH_ROUTES = new Set(['index', 'login', 'password', 'forgot-password', 'register']);
 
@@ -72,10 +73,12 @@ function RootLayoutContent() {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <PresenceProvider>
-      <RootLayoutContent />
-          </PresenceProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <PresenceProvider>
+          <RootLayoutContent />
+        </PresenceProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

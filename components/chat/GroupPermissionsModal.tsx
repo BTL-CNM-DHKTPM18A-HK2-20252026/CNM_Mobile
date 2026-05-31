@@ -1,4 +1,3 @@
-import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
 import React, { useCallback, useState } from 'react';
@@ -23,24 +22,16 @@ interface GroupPermissionsModalProps {
   currentPermissions: {
     canEditInfo?: boolean;
     canPinMessages?: boolean;
-    canCreateNotes?: boolean;
-    canCreatePolls?: boolean;
     canSendMessages?: boolean;
     isMemberApprovalRequired?: boolean;
-    isHighlightAdminMessages?: boolean;
-    canNewMembersReadRecentMessages?: boolean;
   };
 }
 
 const PERMISSIONS = [
   { key: 'canEditInfo', label: 'Chỉnh sửa thông tin nhóm', description: 'Cho phép thành viên sửa tên, ảnh nhóm' },
   { key: 'canPinMessages', label: 'Ghim tin nhắn', description: 'Cho phép thành viên ghim/bỏ ghim tin nhắn' },
-  { key: 'canCreateNotes', label: 'Tạo ghi chú', description: 'Cho phép thành viên tạo ghi chú' },
-  { key: 'canCreatePolls', label: 'Tạo bình chọn', description: 'Cho phép thành viên tạo bình chọn' },
   { key: 'canSendMessages', label: 'Gửi tin nhắn', description: 'Cho phép thành viên gửi tin nhắn' },
   { key: 'isMemberApprovalRequired', label: 'Duyệt thành viên', description: 'Admin phải duyệt khi có thành viên mới' },
-  { key: 'isHighlightAdminMessages', label: 'Làm nổi bật tin nhắn QTV', description: 'Tin nhắn của QTV được highlight' },
-  { key: 'canNewMembersReadRecentMessages', label: 'Thành viên mới xem tin cũ', description: 'Cho phép TV mới đọc tin nhắn trước đó' },
 ];
 
 export default function GroupPermissionsModal({

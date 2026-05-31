@@ -69,6 +69,11 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  checkPinMessagePermission,
+  checkSendMessagePermission,
+  type ConversationPermissions,
+} from '../../../../utils/permissionHelper';
 import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
   mapChatPayloadListToUiMessages,
@@ -146,6 +151,12 @@ export default function ChatDetailScreen() {
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [isSearchingLoading, setIsSearchingLoading] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipPermissionsFetchRef = useRef(false);
+
+  // ========== PERMISSIONS STATE ==========
+  const [conversationData, setConversationData] = useState<any>(null);
+  const [conversationPermissions, setConversationPermissions] = useState<ConversationPermissions | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<'ADMIN' | 'DEPUTY' | 'MEMBER' | null>(null);
 
   const handleSearchMessages = useCallback(async (q: string) => {
     if (!q.trim() || !conversationId) return;
@@ -1524,6 +1535,55 @@ export default function ChatDetailScreen() {
     };
   }, [currentUserId, loadInitialMessages]);
 
+  // ========== FETCH PERMISSIONS & USER ROLE ==========
+  useEffect(() => {
+    const fetchPermissionsData = async () => {
+      if (!conversationId || !currentUserId) return;
+
+      try {
+        // Fetch members to get current user's role (GROUP only)
+        if (String(type ?? '').toUpperCase() === 'GROUP') {
+          const members = await fetchConversationMembers(conversationId);
+          const currentMember = members.find((m: any) => m.userId === currentUserId);
+          setCurrentUserRole(currentMember?.role || 'MEMBER');
+
+          if (skipPermissionsFetchRef.current) {
+            setConversationPermissions(null);
+            return;
+          }
+
+          // Fetch permissions for GROUP chat
+          try {
+            const response = await chatService.getPermissions(conversationId);
+            const permsData = response?.data || response;
+            setConversationPermissions({
+              canEditInfo: permsData?.canEditInfo,
+              canPinMessages: permsData?.canPinMessages,
+              canSendMessages: permsData?.canSendMessages,
+              isMemberApprovalRequired: permsData?.isMemberApprovalRequired,
+            });
+          } catch (permErr: any) {
+            const status = Number(permErr?.response?.status ?? 0);
+            if (status === 404 || status === 405 || status >= 500) {
+              skipPermissionsFetchRef.current = true;
+              console.warn('Permissions endpoint unavailable, falling back to role-only checks');
+            } else {
+              console.warn('Unable to fetch conversation permissions', permErr?.message || permErr);
+            }
+            setConversationPermissions(null);
+          }
+        } else {
+          setCurrentUserRole(null);
+          setConversationPermissions(null);
+        }
+      } catch (err) {
+        console.warn('Error fetching permissions data:', err);
+      }
+    };
+
+    void fetchPermissionsData();
+  }, [conversationId, currentUserId, type]);
+
   const handleMessageListScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const offsetY = contentOffset.y;
@@ -1625,6 +1685,15 @@ export default function ChatDetailScreen() {
   const handleSendMessage = async () => {
     if (inputText.trim() === '' || !conversationId) return;
     if (isAiConversation && isSendingAi) return;
+
+    // ========== CHECK SEND MESSAGE PERMISSION (GROUP ONLY) ==========
+    if (String(type ?? '').toUpperCase() === 'GROUP') {
+      const permCheck = checkSendMessagePermission(type, currentUserRole as any, conversationPermissions as any);
+      if (!permCheck.allowed) {
+        Alert.alert('Không thể gửi tin nhắn', permCheck.reason || 'Bạn không có quyền gửi tin nhắn trong nhóm này');
+        return;
+      }
+    }
 
     if (editingMessageId) {
       const nextContent = inputText.trim();
@@ -2296,6 +2365,16 @@ export default function ChatDetailScreen() {
       return;
     }
 
+    // ========== CHECK PIN MESSAGE PERMISSION (GROUP ONLY) ==========
+    if (String(type ?? '').toUpperCase() === 'GROUP') {
+      const permCheck = checkPinMessagePermission(type, currentUserRole as any, conversationPermissions as any);
+      if (!permCheck.allowed) {
+        Alert.alert('Không thể ghim tin nhắn', permCheck.reason || 'Bạn không có quyền ghim tin nhắn');
+        closeMessageActionMenu();
+        return;
+      }
+    }
+
     try {
       if (isSelectedMessagePinned) {
         await chatService.unpinMessage(selectedMessage.messageId);
@@ -2309,7 +2388,7 @@ export default function ChatDetailScreen() {
       console.error('Failed to toggle pin message:', error);
       closeMessageActionMenu();
     }
-  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, selectedMessage]);
+  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, selectedMessage, type, currentUserRole, conversationPermissions]);
 
   const handleOpenPinnedList = useCallback(async () => {
     await fetchPinnedMessages();

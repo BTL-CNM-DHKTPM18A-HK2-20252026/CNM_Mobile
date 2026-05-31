@@ -360,5 +360,9 @@ export const chatService = {
     return await api.patch(`/conversations/${conversationId}/permissions`, permissions);
   },
 
+  getPermissions: async (conversationId: string) => {
+    return await api.get(`/conversations/${conversationId}/permissions`);
+  },
+
   unwrapApiPayload,
 };
