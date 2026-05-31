@@ -34,6 +34,7 @@ import { getSystemMessageContent, isSystemMessage } from '@/utils/chat/systemMes
 import { CallOverlay } from '@chat/components/CallOverlay';
 import MentionDropdown from '@chat/components/input/MentionDropdown';
 import CallHistoryCard from '@chat/components/message/CallHistoryCard';
+import GroupCallCard from '@/components/chat/GroupCallCard';
 import LinkPreviewCard from '@chat/components/message/LinkPreviewCard';
 import { Ionicons } from '@expo/vector-icons';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
@@ -2762,6 +2763,31 @@ const renderOlderMessagesLoading = () => {
         );
       }
 
+      // CALL_GROUP_START render
+      if (msgType === 'CALL_GROUP_START') {
+        const senderName = item.senderName || 'Thành viên';
+        return (
+          <View style={{ alignItems: 'center', marginVertical: 8 }}>
+            <GroupCallCard
+              senderName={senderName}
+              onJoin={() => {
+                const joinSignal = {
+                  type: 'CALL_GROUP_JOIN',
+                  receiverId: conversationId,
+                  callId: item.messageId || String(Date.now()),
+                  callerName: currentUserId || 'Thành viên',
+                  conversationId,
+                };
+                if (sendCallSignal) {
+                  sendCallSignal(joinSignal);
+                  Alert.alert('Đã tham gia', 'Bạn đã tham gia cuộc gọi nhóm!');
+                }
+              }}
+            />
+          </View>
+        );
+      }
+
       // SHARE_CONTACT render
       if ((item.messageType || '').toUpperCase() === 'SHARE_CONTACT') {
         let contact: { userId?: string; fullName?: string; phoneNumber?: string; avatar?: string } = {};
@@ -2925,20 +2951,35 @@ const renderOlderMessagesLoading = () => {
                       <TouchableOpacity 
                         style={styles.headerIcon}
                         onPress={() => {
-                          const peerName = conversationDisplayName;
-                          const peerAvatar = conversationAvatarUrl;
-                          webrtcService.startCall(
-                            currentUserId!,
-                            partnerId || '',
-                            peerName || 'Unknown',
-                            peerAvatar,
-                            conversationId,
-                            'Bạn',
-                            undefined
-                          );
+                          if (isGroupConversation) {
+                            // Start group call
+                            const callId = String(Date.now());
+                            if (sendCallSignal) {
+                              sendCallSignal({
+                                type: 'CALL_GROUP_START',
+                                receiverId: conversationId,
+                                callId,
+                                callerName: 'Bạn',
+                                conversationId,
+                              });
+                              Alert.alert('Đã bắt đầu', 'Cuộc gọi video nhóm đã được bắt đầu!');
+                            }
+                          } else {
+                            const peerName = conversationDisplayName;
+                            const peerAvatar = conversationAvatarUrl;
+                            webrtcService.startCall(
+                              currentUserId!,
+                              partnerId || '',
+                              peerName || 'Unknown',
+                              peerAvatar,
+                              conversationId,
+                              'Bạn',
+                              undefined
+                            );
+                          }
                         }}
                       >
-                        <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
+                        <Ionicons name={isGroupConversation ? 'people' : 'videocam-outline'} size={27} color="#FFFFFF" />
                       </TouchableOpacity>
                     </>
                   ) : null}

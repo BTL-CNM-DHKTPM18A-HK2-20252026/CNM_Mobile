@@ -44,22 +44,16 @@ type SignalSender = (signal: Partial<CallSignal>) => boolean;
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  // Free TURN relay for NAT traversal (metered.ca)
+  // Own TURN server on api.fruvia.id.vn
   {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
+    urls: 'turn:api.fruvia.id.vn:3478',
+    username: 'fruvia',
+    credential: 'FrUV!aTURN2026_',
   },
   {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
+    urls: 'turn:api.fruvia.id.vn:3478?transport=tcp',
+    username: 'fruvia',
+    credential: 'FrUV!aTURN2026_',
   },
 ];
 
