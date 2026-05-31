@@ -920,15 +920,48 @@ export default function ChatDetailScreen() {
       }
     },
     onConversationEvent: async (event) => {
-      if (event.type !== 'MESSAGE_LOCAL_DELETE') return;
-      const msgId = String(event.messageId);
-      const convId = String(event.conversationId);
-      // Persist to SecureStore via hook so it stays hidden after reload
-      await localDeleted.markDeleted(convId, currentUserId || 'anonymous', msgId);
-      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
-      // Hide from current message list immediately
-      if (convId === conversationId) {
-        setMessages((prev) => prev.filter((m) => String(m.messageId) !== msgId));
+      // Handle local delete events and also merge any server-sent message updates
+      const eventType = String(event?.type ?? '').toUpperCase();
+
+      // MESSAGE_LOCAL_DELETE: mark as locally deleted and remove from list
+      if (eventType === 'MESSAGE_LOCAL_DELETE') {
+        const msgId = String(event.messageId);
+        const convId = String(event.conversationId);
+        await localDeleted.markDeleted(convId, currentUserId || 'anonymous', msgId);
+        locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
+        if (convId === conversationId) {
+          setMessages((prev) => prev.filter((m) => String(m.messageId) !== msgId));
+        }
+        return;
+      }
+
+      // Other conversation-level events may carry updated message/poll payloads
+      try {
+        // Try to map the event payload to a UI message (handles nested shapes)
+        const mapped = mapAnyPayloadToUiMessage(event as any) ?? mapAnyPayloadToUiMessage((event as any)?.data);
+        if (mapped) {
+          appendOrUpdateMessage(mapped as any);
+          return;
+        }
+
+        // If event directly contains a poll update with messageId and poll, merge it
+        const possibleMsgId = String((event as any)?.messageId ?? (event as any)?.data?.messageId ?? '');
+        const possiblePoll = (event as any)?.poll ?? (event as any)?.data?.poll ?? null;
+        if (possibleMsgId && possiblePoll) {
+          const candidate = {
+            messageId: possibleMsgId,
+            messageType: 'POLL',
+            poll: possiblePoll,
+            content: typeof possiblePoll === 'object' ? JSON.stringify(possiblePoll) : String(possiblePoll),
+            updatedAt: (event as any)?.updatedAt ?? new Date().toISOString(),
+            conversationId: String((event as any)?.conversationId ?? conversationId ?? ''),
+          };
+          const mappedCandidate = mapAnyPayloadToUiMessage(candidate as any);
+          if (mappedCandidate) appendOrUpdateMessage(mappedCandidate as any);
+        }
+      } catch (err) {
+        // best-effort: swallow errors here so we don't break socket handling
+        console.warn('Failed to handle conversation event', err);
       }
     },
     onGroupEvent: async (event) => {
