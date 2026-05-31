@@ -1,19 +1,20 @@
 import { useTheme } from '@/context/ThemeContext';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface PollCreateModalProps {
   visible: boolean;
@@ -101,6 +102,8 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setShowSettings(false);
   };
 
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -108,7 +111,7 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.modal, { backgroundColor: colors.card }]}>
+        <SafeAreaView style={[styles.modal, { backgroundColor: colors.card, paddingBottom: Platform.OS === 'ios' ? Math.max(34, insets.bottom) : Math.max(16, insets.bottom) }]}>
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose}>
@@ -184,7 +187,7 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
               <Text style={styles.submitText}>Tạo bình chọn</Text>
             </TouchableOpacity>
           </View>
-        </View>
+          </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
   );

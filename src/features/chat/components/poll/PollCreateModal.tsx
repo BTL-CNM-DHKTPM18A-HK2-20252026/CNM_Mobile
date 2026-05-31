@@ -13,6 +13,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type PollOptionItem = {
   id: string;
@@ -46,6 +47,7 @@ const INITIAL_OPTIONS: PollOptionItem[] = [
 
 export default function PollCreateModal({ visible, onClose, onSubmit }: PollCreateModalProps) {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<PollOptionItem[]>(() => [...INITIAL_OPTIONS]);
@@ -148,7 +150,12 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.modal, { backgroundColor: colors.card }]}>
+        <SafeAreaView
+          style={[
+            styles.modal,
+            { backgroundColor: colors.card, paddingBottom: Platform.OS === 'ios' ? Math.max(34, insets.bottom) : Math.max(16, insets.bottom) },
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose}>
@@ -228,7 +235,7 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
               <Text style={styles.submitText}>Tạo bình chọn</Text>
             </TouchableOpacity>
           </View>
-        </View>
+          </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
   );
