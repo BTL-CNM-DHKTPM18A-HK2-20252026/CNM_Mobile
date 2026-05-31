@@ -3,7 +3,8 @@ import { chatService } from '@/services/chatService';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type PollOption = {
   optionId: string;
@@ -25,6 +26,9 @@ export default function PollDetailsScreen() {
   const [poll, setPoll] = useState<any | null>(null);
   const [membersMap, setMembersMap] = useState<Record<string, any>>({});
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [addingOption, setAddingOption] = useState(false);
+  const [newOptionText, setNewOptionText] = useState('');
+  const [addOptionLoading, setAddOptionLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -50,7 +54,9 @@ export default function PollDetailsScreen() {
           try {
             const parsedPoll = JSON.parse(decodeURIComponent(pollSnapshot));
             if (mounted && parsedPoll) {
-              setPoll(parsedPoll);
+              // normalize options
+              const opts = Array.isArray(parsedPoll.options) ? parsedPoll.options.map(normalizeOption) : [];
+              setPoll({ ...parsedPoll, options: opts });
             }
           } catch {
             // fall back to network lookup below
@@ -102,7 +108,8 @@ export default function PollDetailsScreen() {
           }
 
           if (mounted) {
-            setPoll(pollData || null);
+            const opts = Array.isArray(pollData?.options) ? pollData.options.map(normalizeOption) : [];
+            setPoll(pollData ? { ...pollData, options: opts } : null);
           }
         }
 
@@ -204,6 +211,56 @@ export default function PollDetailsScreen() {
     }
   };
 
+  const handleOpenAddOption = () => {
+    setNewOptionText('');
+    setAddingOption(true);
+  };
+
+  const handleSubmitNewOption = async () => {
+    if (!newOptionText.trim() || !poll) {
+      return;
+    }
+    setAddOptionLoading(true);
+    try {
+      // optimistic add
+      const tempId = `temp-${Date.now()}`;
+      const optimistic = { optionId: tempId, content: newOptionText.trim(), voterIds: [] };
+      setPoll((prev: any) => {
+        if (!prev) return prev;
+        const nextOptions = Array.isArray(prev.options) ? [...prev.options, optimistic] : [optimistic];
+        return { ...prev, options: nextOptions };
+      });
+
+      const resp: any = await chatService.addPollOption(poll.pollId, newOptionText.trim()).catch(() => null);
+      const created = resp?.data ?? resp;
+      const serverOptionRaw = created?.option || created?.data || created;
+      const serverOption = normalizeOption(serverOptionRaw || { optionId: String(Date.now()), content: newOptionText.trim(), voterIds: [] });
+
+      // replace optimistic with server result (match by temp id)
+      setPoll((prev: any) => {
+        if (!prev) return prev;
+        const nextOptions = Array.isArray(prev.options)
+          ? prev.options.map((o: any) => (String(o.optionId) === String(tempId) ? serverOption : normalizeOption(o)))
+          : [serverOption];
+        return { ...prev, options: nextOptions };
+      });
+      setAddingOption(false);
+    } catch (err) {
+      console.warn('Failed to add option', err);
+      Alert.alert('Lỗi', 'Không thêm được phương án, thử lại sau.');
+    } finally {
+      setAddOptionLoading(false);
+    }
+  };
+
+  function normalizeOption(raw: any) {
+    if (!raw) return { optionId: String(Date.now()), content: '', voterIds: [] };
+    const optionId = String(raw.optionId ?? raw.id ?? raw.option_id ?? raw.id ?? raw.optionId ?? raw.key ?? raw.uuid ?? raw._id ?? Date.now());
+    const content = String(raw.content ?? raw.text ?? raw.name ?? raw.title ?? raw.option ?? '');
+    const voterIds = Array.isArray(raw.voterIds) ? raw.voterIds : Array.isArray(raw.voters) ? raw.voters : raw.voter_ids ? raw.voter_ids : [];
+    return { optionId, content, voterIds };
+  }
+
   const renderVoterAvatars = (option: PollOption) => {
     const voterIds = (option.voterIds || []).map(String);
     if (voterIds.length === 0) return null;
@@ -226,23 +283,23 @@ export default function PollDetailsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}> 
+      <SafeAreaView style={[styles.root, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}> 
         <ActivityIndicator size="large" color="#0068FF" />
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (!poll) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background, padding: 16 }]}> 
+      <SafeAreaView style={[styles.root, { backgroundColor: colors.background, padding: 16 }]}> 
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Text style={{ color: '#0068FF' }}>Quay lại</Text></TouchableOpacity>
         <Text style={[styles.emptyText, { color: colors.text }]}>Không tìm thấy thông tin bình chọn.</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}> 
+    <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}> 
       <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.card }]}> 
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={{ color: '#0068FF', fontWeight: '600' }}>Quay lại</Text>
@@ -299,12 +356,36 @@ export default function PollDetailsScreen() {
         })}
 
         {poll.allowAddOptions ? (
-          <TouchableOpacity style={styles.addOptionButton} onPress={() => {}} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.addOptionButton} onPress={handleOpenAddOption} activeOpacity={0.85}>
             <Text style={styles.addOptionText}>+ Thêm phương án</Text>
           </TouchableOpacity>
         ) : null}
       </ScrollView>
-    </View>
+
+      <Modal visible={addingOption} transparent animationType="fade" onRequestClose={() => setAddingOption(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Thêm phương án</Text>
+            <TextInput
+              value={newOptionText}
+              onChangeText={setNewOptionText}
+              placeholder="Nhập nội dung phương án"
+              placeholderTextColor={colors.subText}
+              style={[styles.modalInput, { borderColor: colors.border, color: colors.text }]}
+              multiline
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setAddingOption(false)} style={styles.modalBtn}>
+                <Text style={{ color: colors.subText }}>Huỷ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSubmitNewOption} style={[styles.modalBtn, { opacity: addOptionLoading ? 0.6 : 1 }]} disabled={addOptionLoading}>
+                <Text style={{ color: '#0068FF', fontWeight: '700' }}>{addOptionLoading ? '...' : 'Thêm'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -346,4 +427,10 @@ const styles = StyleSheet.create({
   addOptionButton: { marginTop: 10, alignItems: 'center', paddingVertical: 10 },
   addOptionText: { color: '#6B7280', fontWeight: '700' },
   emptyText: { marginTop: 24, textAlign: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: { width: '90%', borderRadius: 12, padding: 14, borderWidth: 1 },
+  modalTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  modalInput: { borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 44, textAlignVertical: 'top' },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 12 },
+  modalBtn: { paddingHorizontal: 12, paddingVertical: 8 },
 });
