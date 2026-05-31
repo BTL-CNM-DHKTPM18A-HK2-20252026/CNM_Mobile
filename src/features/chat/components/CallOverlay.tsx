@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Vibration, Platform } from 'react-native';
 import { webrtcService, CallState, CallInfo } from '@chat/services/webrtcService';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@react-navigation/native';
@@ -25,6 +25,7 @@ export const CallOverlay = ({ currentUserId }: { currentUserId: string }) => {
   const [remoteStream, setRemoteStream] = useState<any>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
+  const ringtoneRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const unsubscribe = webrtcService.onStateChange((state, info) => {
@@ -37,6 +38,29 @@ export const CallOverlay = ({ currentUserId }: { currentUserId: string }) => {
 
     return unsubscribe;
   }, []);
+
+  // Ringing vibration pattern when calling or incoming
+  useEffect(() => {
+    if (callState === 'requesting' || callState === 'incoming') {
+      // Vibrate in ring pattern: 500ms on, 1000ms off, repeat
+      const pattern = [500, 1000, 500, 2000];
+      ringtoneRef.current = setInterval(() => {
+        Vibration.vibrate(pattern, false);
+      }, 4000);
+      Vibration.vibrate(pattern, false);
+    } else {
+      if (ringtoneRef.current) {
+        clearInterval(ringtoneRef.current);
+        ringtoneRef.current = null;
+      }
+      Vibration.cancel();
+    }
+
+    return () => {
+      if (ringtoneRef.current) clearInterval(ringtoneRef.current);
+      Vibration.cancel();
+    };
+  }, [callState]);
 
   if (callState === 'idle') return null;
 

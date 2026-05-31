@@ -29,6 +29,7 @@ export default function CallHistoryCard({ callType, durationSeconds, status, isC
 
   const isVideo = (callType || '').toUpperCase().includes('VIDEO');
   const isMissed = (status || '').toUpperCase() === 'MISSED';
+  const isRejected = (status || '').toUpperCase() === 'REJECTED';
   const isGroup = (callType || '').toUpperCase().includes('GROUP');
 
   let icon: keyof typeof Ionicons.glyphMap = 'call-outline';
@@ -50,6 +51,11 @@ export default function CallHistoryCard({ callType, durationSeconds, status, isC
   if (isMissed) {
     icon = 'call-outline';
     label = t('chat.call.missed', 'Cuộc gọi nhỡ');
+    iconColor = '#EF4444';
+  }
+  if (isRejected) {
+    icon = 'call-outline';
+    label = isCaller ? t('chat.call.rejected', 'Cuộc gọi bận') : t('chat.call.missed', 'Cuộc gọi nhỡ');
     iconColor = '#EF4444';
   }
 

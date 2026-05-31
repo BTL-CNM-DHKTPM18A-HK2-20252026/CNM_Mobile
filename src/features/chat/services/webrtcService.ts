@@ -44,22 +44,16 @@ type SignalSender = (signal: Partial<CallSignal>) => boolean;
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  // Free TURN relay for NAT traversal (metered.ca)
+  // Own TURN server on api.fruvia.id.vn
   {
-    urls: 'turn:openrelay.metered.ca:80',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
+    urls: 'turn:api.fruvia.id.vn:3478',
+    username: 'fruvia',
+    credential: 'FrUV!aTURN2026_',
   },
   {
-    urls: 'turn:openrelay.metered.ca:443',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
-  {
-    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
+    urls: 'turn:api.fruvia.id.vn:3478?transport=tcp',
+    username: 'fruvia',
+    credential: 'FrUV!aTURN2026_',
   },
 ];
 
@@ -195,7 +189,7 @@ class WebRTCService {
         console.warn('[WebRTC] Call timeout');
         this.endCall();
       }
-    }, 30_000);
+    }, 60_000);
 
     this.sendSignal({
       type: 'CALL_REQUEST',
@@ -371,6 +365,14 @@ class WebRTCService {
   // ── Media ──────────────────────────────────────────
 
   private async acquireMedia() {
+    // Set audio to speakerphone for video calls
+    try {
+      const InCallManager = require('react-native-incall-manager').default;
+      InCallManager.setSpeakerphoneOn(true);
+      InCallManager.setKeepScreenOn(true);
+      InCallManager.setForceSpeakerphoneOn(true);
+    } catch {}
+
     try {
       console.log('[WebRTC] Getting media...');
       const stream = await mediaDevices.getUserMedia({
@@ -403,7 +405,11 @@ class WebRTCService {
     if (this.pc) return;
 
     console.log('[WebRTC] Creating PeerConnection');
-    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    this.pc = new RTCPeerConnection({
+      iceServers: ICE_SERVERS,
+      iceCandidatePoolSize: 2,
+      iceTransportPolicy: 'all',
+    });
     this.remoteStream = new MediaStream();
 
     if (this.localStream) {
@@ -450,7 +456,7 @@ class WebRTCService {
         case 'disconnected':
           this.disconnectTimeoutId = setTimeout(() => {
             if (this.pc?.connectionState === 'disconnected') this.cleanup();
-          }, 10_000);
+          }, 30_000);
           break;
         case 'closed':
           this.cleanup();
@@ -517,6 +523,14 @@ class WebRTCService {
 
     this.isCleaningUp = true;
     console.log('[WebRTC] Cleanup');
+
+    // Release InCallManager
+    try {
+      const InCallManager = require('react-native-incall-manager').default;
+      InCallManager.setSpeakerphoneOn(false);
+      InCallManager.setKeepScreenOn(false);
+      InCallManager.setForceSpeakerphoneOn(false);
+    } catch {}
 
     if (this.connectingTimeoutId) { clearTimeout(this.connectingTimeoutId); this.connectingTimeoutId = null; }
     if (this.incomingTimeoutId) { clearTimeout(this.incomingTimeoutId); this.incomingTimeoutId = null; }

@@ -34,6 +34,7 @@ import { getSystemMessageContent, isSystemMessage } from '@/utils/chat/systemMes
 import { CallOverlay } from '@chat/components/CallOverlay';
 import MentionDropdown from '@chat/components/input/MentionDropdown';
 import CallHistoryCard from '@chat/components/message/CallHistoryCard';
+import GroupCallCard from '@/components/chat/GroupCallCard';
 import LinkPreviewCard from '@chat/components/message/LinkPreviewCard';
 import { Ionicons } from '@expo/vector-icons';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
@@ -2835,20 +2836,48 @@ const renderOlderMessagesLoading = () => {
       }
 
       // CALL render
-      if (msgType === 'CALL' || msgType === 'CALL_HISTORY') {
+      if (msgType === 'CALL' || msgType === 'CALL_HISTORY' || msgType === 'CALL_MISSED' || msgType === 'CALL_REJECTED' || msgType === 'CALL_ENDED') {
         let callData: any = {};
         try { callData = JSON.parse(item.content || '{}'); } catch { callData = {}; }
+        const isMissed = msgType === 'CALL_MISSED';
+        const isRejected = msgType === 'CALL_REJECTED';
+        const isEnded = msgType === 'CALL_ENDED';
         return (
           <>
             {replyBlock}
             {forwardedBanner}
             <CallHistoryCard
-              callType={callData.callType ?? 'VOICE'}
-              durationSeconds={callData.durationSeconds ?? callData.duration ?? 0}
-              status={callData.status}
+              callType={callData.callType ?? 'VIDEO'}
+              durationSeconds={isEnded ? (Number(item.content) || 0) : (callData.durationSeconds ?? callData.duration ?? 0)}
+              status={isMissed ? 'MISSED' : isRejected ? 'REJECTED' : isEnded ? 'ENDED' : (callData.status || 'ENDED')}
               isCaller={item.senderId === currentUserId}
             />
           </>
+        );
+      }
+
+      // CALL_GROUP_START render
+      if (msgType === 'CALL_GROUP_START') {
+        const senderName = item.senderName || 'Thành viên';
+        return (
+          <View style={{ alignItems: 'center', marginVertical: 8 }}>
+            <GroupCallCard
+              senderName={senderName}
+              onJoin={() => {
+                const joinSignal = {
+                  type: 'CALL_GROUP_JOIN',
+                  receiverId: conversationId,
+                  callId: item.messageId || String(Date.now()),
+                  callerName: currentUserId || 'Thành viên',
+                  conversationId,
+                };
+                if (sendCallSignal) {
+                  sendCallSignal(joinSignal);
+                  Alert.alert('Đã tham gia', 'Bạn đã tham gia cuộc gọi nhóm!');
+                }
+              }}
+            />
+          </View>
         );
       }
 
@@ -3017,20 +3046,35 @@ const renderOlderMessagesLoading = () => {
                       <TouchableOpacity 
                         style={styles.headerIcon}
                         onPress={() => {
-                          const peerName = conversationDisplayName;
-                          const peerAvatar = conversationAvatarUrl;
-                          webrtcService.startCall(
-                            currentUserId!,
-                            partnerId || '',
-                            peerName || 'Unknown',
-                            peerAvatar,
-                            conversationId,
-                            'Bạn',
-                            undefined
-                          );
+                          if (isGroupConversation) {
+                            // Start group call
+                            const callId = String(Date.now());
+                            if (sendCallSignal) {
+                              sendCallSignal({
+                                type: 'CALL_GROUP_START',
+                                receiverId: conversationId,
+                                callId,
+                                callerName: 'Bạn',
+                                conversationId,
+                              });
+                              Alert.alert('Đã bắt đầu', 'Cuộc gọi video nhóm đã được bắt đầu!');
+                            }
+                          } else {
+                            const peerName = conversationDisplayName;
+                            const peerAvatar = conversationAvatarUrl;
+                            webrtcService.startCall(
+                              currentUserId!,
+                              partnerId || '',
+                              peerName || 'Unknown',
+                              peerAvatar,
+                              conversationId,
+                              'Bạn',
+                              undefined
+                            );
+                          }
                         }}
                       >
-                        <Ionicons name="videocam-outline" size={27} color="#FFFFFF" />
+                        <Ionicons name={isGroupConversation ? 'people' : 'videocam-outline'} size={27} color="#FFFFFF" />
                       </TouchableOpacity>
                     </>
                   ) : null}
