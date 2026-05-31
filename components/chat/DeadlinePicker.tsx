@@ -1,6 +1,6 @@
 import { useTheme } from '@/context/ThemeContext';
 import React, { useEffect, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Props {
   visible: boolean;
@@ -171,7 +171,28 @@ export default function DeadlinePicker({ visible, initial, onClose, onConfirm }:
 
           <View style={styles.modalActions}>
             <TouchableOpacity onPress={() => onClose()} style={styles.modalBtn}><Text style={{ color: colors.textSecondary }}>Đóng</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => { const next = buildDeadlineFromState(); onConfirm(next); }} style={styles.modalBtn}><Text style={{ color: '#0068FF', fontWeight: '700' }}>Xong</Text></TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                const next = buildDeadlineFromState();
+                if (!next) {
+                  Alert.alert('Lỗi', 'Chưa chọn ngày hoặc giờ hợp lệ');
+                  return;
+                }
+                const nextDate = new Date(next);
+                if (Number.isNaN(nextDate.getTime())) {
+                  Alert.alert('Lỗi', 'Ngày giờ không hợp lệ');
+                  return;
+                }
+                if (nextDate.getTime() <= Date.now()) {
+                  Alert.alert('Lỗi', 'Không thể chọn ngày/giờ trong quá khứ');
+                  return;
+                }
+                onConfirm(next);
+              }}
+              style={styles.modalBtn}
+            >
+              <Text style={{ color: '#0068FF', fontWeight: '700' }}>Xong</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -196,7 +217,7 @@ export default function DeadlinePicker({ visible, initial, onClose, onConfirm }:
               </View>
               <View style={styles.timeColumn}>
                 <ScrollView>
-                  {['00', '15', '30', '45'].map((mm) => {
+                  {['00','05','10', '15','20', '25', '30','35', '40', '45', '50', '55'].map((mm) => {
                     const selected = timeMinute === mm;
                     return (
                       <TouchableOpacity key={mm} onPress={() => setTimeMinute(mm)} style={[styles.timeItem, selected && styles.timeItemSelected]}>
@@ -221,7 +242,33 @@ export default function DeadlinePicker({ visible, initial, onClose, onConfirm }:
             </View>
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setTimePickerVisible(false)} style={styles.modalBtn}><Text style={{ color: colors.textSecondary }}>Huỷ</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => { let hh = Number.parseInt(timeHour, 10); if (timeAmPm === 'PM' && hh < 12) hh += 12; if (timeAmPm === 'AM' && hh === 12) hh = 0; const hhStr = String(hh).padStart(2, '0'); setDeadlineTime(`${hhStr}:${timeMinute}`); setTimePickerVisible(false); }} style={styles.modalBtn}><Text style={{ color: '#0068FF', fontWeight: '700' }}>Chọn</Text></TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  let hh = Number.parseInt(timeHour, 10);
+                  if (timeAmPm === 'PM' && hh < 12) hh += 12;
+                  if (timeAmPm === 'AM' && hh === 12) hh = 0;
+                  const hhStr = String(hh).padStart(2, '0');
+                  // If a date is already selected and it's today, prevent choosing a past time
+                  if (deadlineDate) {
+                    const m = deadlineDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    if (m) {
+                      const year = Number.parseInt(m[1], 10);
+                      const month = Number.parseInt(m[2], 10);
+                      const day = Number.parseInt(m[3], 10);
+                      const candidate = new Date(year, month - 1, day, hh, Number.parseInt(timeMinute, 10), 0);
+                      if (candidate.getTime() <= Date.now()) {
+                        Alert.alert('Lỗi', 'Không thể chọn thời gian trong quá khứ');
+                        return;
+                      }
+                    }
+                  }
+                  setDeadlineTime(`${hhStr}:${timeMinute}`);
+                  setTimePickerVisible(false);
+                }}
+                style={styles.modalBtn}
+              >
+                <Text style={{ color: '#0068FF', fontWeight: '700' }}>Chọn</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -247,9 +294,24 @@ export default function DeadlinePicker({ visible, initial, onClose, onConfirm }:
                 const value = formatDateValue(day);
                 const selected = deadlineDate === value;
                 const today = formatDateValue(new Date()) === value;
+                const todayZero = new Date();
+                todayZero.setHours(0, 0, 0, 0);
+                const isPastDay = day.getTime() < todayZero.getTime();
                 return (
-                  <TouchableOpacity key={item.key} onPress={() => { setDeadlineDate(formatDateValue(day)); setCalendarVisible(false); }} style={[styles.calendarDayCell, { borderColor: selected ? '#0068FF' : 'transparent', backgroundColor: selected ? '#0068FF14' : 'transparent' }]}>
-                    <Text style={{ color: selected ? '#0068FF' : colors.text, fontWeight: '600' }}>{item.date.getDate()}</Text>
+                  <TouchableOpacity
+                    key={item.key}
+                    onPress={() => {
+                      if (isPastDay) return; // block selecting past days
+                      setDeadlineDate(formatDateValue(day));
+                      setCalendarVisible(false);
+                    }}
+                    style={[
+                      styles.calendarDayCell,
+                      { borderColor: selected ? '#0068FF' : 'transparent', backgroundColor: selected ? '#0068FF14' : 'transparent', opacity: isPastDay ? 0.45 : 1 },
+                    ]}
+                    disabled={isPastDay}
+                  >
+                    <Text style={{ color: selected ? '#0068FF' : (isPastDay ? colors.textPlaceholder : colors.text), fontWeight: '600' }}>{item.date.getDate()}</Text>
                     {today ? <View style={styles.todayDot} /> : null}
                   </TouchableOpacity>
                 );
