@@ -68,8 +68,8 @@ export default function PollCard({ poll, currentUserId, conversationId, messageI
 
       <View style={styles.optionsContainer}>
         {(localOptions || []).map((opt: any, idx: number) => {
-          const optVotes = opt.voterIds?.length || 0;
-          const percent = totalVotesCast > 0 ? Math.max(1, Math.round((optVotes / totalVotesCast) * 100)) : 0;
+              const optVotes = opt.voterIds?.length || 0;
+              const percent = totalUniqueVoters > 0 ? Math.round((optVotes / totalUniqueVoters) * 100) : 0;
 
           return (
             <View

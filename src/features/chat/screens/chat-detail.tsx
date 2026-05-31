@@ -2882,7 +2882,7 @@ const renderOlderMessagesLoading = () => {
             {forwardedBanner}
               {pollData ? (
                 <PollCard
-                  {...({ poll: pollData, currentUserId: currentUserId || undefined, conversationId, messageId: String(item.messageId) } as any)}
+                  {...({ poll: pollData, currentUserId: currentUserId || undefined, conversationId, messageId: String(item.messageId), readOnly: true } as any)}
                 />
               ) : null}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: colors.card, borderRadius: 12, marginVertical: 4 }}>
