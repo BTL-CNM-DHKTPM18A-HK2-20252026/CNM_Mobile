@@ -40,27 +40,74 @@ export const toLocalIsoString = (date: Date) => {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
 };
 
-export const parseMessageDate = (createdAt?: string) => {
+const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
+const getVietnamDateParts = (date: Date) => {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(values.year ?? date.getFullYear()),
+    month: Number(values.month ?? date.getMonth() + 1),
+    day: Number(values.day ?? date.getDate()),
+    hour: Number(values.hour ?? date.getHours()),
+    minute: Number(values.minute ?? date.getMinutes()),
+    second: Number(values.second ?? date.getSeconds()),
+  };
+};
+
+const buildVietnamDate = (createdAt?: string) => {
   if (!createdAt) return null;
-  let raw = String(createdAt).trim();
+
+  const raw = String(createdAt).trim();
   if (!raw) return null;
-
-  // QUAN TRỌNG: Cắt bỏ đuôi múi giờ (Z, +00:00, +07:00)
-  // Để ép Javascript hiểu chuỗi này là giờ địa phương thiết bị
-  raw = raw.replace(/(Z|[+-]\d{2}:?\d{2})$/i, '');
-
-  const parsed = new Date(raw);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed;
-  }
 
   const epoch = Number(raw);
   if (!Number.isNaN(epoch)) {
-    const fallback = new Date(epoch);
-    if (!Number.isNaN(fallback.getTime())) return fallback;
+    return new Date(epoch);
   }
 
-  return null;
+  const hasExplicitTimeZone = /(Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  if (hasExplicitTimeZone) {
+    return parsed;
+  }
+
+  const [datePart, timePart] = raw.split('T');
+  if (!datePart || !timePart) {
+    return parsed;
+  }
+
+  const [year, month, day] = datePart.split('-').map((value) => Number(value));
+  const timeSegments = timePart.split(':');
+  const hour = Number(timeSegments[0]);
+  const minute = Number(timeSegments[1] ?? 0);
+  const second = Number((timeSegments[2] ?? '0').split('.')[0]);
+
+  if ([year, month, day, hour, minute, second].some((value) => Number.isNaN(value))) {
+    return parsed;
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, hour - 7, minute, second));
+};
+
+export const parseMessageDate = (createdAt?: string) => {
+  return buildVietnamDate(createdAt);
 };
 
 export const getMessageMillis = (createdAt?: string) => {
@@ -174,24 +221,35 @@ export const stripAiMarkdownMarkers = (content: string | null | undefined) => {
 export const formatMessageTime = (createdAt?: string) => {
   const date = parseMessageDate(createdAt);
   if (!date) return '';
-  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+
+  const { hour, minute } = getVietnamDateParts(date);
+  return `${pad2(hour)}:${pad2(minute)}`;
 };
 
 export const formatDateSeparator = (createdAt?: string) => {
   const date = parseMessageDate(createdAt);
   if (!date) return null;
 
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
+  const nowParts = getVietnamDateParts(new Date());
+  const dateParts = getVietnamDateParts(date);
 
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
+  const isToday =
+    dateParts.year === nowParts.year &&
+    dateParts.month === nowParts.month &&
+    dateParts.day === nowParts.day;
 
-  const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mo = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayParts = getVietnamDateParts(yesterdayDate);
+  const isYesterday =
+    dateParts.year === yesterdayParts.year &&
+    dateParts.month === yesterdayParts.month &&
+    dateParts.day === yesterdayParts.day;
+
+  const time = `${pad2(dateParts.hour)}:${pad2(dateParts.minute)}`;
+  const dd = pad2(dateParts.day);
+  const mo = pad2(dateParts.month);
+  const yyyy = dateParts.year;
 
   if (isToday) return `${time} Hôm nay`;
   if (isYesterday) return `${time} Hôm qua`;
