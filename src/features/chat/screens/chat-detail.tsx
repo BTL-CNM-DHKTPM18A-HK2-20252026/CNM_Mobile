@@ -28,13 +28,13 @@ import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import GroupCallCard from '@/src/components/chat/GroupCallCard';
 import { serializePlainTextToTiptapJson } from '@/utils/chat/plainTextToTiptap';
 import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
 import { getSystemMessageContent, isSystemMessage } from '@/utils/chat/systemMessage';
 import { CallOverlay } from '@chat/components/CallOverlay';
 import MentionDropdown from '@chat/components/input/MentionDropdown';
 import CallHistoryCard from '@chat/components/message/CallHistoryCard';
-import GroupCallCard from '@/components/chat/GroupCallCard';
 import LinkPreviewCard from '@chat/components/message/LinkPreviewCard';
 import { Ionicons } from '@expo/vector-icons';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
@@ -2837,19 +2837,23 @@ const renderOlderMessagesLoading = () => {
 
       // CALL render
       if (msgType === 'CALL' || msgType === 'CALL_HISTORY' || msgType === 'CALL_MISSED' || msgType === 'CALL_REJECTED' || msgType === 'CALL_ENDED') {
+        const rawContent = String(item.content || '').trim();
+        const parsedDuration = rawContent && !Number.isNaN(Number(rawContent)) ? Number(rawContent) : 0;
         let callData: any = {};
-        try { callData = JSON.parse(item.content || '{}'); } catch { callData = {}; }
+        try { callData = rawContent.startsWith('{') ? JSON.parse(rawContent) : {}; } catch { callData = {}; }
         const isMissed = msgType === 'CALL_MISSED';
         const isRejected = msgType === 'CALL_REJECTED';
         const isEnded = msgType === 'CALL_ENDED';
+        const shouldTreatAsMissed = isMissed || (isEnded && parsedDuration <= 0);
+        const durationSeconds = isEnded ? (parsedDuration > 0 ? parsedDuration : 0) : (callData.durationSeconds ?? callData.duration ?? 0);
         return (
           <>
             {replyBlock}
             {forwardedBanner}
             <CallHistoryCard
               callType={callData.callType ?? 'VIDEO'}
-              durationSeconds={isEnded ? (Number(item.content) || 0) : (callData.durationSeconds ?? callData.duration ?? 0)}
-              status={isMissed ? 'MISSED' : isRejected ? 'REJECTED' : isEnded ? 'ENDED' : (callData.status || 'ENDED')}
+              durationSeconds={durationSeconds}
+              status={shouldTreatAsMissed ? 'MISSED' : isRejected ? 'REJECTED' : isEnded ? 'ENDED' : (callData.status || 'ENDED')}
               isCaller={item.senderId === currentUserId}
             />
           </>
