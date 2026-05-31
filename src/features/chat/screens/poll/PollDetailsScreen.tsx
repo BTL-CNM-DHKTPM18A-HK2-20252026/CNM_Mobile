@@ -29,6 +29,53 @@ export default function PollDetailsScreen() {
   const [addingOption, setAddingOption] = useState(false);
   const [newOptionText, setNewOptionText] = useState('');
   const [addOptionLoading, setAddOptionLoading] = useState(false);
+  const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [editMultipleChoices, setEditMultipleChoices] = useState<boolean>(true);
+  const [editAllowAddOptions, setEditAllowAddOptions] = useState<boolean>(true);
+  const [editDeadlineYear, setEditDeadlineYear] = useState('');
+  const [editDeadlineMonth, setEditDeadlineMonth] = useState('');
+  const [editDeadlineDay, setEditDeadlineDay] = useState('');
+  const [editDeadlineHour, setEditDeadlineHour] = useState('');
+  const [editDeadlineMinute, setEditDeadlineMinute] = useState('');
+  const [editDeadlineSecond, setEditDeadlineSecond] = useState('00');
+
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  };
+
+  const buildDeadlineFromState = () => {
+    const year = Number.parseInt(editDeadlineYear, 10);
+    const month = Number.parseInt(editDeadlineMonth, 10);
+    const day = Number.parseInt(editDeadlineDay, 10);
+    const hour = Number.parseInt(editDeadlineHour, 10);
+    const minute = Number.parseInt(editDeadlineMinute, 10);
+    const second = Number.parseInt(editDeadlineSecond, 10);
+
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return undefined;
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || !Number.isFinite(second)) return undefined;
+
+    const next = new Date(year, month - 1, day, hour, minute, second);
+    if (Number.isNaN(next.getTime())) return undefined;
+    return formatLocalDateTime(next);
+  };
+
+  const parseDeadlineToState = (deadline?: string | null) => {
+    if (!deadline) return { year: '', month: '', day: '', hour: '', minute: '', second: '00' };
+    const parsed = new Date(deadline);
+    if (Number.isNaN(parsed.getTime())) {
+      return { year: '', month: '', day: '', hour: '', minute: '', second: '00' };
+    }
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return {
+      year: String(parsed.getFullYear()),
+      month: pad(parsed.getMonth() + 1),
+      day: pad(parsed.getDate()),
+      hour: pad(parsed.getHours()),
+      minute: pad(parsed.getMinutes()),
+      second: pad(parsed.getSeconds()),
+    };
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -216,6 +263,47 @@ export default function PollDetailsScreen() {
     setAddingOption(true);
   };
 
+  const isCreator = poll?.creatorId && String(poll.creatorId) === String(currentUserId);
+
+  const openEditSettings = () => {
+    if (!poll) return;
+    setEditMultipleChoices(Boolean(poll.multipleChoices));
+    setEditAllowAddOptions(Boolean(poll.allowAddOptions));
+    const deadlineState = parseDeadlineToState(poll.deadline ?? undefined);
+    setEditDeadlineYear(deadlineState.year);
+    setEditDeadlineMonth(deadlineState.month);
+    setEditDeadlineDay(deadlineState.day);
+    setEditDeadlineHour(deadlineState.hour);
+    setEditDeadlineMinute(deadlineState.minute);
+    setEditDeadlineSecond(deadlineState.second);
+    setIsEditingSettings(true);
+  };
+
+  const submitEditSettings = async () => {
+    if (!poll) return;
+    try {
+      setIsSubmitting(true);
+      const payload: any = {
+        multipleChoices: editMultipleChoices,
+        allowAddOptions: editAllowAddOptions,
+        deadline: buildDeadlineFromState() ?? null,
+      };
+      const resp: any = await chatService.updatePollSettings(poll.pollId, payload).catch(() => null);
+      const updated = resp?.data ?? resp;
+      const newPoll = updated?.poll ?? updated ?? updated;
+      if (newPoll) {
+        const opts = Array.isArray(newPoll.options) ? newPoll.options.map(normalizeOption) : [];
+        setPoll({ ...newPoll, options: opts });
+      }
+      setIsEditingSettings(false);
+    } catch (err) {
+      console.warn('Failed to update poll settings', err);
+      Alert.alert('Lỗi', 'Không thể cập nhật cài đặt, thử lại sau.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmitNewOption = async () => {
     if (!newOptionText.trim() || !poll) {
       return;
@@ -305,7 +393,14 @@ export default function PollDetailsScreen() {
           <Text style={{ color: '#0068FF', fontWeight: '600' }}>Quay lại</Text>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{poll.question}</Text>
-        <View style={{ width: 56 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {isCreator ? (
+            <TouchableOpacity onPress={openEditSettings} style={{ paddingHorizontal: 8 }}>
+              <Text style={{ color: '#0068FF', fontWeight: '600' }}>Chỉnh sửa</Text>
+            </TouchableOpacity>
+          ) : null}
+          <View style={{ width: 8 }} />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -385,7 +480,92 @@ export default function PollDetailsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal visible={isEditingSettings} transparent animationType="fade" onRequestClose={() => setIsEditingSettings(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Chỉnh sửa cài đặt</Text>
+            <View style={{ marginTop: 8 }}>
+              <ToggleRow label="Chọn nhiều phương án" value={editMultipleChoices} onPress={() => setEditMultipleChoices((s) => !s)} colors={colors} />
+              <ToggleRow label="Cho phép thêm phương án" value={editAllowAddOptions} onPress={() => setEditAllowAddOptions((s) => !s)} colors={colors} />
+
+              <Text style={[styles.settingLabel, { color: colors.text, marginTop: 10, marginBottom: 6 }]}>Hạn chót</Text>
+              <View style={styles.deadlineGrid}>
+                <DeadlineField label="Năm" value={editDeadlineYear} onChangeText={setEditDeadlineYear} placeholder="2026" colors={colors} />
+                <DeadlineField label="Tháng" value={editDeadlineMonth} onChangeText={setEditDeadlineMonth} placeholder="06" colors={colors} />
+                <DeadlineField label="Ngày" value={editDeadlineDay} onChangeText={setEditDeadlineDay} placeholder="01" colors={colors} />
+                <DeadlineField label="Giờ" value={editDeadlineHour} onChangeText={setEditDeadlineHour} placeholder="18" colors={colors} />
+                <DeadlineField label="Phút" value={editDeadlineMinute} onChangeText={setEditDeadlineMinute} placeholder="30" colors={colors} />
+                <DeadlineField label="Giây" value={editDeadlineSecond} onChangeText={setEditDeadlineSecond} placeholder="00" colors={colors} />
+              </View>
+
+              <Text style={[styles.deadlinePreview, { color: colors.textSecondary }]}> 
+                {buildDeadlineFromState() ? `Đã chọn: ${buildDeadlineFromState()}` : 'Chưa chọn hoặc nhập chưa đủ hạn chót'}
+              </Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setIsEditingSettings(false)} style={styles.modalBtn}>
+                <Text style={{ color: colors.subText }}>Huỷ</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={submitEditSettings} style={[styles.modalBtn, { opacity: isSubmitting ? 0.6 : 1 }]} disabled={isSubmitting}>
+                <Text style={{ color: '#0068FF', fontWeight: '700' }}>{isSubmitting ? '...' : 'Lưu'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function ToggleRow({
+  label,
+  value,
+  onPress,
+  colors,
+}: {
+  label: string;
+  value: boolean;
+  onPress: () => void;
+  colors: any;
+}) {
+  return (
+    <View style={styles.toggleRow}>
+      <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
+      <TouchableOpacity onPress={onPress} style={[styles.togglePill, value ? styles.togglePillOn : styles.togglePillOff]}>
+        <View style={[styles.toggleKnob, value ? styles.toggleKnobOn : styles.toggleKnobOff]} />
+        <Text style={[styles.toggleText, { color: value ? '#fff' : colors.subText }]}>{value ? 'ON' : 'OFF'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function DeadlineField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  colors,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  colors: any;
+}) {
+  return (
+    <View style={styles.deadlineField}>
+      <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={(text) => onChangeText(text.replace(/\D/g, '').slice(0, 4))}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textPlaceholder}
+        keyboardType="number-pad"
+        style={[styles.deadlineFieldInput, { borderColor: colors.border, color: colors.text }]}
+      />
+    </View>
   );
 }
 
@@ -433,4 +613,25 @@ const styles = StyleSheet.create({
   modalInput: { borderWidth: 1, borderRadius: 8, padding: 10, minHeight: 44, textAlignVertical: 'top' },
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12, gap: 12 },
   modalBtn: { paddingHorizontal: 12, paddingVertical: 8 },
+  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  togglePill: {
+    minWidth: 72,
+    height: 32,
+    borderRadius: 16,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  togglePillOn: { backgroundColor: '#0068FF' },
+  togglePillOff: { backgroundColor: '#E5E7EB' },
+  toggleKnob: { width: 24, height: 24, borderRadius: 12 },
+  toggleKnobOn: { backgroundColor: '#fff' },
+  toggleKnobOff: { backgroundColor: '#fff' },
+  toggleText: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '800' },
+  deadlinePreview: { marginTop: 8, fontSize: 12 },
+  deadlineGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  deadlineField: { width: '31%' },
+  deadlineFieldLabel: { fontSize: 12, marginBottom: 4 },
+  deadlineFieldInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 10, fontSize: 14, textAlign: 'center' },
 });

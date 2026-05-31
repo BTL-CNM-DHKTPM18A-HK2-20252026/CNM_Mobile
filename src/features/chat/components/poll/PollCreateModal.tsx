@@ -1,17 +1,16 @@
 import { useTheme } from '@/context/ThemeContext';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,14 +23,8 @@ export interface PollCreateData {
   question: string;
   options: string[];
   deadline?: string;
-  isPinned?: boolean;
   multipleChoices?: boolean;
   allowAddOptions?: boolean;
-  hideResultsBeforeVote?: boolean;
-  hideVoters?: boolean;
-  allowMultiChoice?: boolean;
-  allowUserOptions?: boolean;
-  isAnonymous?: boolean;
 }
 
 interface PollCreateModalProps {
@@ -51,12 +44,34 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
 
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<PollOptionItem[]>(() => [...INITIAL_OPTIONS]);
-  const [showSettings, setShowSettings] = useState(false);
-  const [allowMultiChoice, setAllowMultiChoice] = useState(true);
-  const [allowUserOptions, setAllowUserOptions] = useState(true);
-  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [multipleChoices, setMultipleChoices] = useState(true);
+  const [allowAddOptions, setAllowAddOptions] = useState(true);
+  const [deadlineYear, setDeadlineYear] = useState('');
+  const [deadlineMonth, setDeadlineMonth] = useState('');
+  const [deadlineDay, setDeadlineDay] = useState('');
+  const [deadlineHour, setDeadlineHour] = useState('');
+  const [deadlineMinute, setDeadlineMinute] = useState('');
+  const [deadlineSecond, setDeadlineSecond] = useState('00');
 
   const nextOptionIdRef = useRef(3);
+
+  const deadline = useMemo(() => {
+    const year = Number.parseInt(deadlineYear, 10);
+    const month = Number.parseInt(deadlineMonth, 10);
+    const day = Number.parseInt(deadlineDay, 10);
+    const hour = Number.parseInt(deadlineHour, 10);
+    const minute = Number.parseInt(deadlineMinute, 10);
+    const second = Number.parseInt(deadlineSecond, 10);
+
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return undefined;
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || !Number.isFinite(second)) return undefined;
+
+    const next = new Date(year, month - 1, day, hour, minute, second);
+    if (Number.isNaN(next.getTime())) return undefined;
+
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T${pad(next.getHours())}:${pad(next.getMinutes())}:${pad(next.getSeconds())}`;
+  }, [deadlineYear, deadlineMonth, deadlineDay, deadlineHour, deadlineMinute, deadlineSecond]);
 
   const createEmptyOption = useCallback((): PollOptionItem => {
     const id = String(nextOptionIdRef.current);
@@ -68,10 +83,14 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     nextOptionIdRef.current = 3;
     setQuestion('');
     setOptions([...INITIAL_OPTIONS]);
-    setShowSettings(false);
-    setAllowMultiChoice(true);
-    setAllowUserOptions(true);
-    setIsAnonymous(false);
+    setMultipleChoices(true);
+    setAllowAddOptions(true);
+    setDeadlineYear('');
+    setDeadlineMonth('');
+    setDeadlineDay('');
+    setDeadlineHour('');
+    setDeadlineMinute('');
+    setDeadlineSecond('00');
   }, []);
 
   useEffect(() => {
@@ -131,17 +150,12 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     onSubmit({
       question: question.trim(),
       options: filledOptions,
-      multipleChoices: allowMultiChoice,
-      allowMultiChoice: allowMultiChoice,
-      allowAddOptions: allowUserOptions,
-      allowUserOptions: allowUserOptions,
-      isAnonymous: isAnonymous,
-      hideVoters: isAnonymous,
-      hideResultsBeforeVote: false,
-      isPinned: false,
+      multipleChoices,
+      allowAddOptions,
+      deadline,
     });
     resetForm();
-  }, [allowMultiChoice, allowUserOptions, canSubmit, filledOptions, isAnonymous, onSubmit, question, resetForm]);
+  }, [allowAddOptions, canSubmit, deadline, filledOptions, multipleChoices, onSubmit, question, resetForm]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -159,14 +173,10 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose}>
-              <Text style={[styles.cancelBtn, { color: colors.subText }]}>Huỷ</Text>
+              <Text style={[styles.cancelBtn, { color: colors.textSecondary }]}>Huỷ</Text>
             </TouchableOpacity>
             <Text style={[styles.title, { color: colors.text }]}>Tạo bình chọn</Text>
-            <TouchableOpacity onPress={() => setShowSettings((s) => !s)}>
-              <Text style={[styles.settingsBtn, { color: '#0068FF' }]}>
-                {showSettings ? 'Xong' : 'Cài đặt'}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ width: 60 }} />
           </View>
 
           <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
@@ -178,7 +188,7 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
                 { borderColor: colors.border, color: colors.text, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
               ]}
               placeholder="Nhập câu hỏi..."
-              placeholderTextColor={colors.subText}
+              placeholderTextColor={colors.textPlaceholder}
               value={question}
               multiline
               numberOfLines={3}
@@ -190,14 +200,14 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
             <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>Phương án</Text>
             {options.map((opt, idx) => (
               <View key={opt.id} style={styles.optionRow}>
-                <Text style={[styles.optionNumber, { color: colors.subText }]}>{idx + 1}</Text>
+                <Text style={[styles.optionNumber, { color: colors.textSecondary }]}>{idx + 1}</Text>
                 <TextInput
                   style={[
                     styles.optionInput,
                     { borderColor: colors.border, color: colors.text, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
                   ]}
                   placeholder={`Phương án ${idx + 1}`}
-                  placeholderTextColor={colors.subText}
+                  placeholderTextColor={colors.textPlaceholder}
                   value={opt.value}
                   multiline={false}
                   textAlignVertical="top"
@@ -211,14 +221,25 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
               </View>
             ))}
 
-            {/* Settings */}
-            {showSettings && (
-              <View style={[styles.settingsSection, { borderTopColor: colors.border }]}>
-                <SettingRow label="Chọn nhiều phương án" value={allowMultiChoice} onValueChange={setAllowMultiChoice} colors={colors} />
-                <SettingRow label="Cho phép thêm phương án" value={allowUserOptions} onValueChange={setAllowUserOptions} colors={colors} />
-                <SettingRow label="Ẩn danh" value={isAnonymous} onValueChange={setIsAnonymous} colors={colors} />
+            <View style={[styles.settingsSection, { borderTopColor: colors.border }]}>
+              <ToggleRow label="Chọn nhiều phương án" value={multipleChoices} onPress={() => setMultipleChoices((s) => !s)} colors={colors} />
+              <ToggleRow label="Cho phép thêm phương án" value={allowAddOptions} onPress={() => setAllowAddOptions((s) => !s)} colors={colors} />
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={[styles.settingLabel, { color: colors.text, marginBottom: 6 }]}>Hạn chót</Text>
+                  <View style={styles.deadlineGrid}>
+                    <DeadlineField label="Năm" value={deadlineYear} onChangeText={setDeadlineYear} placeholder="2026" colors={colors} />
+                    <DeadlineField label="Tháng" value={deadlineMonth} onChangeText={setDeadlineMonth} placeholder="06" colors={colors} />
+                    <DeadlineField label="Ngày" value={deadlineDay} onChangeText={setDeadlineDay} placeholder="01" colors={colors} />
+                    <DeadlineField label="Giờ" value={deadlineHour} onChangeText={setDeadlineHour} placeholder="18" colors={colors} />
+                    <DeadlineField label="Phút" value={deadlineMinute} onChangeText={setDeadlineMinute} placeholder="30" colors={colors} />
+                    <DeadlineField label="Giây" value={deadlineSecond} onChangeText={setDeadlineSecond} placeholder="00" colors={colors} />
+                  </View>
+                  <Text style={[styles.deadlinePreview, { color: colors.textSecondary }]}> 
+                    {deadline ? `Đã chọn: ${deadline}` : 'Chưa chọn hoặc nhập chưa đủ hạn chót'}
+                  </Text>
               </View>
-            )}
+            </View>
 
             <TouchableOpacity style={styles.addOptionBtn} onPress={handleAddOption}>
               <Text style={[styles.addOptionText, { color: '#0068FF' }]}>+ Thêm phương án</Text>
@@ -241,25 +262,51 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
   );
 }
 
-function SettingRow({
+function ToggleRow({
   label,
   value,
-  onValueChange,
+  onPress,
   colors,
 }: {
   label: string;
   value: boolean;
-  onValueChange: (v: boolean) => void;
+  onPress: () => void;
   colors: any;
 }) {
   return (
     <View style={styles.settingRow}>
       <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
-      <Switch
+      <TouchableOpacity onPress={onPress} style={[styles.togglePill, value ? styles.togglePillOn : styles.togglePillOff]}>
+        <View style={[styles.toggleKnob, value ? styles.toggleKnobOn : styles.toggleKnobOff]} />
+        <Text style={[styles.toggleText, { color: value ? '#fff' : colors.textSecondary }]}>{value ? 'ON' : 'OFF'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function DeadlineField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  colors,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  colors: any;
+}) {
+  return (
+    <View style={styles.deadlineField}>
+      <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <TextInput
         value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: '#ddd', true: '#0068FF80' }}
-        thumbColor={value ? '#0068FF' : '#f4f3f4'}
+        onChangeText={(text) => onChangeText(text.replace(/\D/g, '').slice(0, 4))}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textPlaceholder}
+        keyboardType="number-pad"
+        style={[styles.deadlineFieldInput, { borderColor: colors.border, color: colors.text }]}
       />
     </View>
   );
@@ -368,6 +415,62 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 14,
     flex: 1,
+  },
+  togglePill: {
+    minWidth: 72,
+    height: 32,
+    borderRadius: 16,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  togglePillOn: {
+    backgroundColor: '#0068FF',
+  },
+  togglePillOff: {
+    backgroundColor: '#E5E7EB',
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  toggleKnobOn: {
+    backgroundColor: '#fff',
+  },
+  toggleKnobOff: {
+    backgroundColor: '#fff',
+  },
+  toggleText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  deadlinePreview: {
+    marginTop: 8,
+    fontSize: 12,
+  },
+  deadlineGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  deadlineField: {
+    width: '31%',
+  },
+  deadlineFieldLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  deadlineFieldInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 14,
+    textAlign: 'center',
   },
   footer: {
     borderTopWidth: 0.5,

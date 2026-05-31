@@ -335,6 +335,17 @@ export const chatService = {
     return await api.post(`/polls/${pollId}/options`, { content });
   },
 
+  updatePollSettings: async (pollId: string, data: {
+    multipleChoices?: boolean;
+    allowAddOptions?: boolean;
+    hideResultsBeforeVote?: boolean;
+    hideVoters?: boolean;
+    isPinned?: boolean;
+    deadline?: string | null;
+  }) => {
+    return await api.patch(`/polls/${pollId}`, data);
+  },
+
   // ── Group Permissions ──────────────────────────────────────────────
   updatePermissions: async (conversationId: string, permissions: {
     canEditInfo?: boolean;
