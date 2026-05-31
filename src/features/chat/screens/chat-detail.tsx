@@ -2298,6 +2298,7 @@ const renderOlderMessagesLoading = () => {
     const isImageGroupMsg = msgType === 'IMAGE_GROUP';
     const isVideoMsg = msgType === 'VIDEO';
     const isVoiceMsg = msgType === 'VOICE';
+    const isStickerMsg = msgType === 'STICKER';
     const isFileMsg = msgType === 'FILE' || msgType === 'MEDIA';
     const isMediaMsg = isImageMsg || isImageGroupMsg || isVideoMsg || isFileMsg || isVoiceMsg;
 
@@ -2796,6 +2797,30 @@ const renderOlderMessagesLoading = () => {
     };
 
     const mediaContent = renderMediaContent();
+
+    // STICKER: render without bubble wrapper
+    if (isStickerMsg) {
+      return (
+        <View style={{ alignItems: 'center', marginVertical: 6, paddingHorizontal: 40 }}>
+          {dateSepLabel ? (
+            <View style={styles.dateSeparator}>
+              <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
+            </View>
+          ) : null}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() => openMessageActionMenu(item)}
+            delayLongPress={220}
+          >
+            <Image
+              source={{ uri: item.content }}
+              style={{ width: 120, height: 120 }}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    }
 
     return (
       <MessageItem

@@ -23,6 +23,8 @@ export const CallOverlay = ({ currentUserId }: { currentUserId: string }) => {
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [localStream, setLocalStream] = useState<any>(null);
   const [remoteStream, setRemoteStream] = useState<any>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
 
   useEffect(() => {
     const unsubscribe = webrtcService.onStateChange((state, info) => {
@@ -38,11 +40,11 @@ export const CallOverlay = ({ currentUserId }: { currentUserId: string }) => {
 
   if (callState === 'idle') return null;
 
-  const handleAccept = () => webrtcService.acceptCall(currentUserId);
-  const handleReject = () => webrtcService.rejectCall(currentUserId);
-  const handleEnd = () => webrtcService.endCall(currentUserId);
-  const handleToggleMute = () => webrtcService.toggleMute();
-  const handleToggleVideo = () => webrtcService.toggleCamera();
+  const handleAccept = () => webrtcService.acceptCall();
+  const handleReject = () => webrtcService.rejectCall();
+  const handleEnd = () => webrtcService.endCall();
+  const handleToggleMute = () => { const muted = webrtcService.toggleMute(); setIsMuted(muted); };
+  const handleToggleVideo = () => { const off = webrtcService.toggleCamera(); setIsCameraOff(off); };
 
   if (callState === 'incoming') {
     return (
@@ -70,7 +72,7 @@ export const CallOverlay = ({ currentUserId }: { currentUserId: string }) => {
         />
       ) : (
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' }]}>
-          <Text style={{ color: '#FFF' }}>[Video Call không khả dụng trên Expo Go]</Text>
+          <Text style={{ color: '#AAA' }}>Đang kết nối video...</Text>
         </View>
       )}
       
@@ -93,13 +95,13 @@ export const CallOverlay = ({ currentUserId }: { currentUserId: string }) => {
         
         <View style={styles.controlsRow}>
           <TouchableOpacity style={styles.controlBtn} onPress={handleToggleMute}>
-            <Ionicons name="mic-off" size={24} color="#FFF" />
+            <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={24} color="#FFF" />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.controlBtn, { backgroundColor: '#EF4444' }]} onPress={handleEnd}>
             <Ionicons name="call" size={24} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.controlBtn} onPress={handleToggleVideo}>
-            <Ionicons name="videocam-off" size={24} color="#FFF" />
+            <Ionicons name={isCameraOff ? 'videocam-off' : 'videocam'} size={24} color="#FFF" />
           </TouchableOpacity>
         </View>
       </View>

@@ -9,6 +9,7 @@ import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Keyboard,
@@ -65,6 +66,9 @@ interface ChatItem {
   timeText: string;
   unreadCount: number;
   pinned: boolean;
+  pinnedAt?: string | null;
+  mutedUntil?: string | null;
+  isMarkedUnread?: boolean;
   type: ConversationType;
   otherUserId?: string;
 }
@@ -257,6 +261,9 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
       timeText: toTimeText(item.lastMessageTime ?? item.updatedAt ?? item.lastUpdated ?? item.time),
       unreadCount: Number(item.unreadCount ?? item.unread ?? 0),
       pinned: Boolean(item.isPinned ?? item.pinned),
+      pinnedAt: (item.pinnedAt ?? item.pinned_at ?? null) as string | null | undefined,
+      mutedUntil: (item.mutedUntil ?? item.muted_until ?? null) as string | null | undefined,
+      isMarkedUnread: Boolean(item.isMarkedUnread ?? item.markedUnread ?? false),
       type: conversationType,
     };
   });
@@ -273,7 +280,6 @@ function withDefaultConversations(items: ChatItem[]): ChatItem[] {
   const defaults: ChatItem[] = [];
   if (!hasCloud) defaults.push(DEFAULT_CLOUD_ITEM);
   if (!hasAi) defaults.push(DEFAULT_AI_ITEM);
-
   return [...defaults, ...items];
 }
 
@@ -305,17 +311,37 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ChatItem[]>(FALLBACK_ITEMS);
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ item: ChatItem } | null>(null);
+  const [showMuteSubMenu, setShowMuteSubMenu] = useState(false);
+  const [showPinInput, setShowPinInput] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [hideTargetId, setHideTargetId] = useState<string | null>(null);
+
+  // Sort: pinned first (newest pin first), then by time
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const aPinned = !!a.pinned;
+      const bPinned = !!b.pinned;
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+      if (aPinned && bPinned) {
+        const aPinTime = a.pinnedAt ? new Date(a.pinnedAt).getTime() : 0;
+        const bPinTime = b.pinnedAt ? new Date(b.pinnedAt).getTime() : 0;
+        return bPinTime - aPinTime;
+      }
+      return 0; // Keep API order for non-pinned
+    });
+  }, [items]);
 
   const filteredItems = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    if (!keyword) return items;
+    if (!keyword) return sortedItems;
 
-    return items.filter(
+    return sortedItems.filter(
       (item) =>
         item.title.toLowerCase().includes(keyword) ||
         item.lastMessage.toLowerCase().includes(keyword)
     );
-  }, [items, query]);
+  }, [sortedItems, query]);
 
   const fetchConversations = useCallback(async (options?: { silent?: boolean }) => {
     const silent = Boolean(options?.silent);
@@ -416,6 +442,29 @@ export default function ChatScreen() {
           });
 
           stompSubRefs.current = [friendSub, groupSub];
+
+          // Listen for conversation pin updates from other devices
+          const convSub = client.subscribe(`/topic/conversation-events/${userId}`, (msg) => {
+            try {
+              const payload = JSON.parse(msg.body || '{}') as Record<string, unknown>;
+              if (String(payload?.type ?? '') === 'PIN_UPDATED') {
+                const evtConvId = String(payload?.conversationId ?? '');
+                const evtPinned = Boolean(payload?.isPinned);
+                const evtPinnedAt = (payload?.pinnedAt as string) ?? null;
+                if (evtConvId) {
+                  setItems((prev) => prev.map((item) =>
+                    String(item.id) === evtConvId
+                      ? { ...item, pinned: evtPinned, pinnedAt: evtPinnedAt }
+                      : item
+                  ));
+                }
+              }
+            } catch {
+              // ignore
+            }
+          });
+
+          stompSubRefs.current = [friendSub, groupSub, convSub];
         },
         onStompError: () => {},
         onWebSocketError: () => {},
@@ -466,6 +515,58 @@ export default function ChatScreen() {
       router.push(
         `/chat-detail?id=${encodeURIComponent(item.id)}&name=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}&avatar=${encodeURIComponent(item.avatarUrl ?? '')}`
       );
+    }
+  };
+
+  const handleMuteConversation = async (convId: string, duration: string) => {
+    try {
+      await chatService.muteConversation(convId, duration);
+      setItems((prev) => prev.map((item) => {
+        if (String(item.id) !== convId) return item;
+        if (duration === 'off') return { ...item, mutedUntil: null };
+        const now = new Date();
+        switch (duration) {
+          case '1h': now.setHours(now.getHours() + 1); break;
+          case '4h': now.setHours(now.getHours() + 4); break;
+          case 'until_8am': now.setHours(8, 0, 0, 0); if (now <= new Date()) now.setDate(now.getDate() + 1); break;
+          case 'forever': return { ...item, mutedUntil: '2099-12-31T23:59:59' };
+        }
+        return { ...item, mutedUntil: now.toISOString() };
+      }));
+    } catch (e: any) {
+      Alert.alert('Lỗi', e?.message || 'Không thể tắt thông báo');
+    }
+  };
+
+  const handleMarkUnread = async (convId: string) => {
+    try {
+      await chatService.markUnread(convId);
+      setItems((prev) => prev.map((item) =>
+        String(item.id) === convId ? { ...item, isMarkedUnread: true, unreadCount: Math.max(item.unreadCount, 1) } : item
+      ));
+    } catch (e: any) {
+      Alert.alert('Lỗi', e?.message || 'Không thể đánh dấu chưa đọc');
+    }
+  };
+
+  const handleHideConversation = async (convId: string) => {
+    setHideTargetId(convId);
+    setShowPinInput(true);
+    setPinInput('');
+  };
+
+  const confirmHide = async () => {
+    const convId = hideTargetId;
+    if (!convId || pinInput.length !== 6) return;
+    try {
+      await chatService.hideConversation(convId, pinInput);
+      setItems((prev) => prev.filter((item) => String(item.id) !== convId));
+    } catch (e: any) {
+      Alert.alert('Lỗi', e?.message || 'Không thể ẩn hội thoại');
+    } finally {
+      setShowPinInput(false);
+      setPinInput('');
+      setHideTargetId(null);
     }
   };
 
@@ -536,10 +637,43 @@ export default function ChatScreen() {
     );
   };
 
+  const handlePinConversation = async (convId: string, isPinned: boolean) => {
+    // Optimistic update
+    setItems((prev) => prev.map((item) =>
+      String(item.id) === convId
+        ? { ...item, pinned: !isPinned, pinnedAt: !isPinned ? new Date().toISOString() : null }
+        : item
+    ));
+
+    try {
+      const res = await chatService.togglePinConversation(convId) as any;
+      const newPinned = res?.data?.isPinned ?? res?.isPinned ?? !isPinned;
+      const newPinnedAt = (res?.data?.pinnedAt ?? res?.pinnedAt ?? null) as string | null;
+      setItems((prev) => prev.map((item) =>
+        String(item.id) === convId
+          ? { ...item, pinned: newPinned, pinnedAt: newPinnedAt }
+          : item
+      ));
+    } catch (e: any) {
+      // Revert on failure
+      setItems((prev) => prev.map((item) =>
+        String(item.id) === convId
+          ? { ...item, pinned: isPinned, pinnedAt: isPinned ? item.pinnedAt : null }
+          : item
+      ));
+      Alert.alert('Lỗi', e?.message || 'Không thể ghim/bỏ ghim hội thoại');
+    }
+  };
+
   const renderItem = ({ item }: { item: ChatItem }) => {
     return (
       <View>
-        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenConversation(item)} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.chatItem}
+          onPress={() => handleOpenConversation(item)}
+          onLongPress={() => setContextMenu({ item })}
+          activeOpacity={0.8}
+        >
           {renderAvatar(item)}
 
           <View style={styles.chatContent}>
@@ -549,13 +683,17 @@ export default function ChatScreen() {
               </Text>
               <View style={styles.timeAndPinWrap}>
                 {item.pinned ? <Ionicons name="pin" size={13} color="#A5A8AE" style={styles.pinIcon} /> : null}
+                {item.mutedUntil ? <Ionicons name="volume-mute" size={13} color="#F87171" style={styles.pinIcon} /> : null}
                 <Text style={styles.timeText}>{item.timeText}</Text>
               </View>
             </View>
 
-            <Text style={styles.lastMessageText} numberOfLines={1}>
-              {item.lastMessage}
-            </Text>
+            <View style={styles.lastMessageRow}>
+              <Text style={styles.lastMessageText} numberOfLines={1}>
+                {item.lastMessage}
+              </Text>
+              {item.isMarkedUnread ? <View style={styles.markedUnreadDot} /> : null}
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -626,6 +764,138 @@ export default function ChatScreen() {
             </TouchableOpacity>
           </View>
         </Pressable>
+      </Modal>
+
+      {/* Context menu (long press) */}
+      <Modal visible={contextMenu !== null} transparent animationType="fade" onRequestClose={() => { setContextMenu(null); setShowMuteSubMenu(false); }}>
+        <Pressable style={styles.quickMenuOverlay} onPress={() => { setContextMenu(null); setShowMuteSubMenu(false); }}>
+          {showMuteSubMenu ? (
+            <View style={styles.contextMenuCard}>
+              <Text style={[styles.contextMenuText, { paddingHorizontal: 16, paddingVertical: 6, color: '#888' }]}>Tắt thông báo</Text>
+              {[
+                { label: '1 giờ', value: '1h' },
+                { label: '4 giờ', value: '4h' },
+                { label: 'Đến 8 giờ sáng', value: 'until_8am' },
+                { label: 'Đến khi được mở lại', value: 'forever' },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={styles.contextMenuItem}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    const ctxItem = contextMenu?.item;
+                    setContextMenu(null);
+                    setShowMuteSubMenu(false);
+                    if (ctxItem) handleMuteConversation(ctxItem.id, opt.value);
+                  }}
+                >
+                  <Ionicons name="time-outline" size={18} color="#2E7DE9" />
+                  <Text style={styles.contextMenuText}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+              <View style={styles.quickMenuDivider} />
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                activeOpacity={0.75}
+                onPress={() => {
+                  const ctxItem = contextMenu?.item;
+                  setContextMenu(null);
+                  setShowMuteSubMenu(false);
+                  if (ctxItem) handleMuteConversation(ctxItem.id, 'off');
+                }}
+              >
+                <Ionicons name="notifications" size={18} color="#10B981" />
+                <Text style={[styles.contextMenuText, { color: '#10B981' }]}>Bật thông báo</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.contextMenuCard}>
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                activeOpacity={0.75}
+                onPress={() => {
+                  const ctxItem = contextMenu?.item;
+                  if (ctxItem) {
+                    setContextMenu(null);
+                    handlePinConversation(ctxItem.id, ctxItem.pinned);
+                  }
+                }}
+              >
+                <Ionicons name={contextMenu?.item?.pinned ? 'pin-outline' : 'pin'} size={18} color="#2E7DE9" />
+                <Text style={styles.contextMenuText}>{contextMenu?.item?.pinned ? 'Bỏ ghim' : 'Ghim'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                activeOpacity={0.75}
+                onPress={() => setShowMuteSubMenu(true)}
+              >
+                <Ionicons name="volume-mute" size={18} color="#F87171" />
+                <Text style={styles.contextMenuText}>Tắt thông báo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                activeOpacity={0.75}
+                onPress={() => {
+                  const ctxItem = contextMenu?.item;
+                  setContextMenu(null);
+                  if (ctxItem) handleMarkUnread(ctxItem.id);
+                }}
+              >
+                <Ionicons name="ellipse-outline" size={18} color="#22C55E" />
+                <Text style={styles.contextMenuText}>Đánh dấu chưa đọc</Text>
+              </TouchableOpacity>
+
+              <View style={styles.quickMenuDivider} />
+
+              <TouchableOpacity
+                style={styles.contextMenuItem}
+                activeOpacity={0.75}
+                onPress={() => {
+                  const ctxItem = contextMenu?.item;
+                  setContextMenu(null);
+                  if (ctxItem) handleHideConversation(ctxItem.id);
+                }}
+              >
+                <Ionicons name="eye-off-outline" size={18} color="#888" />
+                <Text style={[styles.contextMenuText, { color: '#888' }]}>Ẩn trò chuyện</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </Pressable>
+      </Modal>
+
+      {/* PIN Input Modal for Hide */}
+      <Modal visible={showPinInput} transparent animationType="fade">
+        <View style={styles.pinOverlay}>
+          <View style={styles.pinCard}>
+            <Text style={styles.pinTitle}>Nhập mã PIN</Text>
+            <Text style={styles.pinSubtitle}>Nhập PIN 6 số để ẩn hội thoại</Text>
+            <TextInput
+              style={styles.pinInput}
+              value={pinInput}
+              onChangeText={(t) => setPinInput(t.replace(/[^0-9]/g, '').slice(0, 6))}
+              keyboardType="numeric"
+              maxLength={6}
+              secureTextEntry
+              placeholder="••••••"
+              placeholderTextColor="#AAA"
+            />
+            <View style={styles.pinButtonRow}>
+              <TouchableOpacity style={styles.pinCancelBtn} onPress={() => { setShowPinInput(false); setPinInput(''); setHideTargetId(null); }}>
+                <Text style={styles.pinCancelText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pinConfirmBtn, pinInput.length === 6 ? {} : { opacity: 0.4 }]}
+                onPress={confirmHide}
+                disabled={pinInput.length !== 6}
+              >
+                <Text style={styles.pinConfirmText}>Xác nhận</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {loading ? (
@@ -723,6 +993,107 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#E6EAF2',
     marginHorizontal: 12,
+  },
+  contextMenuCard: {
+    position: 'absolute',
+    bottom: 80,
+    alignSelf: 'center',
+    minWidth: 160,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+  },
+  contextMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  contextMenuText: {
+    marginLeft: 10,
+    color: '#101317',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  lastMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  markedUnreadDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#3B82F6',
+    marginLeft: 6,
+  },
+  pinOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pinCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 24,
+    width: 280,
+    alignItems: 'center',
+  },
+  pinTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#101317',
+    marginBottom: 6,
+  },
+  pinSubtitle: {
+    fontSize: 12,
+    color: '#888',
+    marginBottom: 20,
+  },
+  pinInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    width: '100%',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 20,
+    textAlign: 'center',
+    letterSpacing: 8,
+    color: '#101317',
+  },
+  pinButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    width: '100%',
+  },
+  pinCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  pinCancelText: {
+    color: '#666',
+    fontWeight: '600',
+  },
+  pinConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#2E7DE9',
+    alignItems: 'center',
+  },
+  pinConfirmText: {
+    color: '#FFF',
+    fontWeight: '600',
   },
   errorBanner: {
     color: '#D14545',
