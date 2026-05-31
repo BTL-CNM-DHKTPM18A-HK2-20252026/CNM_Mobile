@@ -111,6 +111,13 @@ export default function ChatDetailScreen() {
   const [conversationDisplayName, setConversationDisplayName] = useState(String(name ?? ''));
   const [conversationAvatarUrl, setConversationAvatarUrl] = useState(String(avatar ?? ''));
   const [messages, setMessages] = useState<Message[]>([]);
+  const displayMessages = useMemo(() => {
+    return messages.filter(
+      (m) =>
+        (m.messageType || '').toUpperCase() !== 'MESSAGE_PIN' &&
+        (m.messageType || '').toUpperCase() !== 'MESSAGE_UNPIN'
+    );
+  }, [messages]);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isSendingAi, setIsSendingAi] = useState(false);
@@ -838,12 +845,31 @@ export default function ChatDetailScreen() {
   const isPartnerOnline = partnerId ? statuses.get(partnerId)?.online : false;
   const isPartnerTyping = isPartnerOnline && isTyping;
 
+  // Fetch group members for online status
+  useEffect(() => {
+    if (!isGroupConversation || !conversationId) return;
+    fetchConversationMembers(conversationId)
+      .then(setInfoMembers)
+      .catch(() => setInfoMembers([]));
+  }, [isGroupConversation, conversationId]);
+
+  // Count online members for group
+  const groupOnlineCount = useMemo(() => {
+    if (!isGroupConversation || infoMembers.length === 0) return 0;
+    return infoMembers.filter((m: any) => {
+      const uid = String(m.userId ?? m.user_id ?? '');
+      return uid && uid !== currentUserId && statuses.get(uid)?.online;
+    }).length;
+  }, [isGroupConversation, infoMembers, currentUserId, statuses]);
+
   const headerSubtitleText = isAiConversation
-    ? (isSendingAi ? t('chat.typing', 'Đang nhập...') : t('chat.ai_subheading', 'Hỏi đáp với Fruvia AI'))
+    ? (isSendingAi ? t('chat.typing', 'Đang nhập...') : t('chat.ai_subheading', 'Hỏi đáp với Fruvia Chatbot'))
     : isCloudConversation
       ? t('chat.cloud_subheading', 'Truyền file giữa các thiết bị của bạn')
       : isGroupConversation
-        ? `${infoMembers.length} thành viên`
+        ? groupOnlineCount > 0
+          ? `${infoMembers.length} thành viên, ${groupOnlineCount} đang hoạt động`
+          : `${infoMembers.length} thành viên`
         : isPartnerOnline
           ? (isPartnerTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
           : t('chat.offline_recent', 'Truy cập gần đây');
@@ -2279,8 +2305,8 @@ const renderOlderMessagesLoading = () => {
     }
 
     const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
-    const prevMessage = index > 0 ? messages[index - 1] : undefined;
-    const nextMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
+    const prevMessage = index > 0 ? displayMessages[index - 1] : undefined;
+    const nextMessage = index < displayMessages.length - 1 ? displayMessages[index + 1] : undefined;
     const showAvatar = !isCurrentUserMessage && isFirstInMessageBlock(item, prevMessage);
     const showSenderName = isGroupConversation && showAvatar;
     const senderDisplayName = (item.senderName || '').trim() || t('chat.unknown_user', 'Người dùng');
