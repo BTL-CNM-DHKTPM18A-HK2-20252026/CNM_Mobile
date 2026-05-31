@@ -30,25 +30,205 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
 }
 
-function getPlainTextFromMessageContent(content: string): string {
-  const trimmed = content.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === 'object') {
-        const extract = (node: any): string => {
-          if (!node) return '';
-          if (node.type === 'text') return node.text ?? '';
-          if (Array.isArray(node.content)) return node.content.map(extract).join('');
-          return '';
-        };
-        return extract(parsed).trim() || content;
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'svg']);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', '3gp', 'wmv']);
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac']);
+
+function getStringValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : String(value ?? '').trim();
+}
+
+function getFileExtensionFromValue(value: string): string {
+  const clean = value.split('?')[0].split('#')[0];
+  const fileName = clean.split('/').pop() ?? clean;
+  const ext = fileName.includes('.') ? fileName.split('.').pop() ?? '' : '';
+  return ext.toLowerCase();
+}
+
+function inferMediaTypeFromValue(value: string): 'IMAGE' | 'VIDEO' | 'VOICE' | 'FILE' | null {
+  const raw = getStringValue(value);
+  if (!raw) return null;
+
+  const extension = getFileExtensionFromValue(raw);
+  if (IMAGE_EXTENSIONS.has(extension)) return 'IMAGE';
+  if (VIDEO_EXTENSIONS.has(extension)) return 'VIDEO';
+  if (AUDIO_EXTENSIONS.has(extension)) return 'VOICE';
+
+  return null;
+}
+
+function formatMediaLabel(messageType: string, fileName?: string, attachmentCount?: number): string {
+  switch (messageType) {
+    case 'IMAGE':
+      return 'Hình ảnh';
+    case 'IMAGE_GROUP':
+      return attachmentCount && attachmentCount > 1 ? `${attachmentCount} hình ảnh` : 'Hình ảnh';
+    case 'VIDEO':
+      return 'Video';
+    case 'VOICE':
+      return 'Tin nhắn thoại';
+    case 'FILE':
+    case 'MEDIA':
+      return fileName ? `Tệp: ${fileName}` : 'Tệp đính kèm';
+    case 'SHARE_CONTACT':
+      return 'Danh thiếp';
+    default:
+      return 'Nội dung media';
+  }
+}
+
+function extractConversationPreview(rawValue: unknown): {
+  text: string;
+  mediaType: 'IMAGE' | 'VIDEO' | 'VOICE' | 'FILE' | 'IMAGE_GROUP' | 'MEDIA' | 'SHARE_CONTACT' | null;
+  fileName: string;
+  attachmentCount: number;
+} {
+  const state = {
+    textParts: [] as string[],
+    mediaType: null as 'IMAGE' | 'VIDEO' | 'VOICE' | 'FILE' | 'IMAGE_GROUP' | 'MEDIA' | 'SHARE_CONTACT' | null,
+    fileName: '',
+    attachmentCount: 0,
+  };
+
+  const visit = (node: any): void => {
+    if (!node) return;
+
+    if (typeof node === 'string') {
+      const text = node.trim();
+      if (text) state.textParts.push(text);
+      return;
+    }
+
+    if (Array.isArray(node)) {
+      node.forEach(visit);
+      return;
+    }
+
+    if (typeof node !== 'object') return;
+
+    const nodeType = getStringValue(node.type ?? node.messageType ?? node.kind).toUpperCase();
+    if (!state.mediaType) {
+      if (nodeType === 'IMAGE_GROUP') state.mediaType = 'IMAGE_GROUP';
+      else if (nodeType === 'IMAGE') state.mediaType = 'IMAGE';
+      else if (nodeType === 'VIDEO') state.mediaType = 'VIDEO';
+      else if (nodeType === 'VOICE' || nodeType === 'AUDIO') state.mediaType = 'VOICE';
+      else if (nodeType === 'FILE') state.mediaType = 'FILE';
+      else if (nodeType === 'MEDIA') state.mediaType = 'MEDIA';
+      else if (nodeType === 'SHARE_CONTACT') state.mediaType = 'SHARE_CONTACT';
+    }
+
+    const text = getStringValue(node.text ?? node.value ?? node.label ?? node.name);
+    if (text) {
+      state.textParts.push(text);
+    }
+
+    if (!state.fileName) {
+      state.fileName = getStringValue(
+        node.fileName ?? node.filename ?? node.attrs?.fileName ?? node.attrs?.name ?? node.meta?.fileName
+      );
+    }
+
+    if (!state.mediaType) {
+      const urlCandidate = getStringValue(
+        node.url ?? node.src ?? node.contentUrl ?? node.mediaUrl ?? node.path ?? node.attrs?.src ?? node.attrs?.url
+      );
+      if (urlCandidate) {
+        state.mediaType = inferMediaTypeFromValue(urlCandidate) ?? null;
+        if (!state.fileName) {
+          const fileName = getStringValue(node.fileName ?? node.attrs?.fileName ?? node.attrs?.name);
+          if (fileName) state.fileName = fileName;
+        }
       }
+    }
+
+    const attachments = Array.isArray(node.attachments) ? node.attachments : [];
+    if (attachments.length > 0) {
+      state.attachmentCount += attachments.length;
+      if (!state.mediaType) state.mediaType = 'IMAGE_GROUP';
+    }
+
+    if (Array.isArray(node.content)) visit(node.content);
+    if (Array.isArray(node.children)) visit(node.children);
+    if (Array.isArray(node.items)) visit(node.items);
+    if (Array.isArray(node.nodes)) visit(node.nodes);
+    if (Array.isArray(node.markup)) visit(node.markup);
+    if (Array.isArray(node.attachments)) visit(node.attachments);
+  };
+
+  const rawText = getStringValue(rawValue);
+  if (rawText) {
+    try {
+      const parsed = JSON.parse(rawText);
+      visit(parsed);
     } catch {
-      // ignore
+      state.textParts.push(rawText);
     }
   }
-  return content;
+
+  const text = stripHtml(state.textParts.join(' ').replace(/\s+/g, ' ').trim());
+  if (!state.mediaType && rawText) {
+    state.mediaType = inferMediaTypeFromValue(rawText) ?? null;
+  }
+
+  return {
+    text,
+    mediaType: state.mediaType,
+    fileName: state.fileName,
+    attachmentCount: state.attachmentCount,
+  };
+}
+
+function buildConversationPreview(item: any, currentUserId?: string | null): string {
+  const rawSenderId = getStringValue(
+    item.lastMessageSenderId ?? item.lastSenderId ?? item.senderId ?? item.authorId ?? item.messageSenderId
+  );
+  const rawSenderName = getStringValue(
+    item.lastMessageSenderName ?? item.lastSenderName ?? item.senderName ?? item.authorName ?? item.messageSenderName
+  );
+  const isSelf = Boolean(currentUserId && rawSenderId && String(currentUserId) === rawSenderId);
+  const senderLabel = isSelf ? 'Bạn' : rawSenderName;
+
+  const rawPreviewSource =
+    item.lastMessageContent ??
+    item.lastMessage ??
+    item.preview ??
+    item.snippet ??
+    item.content ??
+    item.caption ??
+    '';
+
+  const explicitType = getStringValue(
+    item.lastMessageType ?? item.messageType ?? item.lastMessageKind ?? item.kind ?? item.type
+  ).toUpperCase();
+  const parsed = extractConversationPreview(rawPreviewSource);
+  const inferredType = explicitType || parsed.mediaType || inferMediaTypeFromValue(parsed.text || getStringValue(rawPreviewSource)) || '';
+
+  let previewText = parsed.text;
+
+  if (inferredType === 'IMAGE_GROUP') {
+    previewText = formatMediaLabel('IMAGE_GROUP', parsed.fileName, parsed.attachmentCount);
+  } else if (
+    inferredType === 'IMAGE' ||
+    inferredType === 'VIDEO' ||
+    inferredType === 'VOICE' ||
+    inferredType === 'FILE' ||
+    inferredType === 'MEDIA' ||
+    inferredType === 'SHARE_CONTACT'
+  ) {
+    previewText = formatMediaLabel(inferredType, parsed.fileName, parsed.attachmentCount);
+  }
+
+  if (!previewText) {
+    previewText = parsed.mediaType
+      ? formatMediaLabel(parsed.mediaType, parsed.fileName, parsed.attachmentCount)
+      : 'Chưa có tin nhắn';
+  }
+
+  if (senderLabel) {
+    return `${senderLabel}: ${previewText}`;
+  }
+
+  return previewText;
 }
 
 type ConversationType = 'PRIVATE' | 'GROUP' | 'CLOUD' | 'SYSTEM' | 'AI' | 'SELF';
@@ -221,14 +401,7 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
       primaryMember?.fullName ??
       `Đoạn chat ${index + 1}`;
 
-    const senderPrefix = item.lastMessageSenderName ? `${item.lastMessageSenderName}: ` : '';
-    const rawLastMessage =
-      item.lastMessageContent ??
-      item.lastMessage ??
-      item.preview ??
-      item.snippet ??
-      `${senderPrefix}Chưa có tin nhắn`;
-    const lastMessage = stripHtml(getPlainTextFromMessageContent(String(rawLastMessage)));
+    const lastMessage = buildConversationPreview(item, currentUserId);
 
     return {
       id: String(item.conversationId ?? item.id ?? item.userId ?? `conversation-${index}`),
