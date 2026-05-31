@@ -1,20 +1,15 @@
-import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 interface PollCardProps {
@@ -31,25 +26,31 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
 
   if (!poll) return null;
 
+  const [localOptions, setLocalOptions] = useState<any[]>(() => (poll.options || []).slice());
+
+  useEffect(() => {
+    setLocalOptions((poll.options || []).slice());
+  }, [poll.options]);
+
   // Calculate unique voters
   const uniqueVoters = new Set<string>();
-  poll.options?.forEach((opt: any) => {
+  localOptions?.forEach((opt: any) => {
     opt.voterIds?.forEach((v: string) => uniqueVoters.add(v));
   });
   const totalUniqueVoters = uniqueVoters.size;
-  const totalVotesCast = poll.options?.reduce((sum: number, opt: any) => sum + (opt.voterIds?.length || 0), 0) || 0;
+  const totalVotesCast = localOptions?.reduce((sum: number, opt: any) => sum + (opt.voterIds?.length || 0), 0) || 0;
   const hasVoted = uniqueVoters.has(currentUserId || '');
   const showResults = !poll.hideResultsBeforeVote || hasVoted;
 
-  // Largest remainder method for % calculation
-  const rawPercents = (poll.options || []).map((opt: any) => {
+  // Largest remainder method for % calculation (based on localOptions)
+  const rawPercents = (localOptions || []).map((opt: any) => {
     const votes = opt.voterIds?.length || 0;
     return totalVotesCast > 0 ? (votes / totalVotesCast) * 100 : 0;
   });
   const floored = rawPercents.map((p: number) => Math.floor(p));
   const remainder = Math.min(
     100 - floored.reduce((a: number, b: number) => a + b, 0),
-    poll.options?.length || 0
+    localOptions?.length || 0
   );
   const remainders = rawPercents.map((p: number, i: number) => ({
     idx: i,
@@ -61,8 +62,8 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
   }
 
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(() => {
-    return poll.options
-      ?.filter((opt: any) => opt.voterIds?.includes(currentUserId))
+    return (poll.options || [])
+      .filter((opt: any) => opt.voterIds?.includes(currentUserId))
       .map((opt: any) => opt.optionId) || [];
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,6 +91,26 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
         await chatService.votePoll(poll.pollId, [optionId]);
         setSelectedOptionIds([optionId]);
       }
+
+      // Refresh localOptions optimistic update: adjust voterIds counts locally
+      setLocalOptions((prev) => prev.map((o) => {
+        if (poll.multipleChoices) {
+          // toggle
+          if (o.optionId === optionId) {
+            const has = (o.voterIds || []).includes(currentUserId);
+            return { ...o, voterIds: has ? (o.voterIds || []).filter((v: string) => v !== currentUserId) : [...(o.voterIds || []), currentUserId] };
+          }
+          return o;
+        }
+        // single choice: remove other user's votes locally and add to selected
+        if ((o.voterIds || []).includes(currentUserId)) {
+          return { ...o, voterIds: (o.voterIds || []).filter((v: string) => v !== currentUserId) };
+        }
+        if (o.optionId === optionId) {
+          return { ...o, voterIds: [...(o.voterIds || []), currentUserId] };
+        }
+        return o;
+      }));
     } catch (err: any) {
       Alert.alert('Lỗi', err?.message || 'Không thể thực hiện bình chọn');
     } finally {
@@ -122,7 +143,7 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
 
       {/* Options */}
       <View style={styles.optionsContainer}>
-        {(poll.options || []).map((opt: any, idx: number) => {
+        {(localOptions || []).map((opt: any, idx: number) => {
           const optVotes = opt.voterIds?.length || 0;
           const percent = showResults ? (totalVotesCast > 0 ? floored[idx] : 0) : 0;
           const isSelected = selectedOptionIds.includes(opt.optionId);
@@ -206,6 +227,17 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
             </TouchableOpacity>
           );
         })}
+
+        {/* Add option */}
+        {poll.allowAddOptions && (
+          <AddOptionRow
+            pollId={poll.pollId}
+            onAdded={(newOpt: any) => {
+              // append to local options
+              setLocalOptions((prev) => [...prev, newOpt]);
+            }}
+          />
+        )}
       </View>
     </View>
   );
@@ -224,7 +256,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    gap: 10,
   },
   headerIcon: {
     fontSize: 22,
@@ -265,7 +296,7 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     padding: 12,
-    gap: 8,
+    paddingBottom: 8,
   },
   optionRow: {
     flexDirection: 'row',
@@ -277,6 +308,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
+    marginBottom: 8,
   },
   progressBar: {
     position: 'absolute',
@@ -289,7 +321,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    gap: 8,
     zIndex: 1,
   },
   checkboxWrap: {
@@ -341,3 +372,57 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
 });
+
+function AddOptionRow({ pollId, onAdded }: { pollId: string; onAdded?: (opt: any) => void }) {
+  const { colors } = useTheme();
+  const [showInput, setShowInput] = useState(false);
+  const [text, setText] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+
+  const handleAdd = async () => {
+    if (!text.trim()) return;
+    setIsAdding(true);
+    try {
+      const resp = await chatService.addPollOption(pollId, text.trim());
+      let newOpt = resp as any;
+      try {
+        newOpt = chatService.unwrapApiPayload<any>(resp) ?? resp;
+      } catch {
+        // ignore
+      }
+
+      // normalize
+      const opt = newOpt?.option || newOpt?.data || newOpt;
+      const final = opt || { optionId: `opt-${Date.now()}`, content: text.trim(), voterIds: [] };
+      onAdded && onAdded(final);
+      setText('');
+      setShowInput(false);
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.message || 'Không thể thêm phương án');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  return showInput ? (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+      <TextInput
+        style={{ flex: 1, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, borderColor: colors.border, color: colors.text, backgroundColor: colors.card }}
+        placeholder="Nhập phương án mới"
+        placeholderTextColor={colors.subText}
+        value={text}
+        onChangeText={setText}
+      />
+      <TouchableOpacity onPress={handleAdd} disabled={isAdding} style={{ marginLeft: 8 }}>
+        {isAdding ? <ActivityIndicator /> : <Text style={{ color: '#0068FF', fontWeight: '700' }}>Thêm</Text>}
+      </TouchableOpacity>
+      <TouchableOpacity onPress={() => { setShowInput(false); setText(''); }} style={{ marginLeft: 8 }}>
+        <Text style={{ color: colors.subText }}>Huỷ</Text>
+      </TouchableOpacity>
+    </View>
+  ) : (
+    <TouchableOpacity onPress={() => setShowInput(true)} style={{ paddingVertical: 8, alignItems: 'center' }}>
+      <Text style={{ color: '#0068FF', fontWeight: '600' }}>+ Thêm phương án</Text>
+    </TouchableOpacity>
+  );
+}

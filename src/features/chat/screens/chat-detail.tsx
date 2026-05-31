@@ -49,60 +49,60 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
-    Alert,
-    AppState,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Linking,
-    Modal,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  AppState,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
-    mapChatPayloadListToUiMessages,
-    mapChatPayloadToUiMessage,
-    type ChatUiMessage
+  mapChatPayloadListToUiMessages,
+  mapChatPayloadToUiMessage,
+  type ChatUiMessage
 } from '../services/chatMessageAdapter';
 import { webrtcService } from '../services/webrtcService';
 
 
 import ChatInfoPanel from '../components/ChatInfoPanel';
 import {
-    AI_TYPING_USER_ID, BLOCK_GAP_MS,
-    BROKER_URL,
-    isExpoGo,
-    MAX_IMAGE_SELECTION,
-    PAGE_SIZE,
-    REACTION_EMOJIS,
-    SCROLL_TOP_THRESHOLD
+  AI_TYPING_USER_ID, BLOCK_GAP_MS,
+  BROKER_URL,
+  isExpoGo,
+  MAX_IMAGE_SELECTION,
+  PAGE_SIZE,
+  REACTION_EMOJIS,
+  SCROLL_TOP_THRESHOLD
 } from '../constants/chatConstants';
 import type { ApiWrappedPayload, ForwardConversationItem, Message, MessagePageResponse, PinnedMessageItem } from '../types/chatTypes';
 import {
-    buildReactionSummary,
-    emojiToReactionType,
-    formatDateSeparator,
-    formatMessageTime,
-    getDisplayFileNameFromValue,
-    getFileExtensionFromMimeType,
-    getForwardAttachmentUrls,
-    getMessageMillis,
-    getReplySnippet,
-    isLikelyUrl,
-    parseMessageDate,
-    stripAiMarkdownMarkers,
-    toLocalIsoString
+  buildReactionSummary,
+  emojiToReactionType,
+  formatDateSeparator,
+  formatMessageTime,
+  getDisplayFileNameFromValue,
+  getFileExtensionFromMimeType,
+  getForwardAttachmentUrls,
+  getMessageMillis,
+  getReplySnippet,
+  isLikelyUrl,
+  parseMessageDate,
+  stripAiMarkdownMarkers,
+  toLocalIsoString
 } from '../utils/chatHelpers';
 
 export default function ChatDetailScreen() {
@@ -426,12 +426,15 @@ export default function ChatDetailScreen() {
       const nextMsg = next[i];
 
       if (String(prevMsg.messageId) !== String(nextMsg.messageId)) return false;
+      if (prevMsg.messageType !== nextMsg.messageType) return false;
       if (prevMsg.content !== nextMsg.content) return false;
       if (prevMsg.createdAt !== nextMsg.createdAt) return false;
       if (prevMsg.updatedAt !== nextMsg.updatedAt) return false;
       if (prevMsg.isRecalled !== nextMsg.isRecalled) return false;
       if (prevMsg.isEdited !== nextMsg.isEdited) return false;
       if ((prevMsg.reactions?.length || 0) !== (nextMsg.reactions?.length || 0)) return false;
+      if (JSON.stringify(prevMsg.attachments || []) !== JSON.stringify(nextMsg.attachments || [])) return false;
+      if (JSON.stringify(prevMsg.poll || {}) !== JSON.stringify(nextMsg.poll || {})) return false;
     }
 
     return true;
@@ -3439,6 +3442,13 @@ const renderOlderMessagesLoading = () => {
                     size={30}
                     color="#7B808A"
                   />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bottomActionButton}
+                  onPress={() => setIsPollModalVisible(true)}
+                  disabled={isUploading}
+                >
+                  <Ionicons name="bar-chart" size={24} color={isUploading ? '#CCC' : '#7B808A'} />
                 </TouchableOpacity>
                 <TextInput
                   ref={textInputRef}
