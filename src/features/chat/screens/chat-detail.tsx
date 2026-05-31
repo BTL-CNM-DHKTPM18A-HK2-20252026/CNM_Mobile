@@ -3429,8 +3429,18 @@ const renderOlderMessagesLoading = () => {
         />
 
         {/* Input Area */}
-        <MessageInput>
-          <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
+        {conversationPermissions?.canSendMessages === false && !(currentUserRole === 'ADMIN' || currentUserRole === 'DEPUTY') ? (
+          <SafeAreaView
+            style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingVertical: 14, alignItems: 'center' }}
+            edges={['left', 'right', 'bottom']}
+          >
+            <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
+              Chỉ trưởng nhóm và phó nhóm mới có quyền gửi tin nhắn.
+            </Text>
+          </SafeAreaView>
+        ) : (
+          <MessageInput>
+            <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
           {editingMessageId ? (
             <View style={styles.editingBanner}>
               <View style={styles.editingBannerTextWrap}>
@@ -3641,7 +3651,8 @@ const renderOlderMessagesLoading = () => {
             )}
           </View>
           </SafeAreaView>
-        </MessageInput>
+          </MessageInput>
+        )}
 
         {/* Mention Dropdown */}
         <MentionDropdown
