@@ -191,17 +191,20 @@ export const chatDetailStyles = StyleSheet.create({
   },
   messageBubble: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderRadius: 18,
     maxWidth: '85%',
     minWidth: 48,
-    minHeight: 30,
+    minHeight: 0,
     justifyContent: 'center' as const,
+  },
+  messageBubbleCompact: {
+    paddingVertical: 2,
+    minHeight: 0,
   },
   bubbleWrapper: {
     position: 'relative' as const,
-    // reserve space at bottom for reaction badges
-    paddingBottom: 10,
+    paddingBottom: 4,
   },
   userBubble: {
     backgroundColor: '#D0EAFF',
@@ -217,7 +220,7 @@ export const chatDetailStyles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   richTextParagraph: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   messageText: {
     fontSize: 14,

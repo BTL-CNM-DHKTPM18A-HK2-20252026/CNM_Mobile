@@ -25,6 +25,7 @@ export interface MessageItemProps {
   playingVoiceId?: string | null;
   isLastInBlock?: boolean;
   onReactionPress?: () => void;
+  isCompactBubble?: boolean;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -46,6 +47,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   playingVoiceId,
   isLastInBlock = false,
   onReactionPress,
+  isCompactBubble = false,
 }) => {
   return (
     <View
@@ -64,7 +66,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       {isCurrentUserMessage ? (
         <View style={styles.userMessageBlock}>
           <View style={styles.bubbleWrapper}>
-            <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, styles.userBubble]}>
+            <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, isCompactBubble && styles.messageBubbleCompact, styles.userBubble]}>
               {mediaContent}
             </TouchableOpacity>
 
@@ -85,7 +87,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               </Text>
             ) : null}
             <View style={styles.bubbleWrapper}>
-              <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, styles.otherBubble, { backgroundColor: colors.card }]}>
+              <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, isCompactBubble && styles.messageBubbleCompact, styles.otherBubble, { backgroundColor: colors.card }]}>
                 {mediaContent}
               </TouchableOpacity>
 

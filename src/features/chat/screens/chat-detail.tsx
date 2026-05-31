@@ -2430,6 +2430,8 @@ const renderOlderMessagesLoading = () => {
     const isStickerMsg = msgType === 'STICKER';
     const isFileMsg = msgType === 'FILE' || msgType === 'MEDIA';
     const isMediaMsg = isImageMsg || isImageGroupMsg || isVideoMsg || isFileMsg || isVoiceMsg;
+    const plainTextContent = extractRichTextPlainText(item.content || '').trim();
+    const isCompactBubble = msgType === 'TEXT' && plainTextContent.length > 0 && !plainTextContent.includes('\n') && plainTextContent.length <= 80;
 
     // Helpers for file bubbles
     const getFileNameFromUrl = (url: string): string => {
@@ -2968,6 +2970,7 @@ const renderOlderMessagesLoading = () => {
         timeLabel={timeLabel}
         highlighted={highlightedMessageId === String(item.messageId)}
         onLongPress={() => openMessageActionMenu(item)}
+        isCompactBubble={isCompactBubble}
         colors={colors}
         styles={styles as any}
         playingVoiceId={playingVoiceId}
