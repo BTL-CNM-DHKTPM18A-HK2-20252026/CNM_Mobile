@@ -2746,17 +2746,20 @@ const renderOlderMessagesLoading = () => {
       }
 
       // CALL render
-      if (msgType === 'CALL' || msgType === 'CALL_HISTORY') {
+      if (msgType === 'CALL' || msgType === 'CALL_HISTORY' || msgType === 'CALL_MISSED' || msgType === 'CALL_REJECTED' || msgType === 'CALL_ENDED') {
         let callData: any = {};
         try { callData = JSON.parse(item.content || '{}'); } catch { callData = {}; }
+        const isMissed = msgType === 'CALL_MISSED';
+        const isRejected = msgType === 'CALL_REJECTED';
+        const isEnded = msgType === 'CALL_ENDED';
         return (
           <>
             {replyBlock}
             {forwardedBanner}
             <CallHistoryCard
-              callType={callData.callType ?? 'VOICE'}
-              durationSeconds={callData.durationSeconds ?? callData.duration ?? 0}
-              status={callData.status}
+              callType={callData.callType ?? 'VIDEO'}
+              durationSeconds={isEnded ? (Number(item.content) || 0) : (callData.durationSeconds ?? callData.duration ?? 0)}
+              status={isMissed ? 'MISSED' : isRejected ? 'REJECTED' : isEnded ? 'ENDED' : (callData.status || 'ENDED')}
               isCaller={item.senderId === currentUserId}
             />
           </>
