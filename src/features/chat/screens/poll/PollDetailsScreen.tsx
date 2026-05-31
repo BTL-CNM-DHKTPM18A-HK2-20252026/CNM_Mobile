@@ -13,6 +13,8 @@ type PollOption = {
   voterIds?: string[];
 };
 
+import PollVotersModal from '@/components/chat/PollVotersModal';
+
 export default function PollDetailsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -31,6 +33,7 @@ export default function PollDetailsScreen() {
   const [newOptionText, setNewOptionText] = useState('');
   const [addOptionLoading, setAddOptionLoading] = useState(false);
   const [isEditingSettings, setIsEditingSettings] = useState(false);
+  const [votersModalVisible, setVotersModalVisible] = useState(false);
   const [editMultipleChoices, setEditMultipleChoices] = useState<boolean>(true);
   const [editAllowAddOptions, setEditAllowAddOptions] = useState<boolean>(true);
   const [editDeadlineYear, setEditDeadlineYear] = useState('');
@@ -481,6 +484,10 @@ export default function PollDetailsScreen() {
 
         <Text style={[styles.pollType, { color: colors.textSecondary }]}> {poll.multipleChoices ? 'Chọn được nhiều phương án' : 'Chọn một phương án'} </Text>
 
+        <TouchableOpacity style={styles.votersButton} onPress={() => setVotersModalVisible(true)}>
+          <Text style={styles.votersButtonText}>Xem chi tiết người bình chọn</Text>
+        </TouchableOpacity>
+
         {normalizedOptions.map((opt, idx) => {
           const votes = (opt.voterIds || []).length;
           const percent = totalVoters > 0 ? Math.round((votes / totalVoters) * 100) : 0;
@@ -532,7 +539,7 @@ export default function PollDetailsScreen() {
 
       <Modal visible={addingOption} transparent animationType="fade" onRequestClose={() => setAddingOption(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <SafeAreaView style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Thêm phương án</Text>
             <TextInput
               value={newOptionText}
@@ -550,13 +557,13 @@ export default function PollDetailsScreen() {
                 <Text style={{ color: '#0068FF', fontWeight: '700' }}>{addOptionLoading ? '...' : 'Thêm'}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </SafeAreaView>
         </View>
       </Modal>
 
       <Modal visible={isEditingSettings} transparent animationType="fade" onRequestClose={() => setIsEditingSettings(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <SafeAreaView style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Chỉnh sửa cài đặt</Text>
             <View style={{ marginTop: 8 }}>
               <ToggleRow label="Chọn nhiều phương án" value={editMultipleChoices} onPress={() => setEditMultipleChoices((s) => !s)} colors={colors} />
@@ -583,7 +590,7 @@ export default function PollDetailsScreen() {
                 <Text style={{ color: '#0068FF', fontWeight: '700' }}>{isSubmitting ? '...' : 'Lưu'}</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </SafeAreaView>
         </View>
       </Modal>
       <DeadlinePicker
@@ -606,7 +613,7 @@ export default function PollDetailsScreen() {
 
         <Modal visible={timePickerVisible} transparent animationType="fade" onRequestClose={() => setTimePickerVisible(false)}>
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SafeAreaView style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>Chọn giờ</Text>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
                 <View style={{ width: '30%', maxHeight: 200 }}>
@@ -665,13 +672,13 @@ export default function PollDetailsScreen() {
                   <Text style={{ color: '#0068FF', fontWeight: '700' }}>Chọn</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </SafeAreaView>
           </View>
         </Modal>
 
         <Modal visible={calendarVisible} transparent animationType="fade" onRequestClose={() => setCalendarVisible(false)}>
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SafeAreaView style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#0068FF14' }}>
                   <Text style={{ color: '#0068FF', fontSize: 18 }}>‹</Text>
@@ -714,9 +721,17 @@ export default function PollDetailsScreen() {
                   <Text style={{ color: colors.textSecondary }}>Đóng</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </SafeAreaView>
           </View>
         </Modal>
+      <PollVotersModal
+        visible={votersModalVisible}
+        onClose={() => setVotersModalVisible(false)}
+        options={normalizedOptions}
+        membersMap={membersMap}
+        currentUserId={currentUserId}
+        colors={colors}
+      />
     </SafeAreaView>
   );
 }
@@ -837,4 +852,6 @@ const styles = StyleSheet.create({
   deadlineFieldLabel: { fontSize: 12, marginBottom: 4 },
   deadlineFieldInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 10, fontSize: 14, textAlign: 'center' },
   settingLabel: { fontSize: 14, flex: 1 },
+  votersButton: { marginTop: 8, marginBottom: 12, paddingVertical: 10, alignItems: 'center' },
+  votersButtonText: { color: '#0068FF', fontWeight: '700' },
 });
