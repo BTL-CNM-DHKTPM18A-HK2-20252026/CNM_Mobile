@@ -49,60 +49,60 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
-  Alert,
-  AppState,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    AppState,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Linking,
+    Modal,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Platform,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
-  mapChatPayloadListToUiMessages,
-  mapChatPayloadToUiMessage,
-  type ChatUiMessage
+    mapChatPayloadListToUiMessages,
+    mapChatPayloadToUiMessage,
+    type ChatUiMessage
 } from '../services/chatMessageAdapter';
 import { webrtcService } from '../services/webrtcService';
 
 
 import ChatInfoPanel from '../components/ChatInfoPanel';
 import {
-  AI_TYPING_USER_ID, BLOCK_GAP_MS,
-  BROKER_URL,
-  isExpoGo,
-  MAX_IMAGE_SELECTION,
-  PAGE_SIZE,
-  REACTION_EMOJIS,
-  SCROLL_TOP_THRESHOLD
+    AI_TYPING_USER_ID, BLOCK_GAP_MS,
+    BROKER_URL,
+    isExpoGo,
+    MAX_IMAGE_SELECTION,
+    PAGE_SIZE,
+    REACTION_EMOJIS,
+    SCROLL_TOP_THRESHOLD
 } from '../constants/chatConstants';
 import type { ApiWrappedPayload, ForwardConversationItem, Message, MessagePageResponse, PinnedMessageItem } from '../types/chatTypes';
 import {
-  buildReactionSummary,
-  emojiToReactionType,
-  formatDateSeparator,
-  formatMessageTime,
-  getDisplayFileNameFromValue,
-  getFileExtensionFromMimeType,
-  getForwardAttachmentUrls,
-  getMessageMillis,
-  getReplySnippet,
-  isLikelyUrl,
-  parseMessageDate,
-  stripAiMarkdownMarkers,
-  toLocalIsoString
+    buildReactionSummary,
+    emojiToReactionType,
+    formatDateSeparator,
+    formatMessageTime,
+    getDisplayFileNameFromValue,
+    getFileExtensionFromMimeType,
+    getForwardAttachmentUrls,
+    getMessageMillis,
+    getReplySnippet,
+    isLikelyUrl,
+    parseMessageDate,
+    stripAiMarkdownMarkers,
+    toLocalIsoString
 } from '../utils/chatHelpers';
 
 export default function ChatDetailScreen() {
@@ -223,7 +223,7 @@ export default function ChatDetailScreen() {
     hideVoters?: boolean;
   }) => {
     try {
-      await chatService.createPoll({
+      const resp = await chatService.createPoll({
         conversationId,
         question: data.question,
         options: data.options,
@@ -234,6 +234,17 @@ export default function ChatDetailScreen() {
         hideResultsBeforeVote: data.hideResultsBeforeVote,
         hideVoters: data.hideVoters,
       } as any);
+
+      // Try to map response to UI message and append locally (server may also push realtime event)
+      try {
+        const unwrapped = chatService.unwrapApiPayload<any>(resp);
+        const candidate = unwrapped?.message ?? unwrapped?.data ?? unwrapped;
+        const mapped = mapChatPayloadToUiMessage(candidate as any);
+        if (mapped) appendOrUpdateMessage(mapped as any);
+      } catch (err) {
+        // ignore mapping errors
+      }
+
       setIsPollModalVisible(false);
     } catch (err) {
       const axiosErr = err as AxiosError<{ message?: string }>;

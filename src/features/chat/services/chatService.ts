@@ -307,6 +307,7 @@ export const chatService = {
 
   // ── Poll ───────────────────────────────────────────────────────────
   createPoll: async (data: {
+    conversationId: string;
     question: string;
     options: string[];
     deadline?: string;
@@ -316,10 +317,14 @@ export const chatService = {
     hideResultsBeforeVote?: boolean;
     hideVoters?: boolean;
   }) => {
-    return await api.post('/messages', {
-      content: JSON.stringify(data),
+    const { conversationId, ...pollPayload } = data as any;
+    const body: Record<string, unknown> = {
+      conversationId,
+      content: JSON.stringify(pollPayload),
       messageType: 'POLL',
-    });
+    };
+
+    return await api.post('/messages', body);
   },
 
   votePoll: async (pollId: string, optionIds: string[]) => {
