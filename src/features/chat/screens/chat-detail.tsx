@@ -69,6 +69,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
   mapChatPayloadListToUiMessages,
   mapChatPayloadToUiMessage,
@@ -129,6 +130,8 @@ export default function ChatDetailScreen() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [isMessageActionVisible, setIsMessageActionVisible] = useState(false);
+  const [reactionViewerMessage, setReactionViewerMessage] = useState<Message | null>(null);
+  const [reactionViewerEmojiTab, setReactionViewerEmojiTab] = useState<string>('all');
   const [isPinnedListVisible, setIsPinnedListVisible] = useState(false);
   const [isPollModalVisible, setIsPollModalVisible] = useState(false);
   const [isMentionDropdownVisible, setIsMentionDropdownVisible] = useState(false);
@@ -401,6 +404,75 @@ export default function ChatDetailScreen() {
       return isSameMessageList(prev, merged) ? prev : merged;
     });
   }, [isSameMessageList, logChatDebug, mergeUniqueMessages]);
+
+  const applyReactionUpdate = useCallback((event: Record<string, unknown>) => {
+    const messageId = String(event.messageId ?? '');
+    if (!messageId) {
+      return;
+    }
+
+    const action = String(event.action ?? '').toUpperCase();
+    const reactionEmoji = String(event.emoji ?? '').trim();
+    const reactionType = String(event.reactionType ?? '').toUpperCase();
+    const reactionId = String(event.reactionId ?? `${messageId}-${event.userId ?? 'user'}-${reactionType || reactionEmoji}`);
+    const userId = String(event.userId ?? '');
+
+    setMessages((prev) => prev.map((message) => {
+      if (String(message.messageId) !== messageId) {
+        return message;
+      }
+
+      const currentReactions = Array.isArray(message.reactions) ? [...message.reactions] : [];
+
+      if (action === 'CLEAR') {
+        return { ...message, reactions: [] };
+      }
+
+      if (action === 'REMOVE') {
+        return {
+          ...message,
+          reactions: currentReactions.filter((reaction) => {
+            if (reactionId && reaction.id === reactionId) return false;
+            if (userId && String(reaction.userId) === userId && reaction.reactionType === reactionType) return false;
+            if (reactionEmoji && reaction.emoji === reactionEmoji && userId && String(reaction.userId) === userId) return false;
+            return true;
+          }),
+        };
+      }
+
+      if (action === 'ADD' || !action) {
+        const nextReaction: any = {
+          id: reactionId,
+          userId,
+          emoji: reactionEmoji || '👍',
+          reactionType: reactionType || 'LIKE',
+          userName: String(event.userName ?? '') || undefined,
+          userAvatar: String(event.userAvatar ?? '') || undefined,
+        };
+
+        if (currentReactions.some((reaction) => reaction.id === nextReaction.id)) {
+          return {
+            ...message,
+            reactions: currentReactions.map((reaction) => (reaction.id === nextReaction.id ? nextReaction : reaction)),
+          };
+        }
+
+        return {
+          ...message,
+          reactions: [...currentReactions, nextReaction],
+        };
+      }
+
+      return message;
+    }));
+
+    if (reactionViewerMessage && String(reactionViewerMessage.messageId) === messageId) {
+      const current = messages.find((message) => String(message.messageId) === messageId);
+      if (current) {
+        setReactionViewerMessage(current);
+      }
+    }
+  }, [messages, reactionViewerMessage]);
 
   const unwrapApiPayload = useCallback((raw: unknown): unknown => {
     if (!raw || typeof raw !== 'object') {
@@ -762,6 +834,11 @@ export default function ChatDetailScreen() {
     userId: currentUserId,
     onMessage: (event) => {
       const wrapped = chatService.unwrapApiPayload<any>(event);
+      if (String(wrapped?.type ?? '').toUpperCase() === 'REACTION_UPDATE') {
+        applyReactionUpdate(wrapped as Record<string, unknown>);
+        return;
+      }
+
       const mappedMessage = mapAnyPayloadToUiMessage(wrapped);
       
       if (mappedMessage) {
@@ -2032,6 +2109,16 @@ export default function ChatDetailScreen() {
     }
   }, [closeMessageActionMenu, currentUserId, loadInitialMessages, selectedMessage]);
 
+  const handleOpenReactionViewer = useCallback((message: Message) => {
+    setReactionViewerMessage(message);
+    setReactionViewerEmojiTab('all');
+  }, []);
+
+  const handleCloseReactionViewer = useCallback(() => {
+    setReactionViewerMessage(null);
+    setReactionViewerEmojiTab('all');
+  }, []);
+
   const handleCopySelectedMessage = useCallback(async () => {
     if (!selectedMessage) return;
     const text = extractRichTextPlainText(selectedMessage.content || '') || selectedMessage.content || '';
@@ -2323,8 +2410,9 @@ const renderOlderMessagesLoading = () => {
     const isCurrentUserMessage = currentUserId !== null && String(item.senderId) === String(currentUserId);
     const newerMessage = index > 0 ? messages[index - 1] : undefined;
     const olderMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
-    const showAvatar = !isCurrentUserMessage && isFirstInMessageBlock(item, olderMessage);
-    const showSenderName = isGroupConversation && showAvatar;
+    const isLastInMessageBlock = shouldShowMessageTimestamp(item, newerMessage);
+    const showAvatar = !isCurrentUserMessage && isLastInMessageBlock;
+    const showSenderName = isGroupConversation && isFirstInMessageBlock(item, olderMessage);
     const senderDisplayName = (item.senderName || '').trim() || t('chat.unknown_user', 'Người dùng');
     const senderAvatarSource = showAvatar
       ? getAvatarSource(item.senderAvatarUrl || (isGroupConversation ? undefined : conversationAvatarUrl))
@@ -2343,6 +2431,8 @@ const renderOlderMessagesLoading = () => {
     const isStickerMsg = msgType === 'STICKER';
     const isFileMsg = msgType === 'FILE' || msgType === 'MEDIA';
     const isMediaMsg = isImageMsg || isImageGroupMsg || isVideoMsg || isFileMsg || isVoiceMsg;
+    const plainTextContent = extractRichTextPlainText(item.content || '').trim();
+    const isCompactBubble = msgType === 'TEXT' && plainTextContent.length > 0 && !plainTextContent.includes('\n') && plainTextContent.length <= 80;
 
     // Helpers for file bubbles
     const getFileNameFromUrl = (url: string): string => {
@@ -2900,6 +2990,7 @@ const renderOlderMessagesLoading = () => {
         isCurrentUserMessage={isCurrentUserMessage}
         showAvatar={showAvatar}
         showSenderName={showSenderName}
+        isLastInBlock={isLastInMessageBlock}
         senderDisplayName={senderDisplayName}
         senderAvatarSource={senderAvatarSource}
         mediaContent={mediaContent}
@@ -2908,6 +2999,7 @@ const renderOlderMessagesLoading = () => {
         timeLabel={timeLabel}
         highlighted={highlightedMessageId === String(item.messageId)}
         onLongPress={() => openMessageActionMenu(item)}
+        isCompactBubble={isCompactBubble}
         colors={colors}
         styles={styles as any}
         playingVoiceId={playingVoiceId}
@@ -3405,6 +3497,108 @@ const renderOlderMessagesLoading = () => {
                   <Text style={[styles.actionGridLabel, { color: '#F04343' }]}>{t('chat.menu.delete_local', 'Xóa')}</Text>
                 </TouchableOpacity>
               </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        <Modal
+          visible={Boolean(reactionViewerMessage)}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCloseReactionViewer}
+        >
+          <Pressable style={styles.reactionViewerBackdrop} onPress={handleCloseReactionViewer}>
+            <Pressable style={[styles.reactionViewerSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.reactionViewerHandle} />
+
+              <View style={[styles.reactionViewerHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.reactionViewerTitle, { color: colors.text }]}>Người đã thả reaction</Text>
+                <TouchableOpacity onPress={handleCloseReactionViewer} style={styles.clearButton}>
+                  <Ionicons name="close" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {(() => {
+                const targetMessage = reactionViewerMessage;
+                const allReactions = targetMessage?.reactions || [];
+                const counts = new Map<string, number>();
+                allReactions.forEach((reaction) => {
+                  const emoji = reaction.emoji || '👍';
+                  counts.set(emoji, (counts.get(emoji) || 0) + 1);
+                });
+
+                const filtered = reactionViewerEmojiTab === 'all'
+                  ? allReactions
+                  : allReactions.filter((reaction) => reaction.emoji === reactionViewerEmojiTab);
+
+                const groupedByUser = filtered.reduce<Record<string, { userId: string; name: string; avatar?: string; emojis: string[]; total: number }>>((acc, reaction) => {
+                  const userId = String(reaction.userId || '');
+                  if (!userId) return acc;
+
+                  if (!acc[userId]) {
+                    acc[userId] = {
+                      userId,
+                      name: reaction.userName || t('chat.unknown_user', 'Người dùng'),
+                      avatar: reaction.userAvatar,
+                      emojis: [],
+                      total: 0,
+                    };
+                  }
+
+                  acc[userId].emojis.push(reaction.emoji || '👍');
+                  acc[userId].total += 1;
+                  return acc;
+                }, {});
+
+                return (
+                  <View style={styles.reactionViewerList}>
+                    <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
+                      <View style={[styles.reactionViewerTabs, { borderBottomColor: colors.border }]}>
+                        <TouchableOpacity
+                          onPress={() => setReactionViewerEmojiTab('all')}
+                          style={[styles.reactionViewerTab, reactionViewerEmojiTab === 'all' && styles.reactionViewerTabActive]}
+                        >
+                          <Text style={[styles.reactionViewerTabText, { color: colors.text }]}>Tất cả</Text>
+                          <Text style={[styles.reactionViewerCount, { color: colors.textSecondary }]}>{allReactions.length}</Text>
+                        </TouchableOpacity>
+                        {Array.from(counts.entries())
+                          .sort((left, right) => right[1] - left[1])
+                          .map(([emoji, count]) => (
+                            <TouchableOpacity
+                              key={emoji}
+                              onPress={() => setReactionViewerEmojiTab(emoji)}
+                              style={[styles.reactionViewerTab, reactionViewerEmojiTab === emoji && styles.reactionViewerTabActive]}
+                            >
+                              <Text style={styles.reactionViewerEmoji}>{emoji}</Text>
+                              <Text style={[styles.reactionViewerCount, { color: colors.textSecondary }]}>{count}</Text>
+                            </TouchableOpacity>
+                          ))}
+                      </View>
+
+                      {Object.values(groupedByUser).length > 0 ? (
+                        Object.values(groupedByUser).map((user) => (
+                          <View key={user.userId} style={[styles.reactionViewerItem, { borderBottomColor: colors.border }]}>
+                            <Image source={getAvatarSource(user.avatar)} style={styles.reactionViewerAvatar} />
+                            <View style={styles.reactionViewerItemMain}>
+                              <View style={styles.reactionViewerNameRow}>
+                                <Text style={[styles.reactionViewerName, { color: colors.text }]} numberOfLines={1}>{user.name}</Text>
+                                <Text style={[styles.reactionViewerCount, { color: colors.textSecondary }]}>{user.total}</Text>
+                              </View>
+                              <View style={styles.reactionViewerMeta}>
+                                {Array.from(new Set(user.emojis)).map((emoji) => (
+                                  <Text key={`${user.userId}-${emoji}`} style={[styles.reactionViewerEmoji, { color: colors.text }]}>{emoji}</Text>
+                                ))}
+                              </View>
+                            </View>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 24 }]}>Chưa có reaction nào</Text>
+                      )}
+                    </ScrollView>
+                  </View>
+                );
+              })()}
             </Pressable>
           </Pressable>
         </Modal>

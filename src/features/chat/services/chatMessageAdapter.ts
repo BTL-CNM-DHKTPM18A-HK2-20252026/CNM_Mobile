@@ -32,6 +32,8 @@ export interface ChatUiReaction {
   userId: string;
   emoji: string;
   reactionType: string;
+  userName?: string;
+  userAvatar?: string;
 }
 
 type ChatPayload = Record<string, unknown>;
@@ -94,6 +96,8 @@ const mapReactions = (value: unknown): ChatUiReaction[] => {
         userId: toStringOrEmpty(reaction.userId),
         emoji: mapReactionTypeToEmoji(reactionType),
         reactionType,
+        userName: toStringOrEmpty(reaction.userName) || undefined,
+        userAvatar: toStringOrEmpty(reaction.userAvatar) || undefined,
       };
     })
     .filter((reaction): reaction is ChatUiReaction => Boolean(reaction));

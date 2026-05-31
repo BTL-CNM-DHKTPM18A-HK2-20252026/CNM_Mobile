@@ -29,7 +29,9 @@ export const buildReactionSummary = (reactions?: ChatUiReaction[]) => {
     counter.set(emoji, (counter.get(emoji) || 0) + 1);
   });
 
-  return Array.from(counter.entries()).map(([emoji, count]) => ({ emoji, count }));
+  return Array.from(counter.entries())
+    .map(([emoji, count]) => ({ emoji, count }))
+    .sort((left, right) => right.count - left.count || left.emoji.localeCompare(right.emoji));
 };
 
 export const pad2 = (value: number) => String(value).padStart(2, '0');

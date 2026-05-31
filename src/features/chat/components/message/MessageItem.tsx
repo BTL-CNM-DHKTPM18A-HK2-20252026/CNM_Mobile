@@ -23,6 +23,9 @@ export interface MessageItemProps {
   colors?: any;
   styles: any;
   playingVoiceId?: string | null;
+  isLastInBlock?: boolean;
+  onReactionPress?: () => void;
+  isCompactBubble?: boolean;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -42,12 +45,15 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   colors,
   styles,
   playingVoiceId,
+  isLastInBlock = false,
+  onReactionPress,
+  isCompactBubble = false,
 }) => {
   return (
     <View
       style={[
         styles.messageContainer,
-        { marginBottom: showTimestamp ? 10 : 4 },
+        { marginBottom: isLastInBlock ? (showTimestamp ? 12 : 6) : 2 },
         highlighted && styles.messageContainerHighlighted,
       ]}
     >
@@ -59,17 +65,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
       {isCurrentUserMessage ? (
         <View style={styles.userMessageBlock}>
-          <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, styles.userBubble]}>
-            {mediaContent}
-          </TouchableOpacity>
+          <View style={styles.bubbleWrapper}>
+            <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, isCompactBubble && styles.messageBubbleCompact, styles.userBubble]}>
+              {mediaContent}
+            </TouchableOpacity>
 
-          <ReactionChips reactions={reactionSummary as any} messageId={item.messageId} styles={styles} />
+            <ReactionChips reactions={reactionSummary as any} messageId={item.messageId} styles={styles} align="right" onPress={onReactionPress} />
+          </View>
 
           {showTimestamp ? <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text> : null}
         </View>
       ) : (
         <View style={styles.otherMessageBlock}>
-          <View style={[styles.otherAvatarSlot, { marginBottom: showTimestamp ? 18 : 2 }]}>
+          <View style={[styles.otherAvatarSlot, { marginBottom: isLastInBlock ? 2 : 2 }]}>
             {showAvatar && senderAvatarSource ? <Image source={senderAvatarSource} style={styles.peerAvatar} /> : null}
           </View>
           <View style={styles.otherContentBlock}>
@@ -78,11 +86,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 {senderDisplayName}
               </Text>
             ) : null}
-            <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, styles.otherBubble, { backgroundColor: colors.card }]}>
-              {mediaContent}
-            </TouchableOpacity>
+            <View style={styles.bubbleWrapper}>
+              <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={[styles.messageBubble, isCompactBubble && styles.messageBubbleCompact, styles.otherBubble, { backgroundColor: colors.card }]}>
+                {mediaContent}
+              </TouchableOpacity>
 
-            <ReactionChips reactions={reactionSummary as any} messageId={item.messageId} styles={styles} />
+              <ReactionChips reactions={reactionSummary as any} messageId={item.messageId} styles={styles} align="right" onPress={onReactionPress} />
+            </View>
 
             {showTimestamp ? <Text style={[styles.timestamp, styles.timestampLeft]}>{timeLabel}</Text> : null}
           </View>
