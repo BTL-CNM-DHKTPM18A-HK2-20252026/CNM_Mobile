@@ -115,6 +115,13 @@ export default function ChatDetailScreen() {
   const [conversationDisplayName, setConversationDisplayName] = useState(String(name ?? ''));
   const [conversationAvatarUrl, setConversationAvatarUrl] = useState(String(avatar ?? ''));
   const [messages, setMessages] = useState<Message[]>([]);
+  const displayMessages = useMemo(() => {
+    return messages.filter(
+      (m) =>
+        (m.messageType || '').toUpperCase() !== 'MESSAGE_PIN' &&
+        (m.messageType || '').toUpperCase() !== 'MESSAGE_UNPIN'
+    );
+  }, [messages]);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [isSendingAi, setIsSendingAi] = useState(false);
@@ -836,12 +843,31 @@ export default function ChatDetailScreen() {
   const isPartnerOnline = partnerId ? statuses.get(partnerId)?.online : false;
   const isPartnerTyping = isPartnerOnline && isTyping;
 
+  // Fetch group members for online status
+  useEffect(() => {
+    if (!isGroupConversation || !conversationId) return;
+    fetchConversationMembers(conversationId)
+      .then(setInfoMembers)
+      .catch(() => setInfoMembers([]));
+  }, [isGroupConversation, conversationId]);
+
+  // Count online members for group
+  const groupOnlineCount = useMemo(() => {
+    if (!isGroupConversation || infoMembers.length === 0) return 0;
+    return infoMembers.filter((m: any) => {
+      const uid = String(m.userId ?? m.user_id ?? '');
+      return uid && uid !== currentUserId && statuses.get(uid)?.online;
+    }).length;
+  }, [isGroupConversation, infoMembers, currentUserId, statuses]);
+
   const headerSubtitleText = isAiConversation
-    ? (isSendingAi ? t('chat.typing', 'Đang nhập...') : t('chat.ai_subheading', 'Hỏi đáp với Fruvia AI'))
+    ? (isSendingAi ? t('chat.typing', 'Đang nhập...') : t('chat.ai_subheading', 'Hỏi đáp với Fruvia Chatbot'))
     : isCloudConversation
       ? t('chat.cloud_subheading', 'Truyền file giữa các thiết bị của bạn')
       : isGroupConversation
-        ? `${infoMembers.length} thành viên`
+        ? groupOnlineCount > 0
+          ? `${infoMembers.length} thành viên, ${groupOnlineCount} đang hoạt động`
+          : `${infoMembers.length} thành viên`
         : isPartnerOnline
           ? (isPartnerTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
           : t('chat.offline_recent', 'Truy cập gần đây');
@@ -2313,6 +2339,7 @@ const renderOlderMessagesLoading = () => {
     const isImageGroupMsg = msgType === 'IMAGE_GROUP';
     const isVideoMsg = msgType === 'VIDEO';
     const isVoiceMsg = msgType === 'VOICE';
+    const isStickerMsg = msgType === 'STICKER';
     const isFileMsg = msgType === 'FILE' || msgType === 'MEDIA';
     const isMediaMsg = isImageMsg || isImageGroupMsg || isVideoMsg || isFileMsg || isVoiceMsg;
 
@@ -2811,6 +2838,30 @@ const renderOlderMessagesLoading = () => {
     };
 
     const mediaContent = renderMediaContent();
+
+    // STICKER: render without bubble wrapper
+    if (isStickerMsg) {
+      return (
+        <View style={{ alignItems: 'center', marginVertical: 6, paddingHorizontal: 40 }}>
+          {dateSepLabel ? (
+            <View style={styles.dateSeparator}>
+              <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
+            </View>
+          ) : null}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() => openMessageActionMenu(item)}
+            delayLongPress={220}
+          >
+            <Image
+              source={{ uri: item.content }}
+              style={{ width: 120, height: 120 }}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    }
 
     return (
       <MessageItem

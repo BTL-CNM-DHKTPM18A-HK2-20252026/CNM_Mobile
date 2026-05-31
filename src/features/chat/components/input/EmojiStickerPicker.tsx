@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import emojiPack from '../constants/emoji-pack.json';
+import api from '@shared/services/api';
 
 const S3_BASE_URL = process.env.EXPO_PUBLIC_S3_BASE_URL || 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public';
 
@@ -55,24 +56,36 @@ export default function EmojiStickerPicker({
     return `${S3_BASE_URL}${src.replace('/fruvia_emoji', '')}`;
   };
 
-  // Load stickers from S3 when the sticker tab is opened
+  // Load stickers from API, fallback to S3 JSON
   useEffect(() => {
     if (activeTab !== 'sticker' || stickerPacks.length > 0) return;
     setStickerLoading(true);
-    fetch(`${S3_BASE_URL}/stickers/sticker-pack.json`)
-      .then((r) => r.json())
-      .then((data: { packs: StickerPackData[] }) => {
-        // filter out pack_0 if matching web logic
-        const packs = data.packs.filter((p) => p.id !== 'pack_0');
-        setStickerPacks(packs);
-        if (packs.length > 0) {
-          setActiveStickerPackId(packs[0].id);
+
+    const loadFromS3 = () => {
+      fetch(`${S3_BASE_URL}/stickers/sticker-pack.json`)
+        .then((r) => r.json())
+        .then((data: { packs: StickerPackData[] }) => {
+          const packs = data.packs.filter((p) => p.id !== 'pack_0');
+          setStickerPacks(packs);
+          if (packs.length > 0) setActiveStickerPackId(packs[0].id);
+        })
+        .catch((e) => console.error('Failed to load sticker packs:', e))
+        .finally(() => setStickerLoading(false));
+    };
+
+    // Try API first
+    api.get('/stickers/packs')
+      .then((res: any) => {
+        const packs = res?.data ?? res;
+        if (Array.isArray(packs) && packs.length > 0) {
+          setStickerPacks(packs);
+          if (packs.length > 0) setActiveStickerPackId(packs[0].id);
+          setStickerLoading(false);
+        } else {
+          loadFromS3();
         }
       })
-      .catch((e) => {
-        console.error('Failed to load sticker packs:', e);
-      })
-      .finally(() => setStickerLoading(false));
+      .catch(() => loadFromS3());
   }, [activeTab, stickerPacks.length]);
 
   // Active sticker pack stickers filtered by search query

@@ -261,6 +261,30 @@ export const chatService = {
     return await api.delete(`/conversations/${conversationId}/dissolve`);
   },
 
+  togglePinConversation: async (conversationId: string) => {
+    return await api.post(`/conversations/${conversationId}/pin`, {});
+  },
+
+  muteConversation: async (conversationId: string, duration: string) => {
+    return await api.post(`/conversations/${conversationId}/mute`, { duration });
+  },
+
+  markUnread: async (conversationId: string) => {
+    return await api.post(`/conversations/${conversationId}/mark-unread`, {});
+  },
+
+  hideConversation: async (conversationId: string, pinCode: string) => {
+    return await api.post(`/conversations/${conversationId}/hide`, { pinCode });
+  },
+
+  unhideConversation: async (conversationId: string, pinCode: string) => {
+    return await api.post(`/conversations/${conversationId}/unhide`, { pinCode });
+  },
+
+  getStickerPacks: async () => {
+    return await api.get('/stickers/packs');
+  },
+
   transferOwnership: async (conversationId: string, newAdminId: string) => {
     return await api.post(`/conversations/${conversationId}/transfer`, { newAdminId });
   },
