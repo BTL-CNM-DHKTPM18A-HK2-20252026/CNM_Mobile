@@ -39,9 +39,15 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
   const [options, setOptions] = useState(['', '']);
   const [showSettings, setShowSettings] = useState(false);
   const [deadline, setDeadline] = useState('');
-  const [deadlineModalVisible, setDeadlineModalVisible] = useState(false);
   const [deadlineDate, setDeadlineDate] = useState('');
   const [deadlineTime, setDeadlineTime] = useState('');
+  const [deadlinePickerVisible, setDeadlinePickerVisible] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const next = new Date();
+    next.setHours(0, 0, 0, 0);
+    return next;
+  });
   const [isPinned, setIsPinned] = useState(false);
   const [multipleChoices, setMultipleChoices] = useState(true);
   const [allowAddOptions, setAllowAddOptions] = useState(true);
@@ -91,17 +97,79 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     const next = parseDeadlineToState(deadline);
     setDeadlineDate(next.date);
     setDeadlineTime(next.time);
-    setDeadlineModalVisible(true);
+    if (next.date) {
+      const [year, month] = next.date.split('-').map((part) => Number.parseInt(part, 10));
+      const parsedMonth = new Date(year, month - 1, 1);
+      if (!Number.isNaN(parsedMonth.getTime())) setCalendarMonth(parsedMonth);
+    }
+    setDeadlinePickerVisible(true);
   };
 
-  const saveDeadline = () => {
-    const nextDeadline = buildDeadlineFromState();
-    if (!nextDeadline) {
-      Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ ngày, giờ kết thúc bình chọn');
-      return;
+  const getMonthLabel = (date: Date) => {
+    const months = [
+      'Tháng 1',
+      'Tháng 2',
+      'Tháng 3',
+      'Tháng 4',
+      'Tháng 5',
+      'Tháng 6',
+      'Tháng 7',
+      'Tháng 8',
+      'Tháng 9',
+      'Tháng 10',
+      'Tháng 11',
+      'Tháng 12',
+    ];
+    return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  const formatDateValue = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+
+  const formatDateLabel = (value: string) => {
+    const parsed = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return value;
+    const pad = (v: number) => String(v).padStart(2, '0');
+    return `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}/${parsed.getFullYear()}`;
+  };
+
+  const getCalendarDays = (month: Date) => {
+    const start = new Date(month.getFullYear(), month.getMonth(), 1);
+    const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+    const daysInMonth = end.getDate();
+    const firstDay = (start.getDay() + 6) % 7;
+    const cells: Array<{ date?: Date; key: string; empty?: boolean }> = [];
+
+    for (let i = 0; i < firstDay; i += 1) {
+      cells.push({ key: `empty-${i}`, empty: true });
     }
-    setDeadline(nextDeadline);
-    setDeadlineModalVisible(false);
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const date = new Date(month.getFullYear(), month.getMonth(), day);
+      cells.push({ key: formatDateValue(date), date });
+    }
+
+    return cells;
+  };
+
+  const selectCalendarDate = (date: Date) => {
+    setDeadlineDate(formatDateValue(date));
+    setCalendarVisible(false);
+  };
+
+  const generateTimeOptions = () => {
+    const optionsList: { label: string; value: string }[] = [];
+    const hours = [6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22];
+    hours.forEach((hour) => {
+      [0, 30].forEach((minute) => {
+        const hh = String(hour).padStart(2, '0');
+        const mm = String(minute).padStart(2, '0');
+        optionsList.push({ label: `${hh}:${mm}`, value: `${hh}:${mm}` });
+      });
+    });
+    return optionsList;
   };
 
   const handleAddOption = () => {
@@ -141,7 +209,6 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setQuestion('');
     setOptions(['', '']);
     setDeadline('');
-    setDeadlineModalVisible(false);
     setDeadlineDate('');
     setDeadlineTime('');
     setIsPinned(false);
@@ -156,7 +223,6 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setQuestion('');
     setOptions(['', '']);
     setDeadline('');
-    setDeadlineModalVisible(false);
     setDeadlineDate('');
     setDeadlineTime('');
     setIsPinned(false);
@@ -256,23 +322,161 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
             </TouchableOpacity>
           </View>
 
-          <Modal visible={deadlineModalVisible} transparent animationType="fade" onRequestClose={() => setDeadlineModalVisible(false)}>
+          <Modal visible={deadlinePickerVisible} transparent animationType="fade" onRequestClose={() => setDeadlinePickerVisible(false)}>
             <View style={styles.modalOverlay}>
-              <View style={[styles.deadlineCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.deadlineCard, { backgroundColor: colors.card, borderColor: colors.border, maxHeight: '80%' }]}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Hạn chót</Text>
-                <View style={styles.compactDeadlineRow}>
-                  <DeadlineField label="Ngày" value={deadlineDate} onChangeText={setDeadlineDate} placeholder="2026-06-01" colors={colors} style={styles.compactDeadlineField} />
-                  <DeadlineField label="Giờ" value={deadlineTime} onChangeText={setDeadlineTime} placeholder="18:30" colors={colors} style={styles.compactDeadlineField} />
+                <Text style={[styles.deadlinePreview, { color: colors.textSecondary, marginTop: 8 }]}>Bấm vào ngày để mở lịch chọn.</Text>
+
+                <View style={styles.deadlineInputRow}>
+                  <View style={styles.deadlineInputGroup}>
+                    <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>Ngày</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const nextMonth = deadlineDate ? new Date(`${deadlineDate}T00:00:00`) : new Date();
+                        if (!Number.isNaN(nextMonth.getTime())) setCalendarMonth(nextMonth);
+                        setCalendarVisible(true);
+                      }}
+                      activeOpacity={0.85}
+                      style={[
+                        styles.deadlineTextInput,
+                        { borderColor: colors.border, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
+                      ]}
+                    >
+                      <Text style={{ color: deadlineDate ? colors.text : colors.textPlaceholder }}>
+                        {deadlineDate ? formatDateLabel(deadlineDate) : 'Chọn ngày'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.deadlineInputGroup}>
+                    <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>Giờ</Text>
+                    <TextInput
+                      value={deadlineTime}
+                      onChangeText={setDeadlineTime}
+                      placeholder="18:00"
+                      placeholderTextColor={colors.textPlaceholder}
+                      keyboardType="numbers-and-punctuation"
+                      style={[
+                        styles.deadlineTextInput,
+                        { borderColor: colors.border, color: colors.text, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
+                      ]}
+                    />
+                  </View>
                 </View>
+
+                <View style={styles.quickActionRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const now = new Date();
+                      const pad = (v: number) => String(v).padStart(2, '0');
+                      setDeadlineDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+                      setDeadlineTime('20:00');
+                    }}
+                    style={styles.quickChip}
+                  >
+                    <Text style={styles.quickChipText}>Hôm nay 20:00</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const now = new Date();
+                      const tomorrow = new Date(now);
+                      tomorrow.setDate(now.getDate() + 1);
+                      const pad = (v: number) => String(v).padStart(2, '0');
+                      setDeadlineDate(`${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`);
+                      setDeadlineTime('18:00');
+                    }}
+                    style={styles.quickChip}
+                  >
+                    <Text style={styles.quickChipText}>Ngày mai 18:00</Text>
+                  </TouchableOpacity>
+                </View>
+
                 <Text style={[styles.deadlinePreview, { color: colors.textSecondary }]}> 
-                  {buildDeadlineFromState() ? `Đã chọn: ${buildDeadlineFromState()}` : 'Nhập ngày (YYYY-MM-DD) và giờ (HH:MM)'}
+                  {buildDeadlineFromState() ? `Đã chọn: ${buildDeadlineFromState()}` : 'Chưa đủ ngày hoặc giờ'}
                 </Text>
                 <View style={styles.modalActions}>
-                  <TouchableOpacity onPress={() => setDeadlineModalVisible(false)} style={styles.modalBtn}>
-                    <Text style={{ color: colors.textSecondary }}>Huỷ</Text>
+                  <TouchableOpacity onPress={() => setDeadlinePickerVisible(false)} style={styles.modalBtn}>
+                    <Text style={{ color: colors.textSecondary }}>Đóng</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={saveDeadline} style={styles.modalBtn}>
-                    <Text style={{ color: '#0068FF', fontWeight: '700' }}>Lưu</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const nextDeadline = buildDeadlineFromState();
+                      if (nextDeadline) setDeadline(nextDeadline);
+                      setDeadlinePickerVisible(false);
+                    }}
+                    style={styles.modalBtn}
+                  >
+                    <Text style={{ color: '#0068FF', fontWeight: '700' }}>Xong</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal visible={calendarVisible} transparent animationType="fade" onRequestClose={() => setCalendarVisible(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={[styles.calendarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.calendarHeader}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const prev = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+                      setCalendarMonth(prev);
+                    }}
+                    style={styles.calendarNavBtn}
+                  >
+                    <Text style={{ color: '#0068FF', fontSize: 18 }}>‹</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>{getMonthLabel(calendarMonth)}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const next = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+                      setCalendarMonth(next);
+                    }}
+                    style={styles.calendarNavBtn}
+                  >
+                    <Text style={{ color: '#0068FF', fontSize: 18 }}>›</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.weekdayRow}>
+                  {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((item) => (
+                    <Text key={item} style={[styles.weekdayText, { color: colors.textSecondary }]}>
+                      {item}
+                    </Text>
+                  ))}
+                </View>
+
+                <View style={styles.calendarGrid}>
+                  {getCalendarDays(calendarMonth).map((item) => {
+                    if (item.empty || !item.date) {
+                      return <View key={item.key} style={styles.calendarDayCell} />;
+                    }
+                    const day = item.date;
+                    const value = formatDateValue(day);
+                    const selected = deadlineDate === value;
+                    const today = formatDateValue(new Date()) === value;
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        onPress={() => selectCalendarDate(day)}
+                        style={[
+                          styles.calendarDayCell,
+                          {
+                            borderColor: selected ? '#0068FF' : 'transparent',
+                            backgroundColor: selected ? '#0068FF14' : 'transparent',
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: selected ? '#0068FF' : colors.text, fontWeight: '600' }}>{item.date.getDate()}</Text>
+                        {today ? <View style={styles.todayDot} /> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity onPress={() => setCalendarVisible(false)} style={styles.modalBtn}>
+                    <Text style={{ color: colors.textSecondary }}>Đóng</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -332,33 +536,26 @@ function DeadlineSettingRow({
   );
 }
 
-function DeadlineField({
+function DeadlinePickerButton({
   label,
   value,
-  onChangeText,
-  placeholder,
+  onPress,
   colors,
   style,
 }: {
   label: string;
   value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
+  onPress: () => void;
   colors: any;
   style?: any;
 }) {
   return (
-    <View style={[styles.deadlineField, style]}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.deadlineField, style]}>
       <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textPlaceholder}
-        keyboardType="number-pad"
-        style={[styles.deadlineFieldInput, { borderColor: colors.border, color: colors.text }]}
-      />
-    </View>
+      <View style={[styles.deadlineFieldInput, { borderColor: colors.border }]}>
+        <Text style={{ color: value === 'Chọn ngày' || value === 'Chọn giờ' ? colors.textPlaceholder : colors.text }}>{value}</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -509,6 +706,14 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 12,
   },
+  deadlineInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  deadlineInputGroup: {
+    flex: 1,
+  },
   deadlineField: {
     flex: 1,
   },
@@ -531,6 +736,107 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 14,
+  },
+  deadlineTextInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  calendarCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  calendarNavBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: '#0068FF14',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  weekdayText: {
+    width: 34,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDayCell: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  todayDot: {
+    marginTop: 4,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#0068FF',
+  },
+  pickerSection: {
+    marginTop: 16,
+  },
+  pickerSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  chipRow: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    flexWrap: 'wrap',
+  },
+  quickChip: {
+    backgroundColor: '#0068FF14',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  quickChipText: {
+    color: '#0068FF',
+    fontWeight: '700',
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
   },
   deadlinePreview: {
     marginTop: 10,
