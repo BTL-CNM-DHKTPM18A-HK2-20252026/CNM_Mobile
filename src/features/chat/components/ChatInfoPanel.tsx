@@ -709,12 +709,14 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
                   </View>
                   <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Tắt {'\n'}thông báo</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.infoPanelQuickAction} onPress={() => setInfoPermissionsVisible(true)}>
-                  <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="settings-outline" size={22} color={colors.text} />
-                  </View>
-                  <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Phân {'\n'}quyền</Text>
-                </TouchableOpacity>
+                {(infoIsAdmin || infoIsDeputy) && (
+                  <TouchableOpacity style={styles.infoPanelQuickAction} onPress={() => setInfoPermissionsVisible(true)}>
+                    <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Ionicons name="settings-outline" size={22} color={colors.text} />
+                    </View>
+                    <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Phân {'\n'}quyền</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
