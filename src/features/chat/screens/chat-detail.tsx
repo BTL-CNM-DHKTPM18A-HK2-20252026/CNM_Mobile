@@ -49,66 +49,66 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
-    Alert,
-    AppState,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Linking,
-    Modal,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  AppState,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MAX_PINNED_MESSAGES } from '../../../../components/chat/pinnedMessageDisplay';
 import {
-    checkPinMessagePermission,
-    checkSendMessagePermission,
-    type ConversationPermissions,
+  checkPinMessagePermission,
+  checkSendMessagePermission,
+  type ConversationPermissions,
 } from '../../../../utils/permissionHelper';
 import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
-    mapChatPayloadListToUiMessages,
-    mapChatPayloadToUiMessage,
-    type ChatUiMessage
+  mapChatPayloadListToUiMessages,
+  mapChatPayloadToUiMessage,
+  type ChatUiMessage
 } from '../services/chatMessageAdapter';
 import { webrtcService } from '../services/webrtcService';
 
 
 import ChatInfoPanel from '../components/ChatInfoPanel';
 import {
-    AI_TYPING_USER_ID, BLOCK_GAP_MS,
-    BROKER_URL,
-    isExpoGo,
-    MAX_IMAGE_SELECTION,
-    PAGE_SIZE,
-    REACTION_EMOJIS,
-    SCROLL_TOP_THRESHOLD
+  AI_TYPING_USER_ID, BLOCK_GAP_MS,
+  BROKER_URL,
+  isExpoGo,
+  MAX_IMAGE_SELECTION,
+  PAGE_SIZE,
+  REACTION_EMOJIS,
+  SCROLL_TOP_THRESHOLD
 } from '../constants/chatConstants';
 import type { ApiWrappedPayload, ForwardConversationItem, Message, MessagePageResponse, PinnedMessageItem } from '../types/chatTypes';
 import {
-    buildReactionSummary,
-    emojiToReactionType,
-    formatDateSeparator,
-    formatMessageTime,
-    getDisplayFileNameFromValue,
-    getFileExtensionFromMimeType,
-    getForwardAttachmentUrls,
-    getMessageMillis,
-    getReplySnippet,
-    isLikelyUrl,
-    parseMessageDate,
-    stripAiMarkdownMarkers,
-    toLocalIsoString
+  buildReactionSummary,
+  emojiToReactionType,
+  formatDateSeparator,
+  formatMessageTime,
+  getDisplayFileNameFromValue,
+  getFileExtensionFromMimeType,
+  getForwardAttachmentUrls,
+  getMessageMillis,
+  getReplySnippet,
+  isLikelyUrl,
+  parseMessageDate,
+  stripAiMarkdownMarkers,
+  toLocalIsoString
 } from '../utils/chatHelpers';
 
 export default function ChatDetailScreen() {
@@ -819,14 +819,26 @@ export default function ChatDetailScreen() {
     }
   }, [generateVideoThumbnail]);
 
-  const openMessageActionMenu = useCallback((message: Message) => {
+  const openMessageActionMenu = useCallback(async (message: Message) => {
     if (!canUseMessageInteractions) {
       return;
     }
 
+    // Ensure pinned messages are loaded so the UI shows correct Pin/Unpin label
+    try {
+      // If we haven't loaded pins yet or the selected message might be pinned, refresh
+      const alreadyHasPin = pinnedMessages.some((p) => String(p.messageId) === String(message.messageId));
+      if (!alreadyHasPin) {
+        await fetchPinnedMessages();
+      }
+    } catch (err) {
+      // Best-effort: ignore fetch errors and still open the menu
+      console.warn('Failed to refresh pinned messages before opening action menu', err);
+    }
+
     setSelectedMessage(message);
     setIsMessageActionVisible(true);
-  }, [canUseMessageInteractions]);
+  }, [canUseMessageInteractions, fetchPinnedMessages, pinnedMessages]);
 
   const isSelectedMessageMine = selectedMessage
     ? (currentUserId !== null && String(selectedMessage.senderId) === String(currentUserId))

@@ -9,19 +9,19 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    Linking,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -37,13 +37,13 @@ import { getMessageMillis } from '@chat/utils/chatHelpers';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
 import { friendService } from '@friends/services/friendService';
 import {
-    getPinnedMessagePreviewText,
-    getPinnedMessageThumbnailUrl,
+  getPinnedMessagePreviewText,
+  getPinnedMessageThumbnailUrl,
 } from '../../../../components/chat/pinnedMessageDisplay';
 import {
-    checkAddMembersPermission,
-    checkEditGroupInfoPermission,
-    type MemberRole,
+  checkAddMembersPermission,
+  checkEditGroupInfoPermission,
+  type MemberRole,
 } from '../../../../utils/permissionHelper';
 
 interface ChatInfoPanelProps {
