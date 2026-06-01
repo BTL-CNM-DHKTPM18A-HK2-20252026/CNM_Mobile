@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, Image as RNImage, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { getAvatarSource } from '@/services/mediaUtils';
 
@@ -48,15 +48,50 @@ function reactionTypeToEmoji(type?: string | null) {
   return REACTION_TO_EMOJI[type] || '👍';
 }
 
-function renderMedia(post: PostCardData) {
+function useImageAspectRatio(imageUri?: string | null) {
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!imageUri) {
+      setAspectRatio(null);
+      return;
+    }
+
+    let isActive = true;
+
+    RNImage.getSize(
+      imageUri,
+      (imageWidth, imageHeight) => {
+        if (isActive && imageWidth > 0 && imageHeight > 0) {
+          setAspectRatio(imageWidth / imageHeight);
+        }
+      },
+      () => {
+        if (isActive) {
+          setAspectRatio(null);
+        }
+      },
+    );
+
+    return () => {
+      isActive = false;
+    };
+  }, [imageUri]);
+
+  return aspectRatio;
+}
+
+function renderMedia(post: PostCardData, singleImageAspectRatio: number | null, firstPairAspectRatio: number | null) {
   const images = post.images?.length ? post.images.slice(0, 4) : post.image ? [post.image] : [];
   if (images.length === 0) return null;
 
   const count = images.length;
   const gutter = 2;
-  const innerWidth = width - 4;
+  const mediaInset = 12;
+  const innerWidth = width - mediaInset * 2;
   const squareSize = (innerWidth - gutter) / 2;
   const topImageHeight = innerWidth * 0.65;
+  const pairHeight = firstPairAspectRatio ? squareSize / firstPairAspectRatio : squareSize;
 
   return (
     <View
@@ -65,9 +100,9 @@ function renderMedia(post: PostCardData) {
         {
           height:
             count === 1
-              ? topImageHeight
+              ? undefined
               : count === 2
-                ? squareSize
+                ? pairHeight
                 : count === 3
                   ? topImageHeight + gutter + squareSize
                   : squareSize * 2 + gutter,
@@ -75,16 +110,21 @@ function renderMedia(post: PostCardData) {
       ]}
     >
       {count === 1 ? (
-        <Image source={{ uri: images[0] }} style={styles.singleImage} contentFit="cover" transition={120} />
+        <Image
+          source={{ uri: images[0] }}
+          style={[styles.singleImage, { aspectRatio: singleImageAspectRatio ?? 1 }]}
+          contentFit="contain"
+          transition={120}
+        />
       ) : count === 2 ? (
-        <View style={styles.twoImageRow}>
+        <View style={[styles.twoImageRow, { height: pairHeight }]}> 
           {images.map((uri, index) => (
             <Image
               key={uri + index}
               source={{ uri }}
               style={[
                 styles.twoImageTile,
-                { width: squareSize, height: squareSize, marginRight: index === 0 ? gutter : 0 },
+                { width: squareSize, height: pairHeight, marginRight: index === 0 ? gutter : 0 },
               ]}
               contentFit="cover"
               transition={120}
@@ -166,6 +206,9 @@ export function PostCard({
   showActions = true,
 }: PostCardProps) {
   const canShowMenu = showMenu && typeof onMenuPress === 'function';
+  const images = post.images?.length ? post.images.slice(0, 4) : post.image ? [post.image] : [];
+  const singleImageAspectRatio = useImageAspectRatio(images.length === 1 ? images[0] : null);
+  const firstPairAspectRatio = useImageAspectRatio(images.length === 2 ? images[0] : null);
 
   return (
     <View style={styles.card}>
@@ -187,7 +230,7 @@ export function PostCard({
 
       {post.text ? <Text style={styles.contentText}>{post.text}</Text> : null}
 
-      {renderMedia(post)}
+      {renderMedia(post, singleImageAspectRatio, firstPairAspectRatio)}
 
       {showActions ? (
         <View style={styles.actionsRow}>
@@ -232,10 +275,19 @@ const styles = StyleSheet.create({
   sponsoredText: { fontSize: 12, color: '#757575' },
   moreButton: { padding: 4 },
   contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#1c1c1c', lineHeight: 21 },
-  imageContainer: { marginTop: 10, width: '100%', position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
-  singleImage: { width: '100%', height: '100%' },
-  twoImageRow: { flexDirection: 'row', width: '100%', height: '100%' },
-  twoImageTile: { height: '100%' },
+  imageContainer: {
+    marginTop: 10,
+    marginHorizontal: 12,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    alignSelf: 'stretch',
+    borderRadius: 8,
+  },
+  singleImage: { width: '100%' },
+  twoImageRow: { flexDirection: 'row', width: '100%' },
+  twoImageTile: { position: 'relative', overflow: 'hidden' },
+  fillImage: { width: '100%', height: '100%' },
   threeImageLayout: { width: '100%', height: '100%' },
   threeMainImage: { width: '100%' },
   threeBottomRow: { flexDirection: 'row', width: '100%', height: width / 2 },

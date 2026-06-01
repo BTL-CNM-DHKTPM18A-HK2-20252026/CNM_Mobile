@@ -362,8 +362,11 @@ export default function PersonalScreen() {
                   keyExtractor={(c, index) => c.commentId || c.id || String(index)}
                   renderItem={({ item }) => (
                     <View style={styles.commentItem}>
-                      <Text style={styles.commentUser}>{item.userName || item.authorName || 'Người dùng'}</Text>
-                      <Text style={styles.commentText}>{item.content}</Text>
+                      <Image source={getAvatarSource(item.avatar || item.userAvatar || item.authorAvatar)} style={styles.commentAvatar} />
+                      <View style={styles.commentBody}>
+                        <Text style={styles.commentUser}>{item.userName || item.authorName || 'Người dùng'}</Text>
+                        <Text style={styles.commentText}>{item.content}</Text>
+                      </View>
                     </View>
                   )}
                 />
@@ -699,6 +702,8 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   commentItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 0.5,
@@ -708,6 +713,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     color: '#333',
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
+  },
+  commentBody: {
+    flex: 1,
   },
   commentText: {
     marginTop: 3,
