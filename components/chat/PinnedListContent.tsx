@@ -8,7 +8,7 @@ export type PinnedListContentProps = any;
 
 export const PinnedListContent: React.FC<PinnedListContentProps> = ({ pinnedMessages = [], onClose, onJump, onUnpin, colors, styles, t }) => {
   return (
-    <SafeAreaView edges={['left', 'right', 'top']}>
+    <SafeAreaView edges={['left', 'right', 'bottom']}>
       <View style={styles.pinnedHeader}>
         <Text style={[styles.pinnedTitle, { color: colors.text }]}>{t('chat.pinned_title', 'Tin nhắn đã ghim')}</Text>
         <TouchableOpacity onPress={onClose}>

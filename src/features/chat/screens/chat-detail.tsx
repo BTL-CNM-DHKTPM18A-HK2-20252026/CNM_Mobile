@@ -11,6 +11,7 @@ import ForwardedBanner from '@/components/chat/MessageItem/ForwardedBanner';
 import ReplySnippet from '@/components/chat/MessageItem/ReplySnippet';
 import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
+import { getPinnedMessagePreviewText, getPinnedMessageThumbnailUrl } from '@/components/chat/pinnedMessageDisplay';
 import PollCard from '@/components/chat/PollCard';
 import PollCreateModal from '@/components/chat/PollCreateModal';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
@@ -819,27 +820,6 @@ export default function ChatDetailScreen() {
     }
   }, [generateVideoThumbnail]);
 
-  const openMessageActionMenu = useCallback(async (message: Message) => {
-    if (!canUseMessageInteractions) {
-      return;
-    }
-
-    // Ensure pinned messages are loaded so the UI shows correct Pin/Unpin label
-    try {
-      // If we haven't loaded pins yet or the selected message might be pinned, refresh
-      const alreadyHasPin = pinnedMessages.some((p) => String(p.messageId) === String(message.messageId));
-      if (!alreadyHasPin) {
-        await fetchPinnedMessages();
-      }
-    } catch (err) {
-      // Best-effort: ignore fetch errors and still open the menu
-      console.warn('Failed to refresh pinned messages before opening action menu', err);
-    }
-
-    setSelectedMessage(message);
-    setIsMessageActionVisible(true);
-  }, [canUseMessageInteractions, fetchPinnedMessages, pinnedMessages]);
-
   const isSelectedMessageMine = selectedMessage
     ? (currentUserId !== null && String(selectedMessage.senderId) === String(currentUserId))
     : false;
@@ -896,6 +876,26 @@ export default function ChatDetailScreen() {
       setPinnedMessages([]);
     }
   }, [canUseMessageInteractions, conversationId]);
+
+  const openMessageActionMenu = useCallback(async (message: Message) => {
+    if (!canUseMessageInteractions) {
+      return;
+    }
+
+    // Ensure pinned messages are loaded so the UI shows correct Pin/Unpin label
+    try {
+      const alreadyHasPin = pinnedMessages.some((p) => String(p.messageId) === String(message.messageId));
+      if (!alreadyHasPin) {
+        await fetchPinnedMessages();
+      }
+    } catch (err) {
+      // Best-effort: ignore fetch errors and still open the menu
+      console.warn('Failed to refresh pinned messages before opening action menu', err);
+    }
+
+    setSelectedMessage(message);
+    setIsMessageActionVisible(true);
+  }, [canUseMessageInteractions, fetchPinnedMessages, pinnedMessages]);
 
   const { statuses } = usePresence();
   const { isConnected, sendTyping, sendReadReceipt, sendCallSignal } = useChatSocket({
@@ -1056,41 +1056,9 @@ export default function ChatDetailScreen() {
   const latestPinnedMessage = pinnedMessages.length > 0
     ? pinnedMessages[pinnedMessages.length - 1]
     : null;
-  const latestPinnedType = (latestPinnedMessage?.messageType || '').toUpperCase();
-  const latestPinnedIsImage = latestPinnedType === 'IMAGE' || latestPinnedType === 'IMAGE_GROUP';
-  const latestPinnedThumbUrl = latestPinnedMessage
-    ? (() => {
-      if (latestPinnedType === 'IMAGE') {
-        const candidate = String(latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
-        return isLikelyUrl(candidate) ? candidate : '';
-      }
-
-      if (latestPinnedType === 'IMAGE_GROUP') {
-        const firstAttachment = latestPinnedMessage.attachments?.[0]?.url;
-        const candidate = String(firstAttachment || latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
-        return isLikelyUrl(candidate) ? candidate : '';
-      }
-
-      return '';
-    })()
-    : '';
-  const latestPinnedLabel = latestPinnedMessage
-    ? (() => {
-      const text = (latestPinnedMessage.content || '').trim();
-      if (latestPinnedType === 'IMAGE') return '[Hình ảnh]';
-      if (latestPinnedType === 'IMAGE_GROUP') {
-        const imageCount = latestPinnedMessage.attachments?.length ?? 0;
-        return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
-      }
-      if (latestPinnedType === 'VIDEO') return '[Video]';
-      if (latestPinnedType === 'VOICE') return '[Tin nhắn thoại]';
-      if (latestPinnedType === 'FILE' || latestPinnedType === 'MEDIA') {
-        const fileName = latestPinnedMessage.fileName || getDisplayFileNameFromValue(latestPinnedMessage.contentUrl || latestPinnedMessage.content);
-        return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
-      }
-      return text || t('chat.empty_message', 'Tin nhắn trống');
-    })()
-    : '';
+  const latestPinnedLabel = latestPinnedMessage ? getPinnedMessagePreviewText(latestPinnedMessage) : '';
+  const latestPinnedThumbUrl = latestPinnedMessage ? getPinnedMessageThumbnailUrl(latestPinnedMessage) : '';
+  const latestPinnedIsImage = Boolean(latestPinnedThumbUrl);
 
   const getPinnedPreviewText = useCallback((item: PinnedMessageItem) => {
     const pinnedType = (item.messageType || '').toUpperCase();

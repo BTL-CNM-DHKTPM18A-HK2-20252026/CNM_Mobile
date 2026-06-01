@@ -42,7 +42,9 @@ export const chatDetailStyles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 36,
+    height: 48,
+    alignItems:'center',
+    justifyContent: 'center',
     color: '#FFF',
     fontSize: 16,
     paddingHorizontal: 0,
