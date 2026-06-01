@@ -9,19 +9,19 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    Linking,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -34,16 +34,16 @@ import { chatFileService } from '@chat/services/chatFileService';
 import { chatService } from '@chat/services/chatService';
 import type { Message, PinnedMessageItem } from '@chat/types/chatTypes';
 import {
-  getDisplayFileNameFromValue,
-  getMessageMillis,
-  isLikelyUrl
+    getDisplayFileNameFromValue,
+    getMessageMillis,
+    isLikelyUrl
 } from '@chat/utils/chatHelpers';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
 import { friendService } from '@friends/services/friendService';
 import {
-  checkAddMembersPermission,
-  checkEditGroupInfoPermission,
-  type MemberRole,
+    checkAddMembersPermission,
+    checkEditGroupInfoPermission,
+    type MemberRole,
 } from '../../../../utils/permissionHelper';
 
 interface ChatInfoPanelProps {
@@ -392,6 +392,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   const infoIsAdmin = infoCurrentUserRole === 'ADMIN';
   const infoIsDeputy = infoCurrentUserRole === 'DEPUTY';
   const infoCanAddMembers = infoIsAdmin || infoIsDeputy;
+  const infoCanEditGroupInfo = checkEditGroupInfoPermission('GROUP', infoCurrentUserRole, currentPermissions).allowed;
   const infoMemberCount = infoMembers.length;
   const infoRemainingMemberSlots = getRemainingGroupMemberSlots(infoMemberCount);
   const infoGroupIsFull = isGroupAtCapacity(infoMemberCount);
@@ -674,7 +675,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
             </View>
             <View style={styles.infoPanelNameRow}>
               <Text style={[styles.infoPanelName, { color: colors.text }]} numberOfLines={2}>{props.conversationDisplayName}</Text>
-              {props.isGroupConversation && (
+              {props.isGroupConversation && infoCanEditGroupInfo && (
                 <TouchableOpacity style={styles.infoPanelNameEditBtn} onPress={handleOpenInfoEditNameModal}>
                   <Ionicons name="pencil" size={16} color={colors.text} />
                 </TouchableOpacity>
@@ -697,12 +698,14 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
                   </View>
                   <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Thêm {'\n'}thành viên</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.infoPanelQuickAction} onPress={handleSelectInfoGroupAvatarSource}>
-                  <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="camera" size={22} color={colors.text} />
-                  </View>
-                  <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Đổi ảnh {'\n'}đại diện</Text>
-                </TouchableOpacity>
+                {infoCanEditGroupInfo && (
+                  <TouchableOpacity style={styles.infoPanelQuickAction} onPress={handleSelectInfoGroupAvatarSource}>
+                    <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Ionicons name="camera" size={22} color={colors.text} />
+                    </View>
+                    <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Đổi ảnh {'\n'}đại diện</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.infoPanelQuickAction} onPress={() => Alert.alert('Tắt thông báo', 'Chức năng đang phát triển')}>
                   <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Ionicons name="notifications-off-outline" size={22} color={colors.text} />

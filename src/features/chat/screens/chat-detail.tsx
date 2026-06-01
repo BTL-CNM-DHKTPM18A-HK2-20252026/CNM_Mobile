@@ -49,65 +49,65 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
-  Alert,
-  AppState,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    AppState,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Linking,
+    Modal,
+    NativeScrollEvent,
+    NativeSyntheticEvent,
+    Platform,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  checkPinMessagePermission,
-  checkSendMessagePermission,
-  type ConversationPermissions,
+    checkPinMessagePermission,
+    checkSendMessagePermission,
+    type ConversationPermissions,
 } from '../../../../utils/permissionHelper';
 import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
-  mapChatPayloadListToUiMessages,
-  mapChatPayloadToUiMessage,
-  type ChatUiMessage
+    mapChatPayloadListToUiMessages,
+    mapChatPayloadToUiMessage,
+    type ChatUiMessage
 } from '../services/chatMessageAdapter';
 import { webrtcService } from '../services/webrtcService';
 
 
 import ChatInfoPanel from '../components/ChatInfoPanel';
 import {
-  AI_TYPING_USER_ID, BLOCK_GAP_MS,
-  BROKER_URL,
-  isExpoGo,
-  MAX_IMAGE_SELECTION,
-  PAGE_SIZE,
-  REACTION_EMOJIS,
-  SCROLL_TOP_THRESHOLD
+    AI_TYPING_USER_ID, BLOCK_GAP_MS,
+    BROKER_URL,
+    isExpoGo,
+    MAX_IMAGE_SELECTION,
+    PAGE_SIZE,
+    REACTION_EMOJIS,
+    SCROLL_TOP_THRESHOLD
 } from '../constants/chatConstants';
 import type { ApiWrappedPayload, ForwardConversationItem, Message, MessagePageResponse, PinnedMessageItem } from '../types/chatTypes';
 import {
-  buildReactionSummary,
-  emojiToReactionType,
-  formatDateSeparator,
-  formatMessageTime,
-  getDisplayFileNameFromValue,
-  getFileExtensionFromMimeType,
-  getForwardAttachmentUrls,
-  getMessageMillis,
-  getReplySnippet,
-  isLikelyUrl,
-  parseMessageDate,
-  stripAiMarkdownMarkers,
-  toLocalIsoString
+    buildReactionSummary,
+    emojiToReactionType,
+    formatDateSeparator,
+    formatMessageTime,
+    getDisplayFileNameFromValue,
+    getFileExtensionFromMimeType,
+    getForwardAttachmentUrls,
+    getMessageMillis,
+    getReplySnippet,
+    isLikelyUrl,
+    parseMessageDate,
+    stripAiMarkdownMarkers,
+    toLocalIsoString
 } from '../utils/chatHelpers';
 
 export default function ChatDetailScreen() {
@@ -2390,6 +2390,9 @@ export default function ChatDetailScreen() {
     }
   }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, selectedMessage, type, currentUserRole, conversationPermissions]);
 
+  const canShowPinSelectedMessageAction =
+    checkPinMessagePermission(type, currentUserRole as any, conversationPermissions as any).allowed;
+
   const handleOpenPinnedList = useCallback(async () => {
     await fetchPinnedMessages();
     setIsPinnedListVisible(true);
@@ -3717,14 +3720,16 @@ const renderOlderMessagesLoading = () => {
                   </TouchableOpacity>
                 ) : null}
 
-                <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleTogglePinSelectedMessage(); }}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
-                    <Ionicons name={isSelectedMessagePinned ? 'pin-outline' : 'pin'} size={22} color="#F0853A" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>
-                    {isSelectedMessagePinned ? t('chat.menu.unpin', 'Bỏ ghim') : t('chat.menu.pin', 'Ghim')}
-                  </Text>
-                </TouchableOpacity>
+                {canShowPinSelectedMessageAction && (
+                  <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleTogglePinSelectedMessage(); }}>
+                    <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
+                      <Ionicons name={isSelectedMessagePinned ? 'pin-outline' : 'pin'} size={22} color="#F0853A" />
+                    </View>
+                    <Text style={[styles.actionGridLabel, { color: colors.text }]}>
+                      {isSelectedMessagePinned ? t('chat.menu.unpin', 'Bỏ ghim') : t('chat.menu.pin', 'Ghim')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity style={styles.actionGridItem} onPress={closeMessageActionMenu}>
                   <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>

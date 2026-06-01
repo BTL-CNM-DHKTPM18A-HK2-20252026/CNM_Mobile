@@ -31,7 +31,7 @@ const PERMISSIONS = [
   { key: 'canEditInfo', label: 'Chỉnh sửa thông tin nhóm', description: 'Cho phép thành viên sửa tên, ảnh nhóm' },
   { key: 'canPinMessages', label: 'Ghim tin nhắn', description: 'Cho phép thành viên ghim/bỏ ghim tin nhắn' },
   { key: 'canSendMessages', label: 'Gửi tin nhắn', description: 'Cho phép thành viên gửi tin nhắn' },
-  { key: 'isMemberApprovalRequired', label: 'Duyệt thành viên', description: 'Admin phải duyệt khi có thành viên mới' },
+  
 ];
 
 export default function GroupPermissionsModal({
