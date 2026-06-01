@@ -41,7 +41,7 @@ export default function StoryCard({ isCreate, onPress, profile, displayUri, avat
   }
 
   return (
-    <View style={styles.storyCard}>
+    <TouchableOpacity style={styles.storyCard} activeOpacity={0.9} onPress={onPress}>
       <Image source={{ uri: displayUri }} style={styles.storyCover} />
       <View style={styles.storyOverlay} />
       <Image source={avatarSource} style={styles.storyAvatarBorder} />
@@ -50,7 +50,7 @@ export default function StoryCard({ isCreate, onPress, profile, displayUri, avat
           {name || 'Bạn bè'}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

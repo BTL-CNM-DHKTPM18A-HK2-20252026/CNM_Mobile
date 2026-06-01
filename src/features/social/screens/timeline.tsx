@@ -16,6 +16,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { PostCard, type PostCardData } from '@/components/post/PostCard';
 import StoryCard from '@/components/post/StoryCard';
+import StoryViewer from '@/components/post/StoryViewer';
 import { useTheme } from '@/context/ThemeContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,6 +47,8 @@ export default function TimelineScreen() {
 
   // Trạng thái quản lý đóng/mở và id bài viết đang chọn cho Menu 3 chấm
   const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
+  const [storyViewerVisible, setStoryViewerVisible] = useState(false);
+  const [storyViewerIndex, setStoryViewerIndex] = useState(0);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -69,30 +72,34 @@ export default function TimelineScreen() {
   );
 
   const fetchStories = async () => {
-    try {
-      let userId = profile?.id || profile?.userId || profile?.user_id;
-      if (!userId) {
-        const p = await authService.getProfile();
-        if (p) {
-          setProfile(p);
-          userId = p.id || p.userId || p.user_id;
-        }
+  try {
+    let userId = profile?.id || profile?.userId || profile?.user_id;
+    if (!userId) {
+      const p = await authService.getProfile();
+      if (p) {
+        setProfile(p);
+        userId = p.id || p.userId || p.user_id;
       }
-      const res: any = await api.get('/stories/feed', { headers: userId ? { 'X-User-Id': String(userId) } : undefined });
-      const list = Array.isArray(res) ? res : res?.data || res || [];
-      const mapped = (list || []).map((s: any) => ({
-        id: s.storyId || s.id,
-        name: s.authorName || s.name || 'Bạn bè',
-        avatar: s.authorAvatarUrl || s.authorAvatar || s.avatar,
-        mediaUrl: s.mediaUrl || s.media || s.cover,
-        mediaType: s.mediaType || (s.mediaUrl && s.mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE'),
-        isViewed: s.isViewedByMe || false,
-      }));
-      setStories(mapped);
-    } catch (err) {
-      console.warn('Fetch stories error', err);
     }
-  };
+    const res: any = await api.get('/stories/feed', { headers: userId ? { 'X-User-Id': String(userId) } : undefined });
+    const list = Array.isArray(res) ? res : res?.data || res || [];
+    
+    const mapped = (list || []).map((s: any) => ({
+      id: s.storyId || s.id,
+      name: s.authorName || s.name || 'Bạn bè',
+      avatar: s.authorAvatarUrl || s.authorAvatar || s.avatar,
+      mediaUrl: s.mediaUrl || s.media || s.cover,
+      mediaType: s.mediaType || (s.mediaUrl && s.mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE'),
+      isViewed: s.isViewedByMe || false,
+      // Thêm dòng này để giữ lại nội dung chữ của Story
+      caption: s.caption || s.content || s.text || '', 
+    }));
+    
+    setStories(mapped);
+  } catch (err) {
+    console.warn('Fetch stories error', err);
+  }
+};
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -241,6 +248,11 @@ export default function TimelineScreen() {
     />
   );
 
+  const openStory = (idx: number) => {
+    setStoryViewerIndex(idx);
+    setStoryViewerVisible(true);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: '#ededed' }]}>
       <View style={[styles.zaloHeader, { paddingTop: insets.top }]}>
@@ -267,7 +279,7 @@ export default function TimelineScreen() {
         ListHeaderComponent={
           <>
             <View style={styles.storySection}>
-              <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} profile={profile} />
+              <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} profile={profile} onOpenStory={openStory} />
             </View>
 
             <View style={styles.composerCard}>
@@ -287,6 +299,13 @@ export default function TimelineScreen() {
             </View>
           </>
         }
+      />
+
+      <StoryViewer
+        visible={storyViewerVisible}
+        stories={stories}
+        startIndex={storyViewerIndex}
+        onClose={() => setStoryViewerVisible(false)}
       />
 
       {/* Reaction picker modal */}
@@ -429,7 +448,7 @@ export default function TimelineScreen() {
   );
 }
 
-const ScrollViewHorizontal = ({ stories, onPressCreate, profile }: { stories?: any[], onPressCreate?: () => void, profile?: any }) => {
+const ScrollViewHorizontal = ({ stories, onPressCreate, profile, onOpenStory }: { stories?: any[], onPressCreate?: () => void, profile?: any, onOpenStory?: (idx: number) => void }) => {
   const router = useRouter();
   const data = [null, ...(stories || [])];
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
@@ -474,7 +493,7 @@ const ScrollViewHorizontal = ({ stories, onPressCreate, profile }: { stories?: a
         const displayUri = item.mediaType === 'VIDEO' ? (thumbnails[item.mediaUrl] || uri) : uri;
 
         return (
-          <StoryCard displayUri={displayUri} avatarSource={getAvatarSource(item?.avatar)} name={item?.name} />
+          <StoryCard displayUri={displayUri} avatarSource={getAvatarSource(item?.avatar)} name={item?.name} onPress={() => onOpenStory && onOpenStory(index - 1)} />
         );
       }}
     />
