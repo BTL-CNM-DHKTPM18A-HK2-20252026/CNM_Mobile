@@ -1053,9 +1053,17 @@ export default function ChatDetailScreen() {
           ? (isPartnerTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
           : t('chat.offline_recent', 'Truy cập gần đây');
 
-  const latestPinnedMessage = pinnedMessages.length > 0
-    ? pinnedMessages[pinnedMessages.length - 1]
-    : null;
+  const latestPinnedMessage = useMemo(() => {
+    if (pinnedMessages.length === 0) {
+      return null;
+    }
+
+    return pinnedMessages.reduce((latest, candidate) => {
+      const latestPinnedAt = Date.parse(String(latest.pinnedAt ?? '')) || 0;
+      const candidatePinnedAt = Date.parse(String(candidate.pinnedAt ?? '')) || 0;
+      return candidatePinnedAt >= latestPinnedAt ? candidate : latest;
+    }, pinnedMessages[0]);
+  }, [pinnedMessages]);
   const latestPinnedLabel = latestPinnedMessage ? getPinnedMessagePreviewText(latestPinnedMessage) : '';
   const latestPinnedThumbUrl = latestPinnedMessage ? getPinnedMessageThumbnailUrl(latestPinnedMessage) : '';
   const latestPinnedIsImage = Boolean(latestPinnedThumbUrl);
