@@ -35,6 +35,39 @@ export default function PersonalScreen() {
     }, [])
   );
 
+  function formatPostTime(createdAtString?: string | null): string {
+    if (!createdAtString) return 'Vừa xong';
+
+    const createdTime = new Date(createdAtString).getTime();
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - createdTime) / 1000);
+
+    if (diffInSeconds < 60) return 'Vừa xong';
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} phút`;
+    }
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+      return `${diffInHours} giờ`;
+    }
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) {
+      return `${diffInDays} ngày`;
+    }
+
+    const diffInMonths = Math.floor(diffInDays / 30);
+    if (diffInMonths < 12) {
+      return `${diffInMonths} tháng`;
+    }
+
+    const diffInYears = Math.floor(diffInMonths / 12);
+    return `${diffInYears} năm`;
+  }
+
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
@@ -65,7 +98,7 @@ export default function PersonalScreen() {
         authorId: String(p.authorId || p.userId || p.createdById || p.createdBy || ''),
         author: p.author?.displayName || p.authorName || p.createdBy || p.userName || 'Người dùng',
         avatar: p.authorAvatarUrl || p.avatarUrl || null,
-        time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
+        time: formatPostTime(p.createdAt),
         text: p.content || p.text || p.body || '',
         images: Array.isArray(p.media) && p.media.length > 0
           ? p.media.map((m: any) => m.url || m)
