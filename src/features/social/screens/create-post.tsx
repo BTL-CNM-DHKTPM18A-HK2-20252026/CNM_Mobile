@@ -36,16 +36,22 @@ export default function CreatePostScreen() {
   const [loading, setLoading] = useState(false);
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
 
+  const isVideoAsset = (uri: string, type?: string) => {
+    const ext = uri.split('.').pop()?.toLowerCase();
+    return type === 'video' || ext === 'mp4' || ext === 'mov' || ext === 'm4v';
+  };
+
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') return;
     const res = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'], // Sửa thành mảng chuỗi trực tiếp ở đây
-      quality: 0.8
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      quality: 0.8,
     });
 
     if (!res.canceled && res.assets && res.assets.length > 0) {
-      setSelectedImages(prev => [...prev, { uri: res.assets[0].uri }]);
+      const asset = res.assets[0];
+      setSelectedImages(prev => [...prev, { uri: asset.uri, type: asset.type }]);
     }
   };
 
@@ -53,9 +59,9 @@ export default function CreatePostScreen() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], // Sửa thành mảng chuỗi trực tiếp ở đây
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsMultipleSelection: true,
-      quality: 0.8
+      quality: 0.8,
     });
 
     if (!res.canceled && res.assets && res.assets.length > 0) {
@@ -63,7 +69,7 @@ export default function CreatePostScreen() {
         ...prev,
         ...res.assets
           .filter((asset) => !!asset.uri)
-          .map((asset) => ({ uri: asset.uri })),
+          .map((asset) => ({ uri: asset.uri, type: asset.type })),
       ]);
     }
   };
@@ -78,13 +84,16 @@ export default function CreatePostScreen() {
         let appendedCount = 0;
         selectedImages.forEach((it, idx) => {
           const uri = it.uri;
+          const mediaType = isVideoAsset(uri, it.type) ? 'video' : 'image';
 
           // Lớp bảo vệ: Bỏ qua nếu cấu trúc uri trống
           if (!uri) return;
 
           const filename = uri.split('/').pop() || `photo_${idx}.jpg`;
           const fileType = (filename.match(/\.(\w+)$/)?.[1] || 'jpg').toLowerCase();
-          const mime = fileType === 'png' ? 'image/png' : 'image/jpeg';
+          const mime = mediaType === 'video'
+            ? (fileType === 'mov' ? 'video/quicktime' : 'video/mp4')
+            : (fileType === 'png' ? 'image/png' : 'image/jpeg');
 
           uploadForm.append('files', {
             uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
@@ -202,7 +211,20 @@ export default function CreatePostScreen() {
                 contentContainerStyle={{ paddingBottom: 12 }}
                 renderItem={({ item, index }) => (
                   <View style={styles.selectedImageContainer}>
-                    <Image source={{ uri: item.uri }} style={styles.selectedPreviewImage} />
+                    {isVideoAsset(item.uri, item.type) ? (
+                      <View style={[styles.selectedPreviewImage, styles.videoPreviewBox]}>
+                        <Ionicons name="videocam" size={22} color="#fff" />
+                        <Text style={styles.videoPreviewText}>Video</Text>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: item.uri }} style={styles.selectedPreviewImage} />
+                    )}
+                    {isVideoAsset(item.uri, item.type) && (
+                      <View style={styles.videoBadge}>
+                        <Ionicons name="play" size={12} color="#fff" />
+                        <Text style={styles.videoBadgeText}>Video</Text>
+                      </View>
+                    )}
                     <TouchableOpacity
                       onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== index))}
                       style={styles.removeImageBadge}
@@ -214,51 +236,12 @@ export default function CreatePostScreen() {
               />
             )}
 
-            <View style={styles.colorTextRow}>
-              <TouchableOpacity style={styles.circleColorButton}>
-                <Text style={styles.circleColorText}>Aa</Text>
+            <View style={styles.pickButtonsRow}>
+              <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary}>
+                <Ionicons name="image" size={20} color="#0082f6" />
               </TouchableOpacity>
-
-              <View style={styles.pickButtonsRow}>
-                <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary}>
-                  <Ionicons name="image" size={20} color="#0082f6" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.pickBtn} onPress={takePhoto}>
-                  <Ionicons name="camera" size={20} color="#4caf50" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.tagsRow}>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="musical-notes-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Nhạc</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="images-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Album</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="pricetag-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Với bạn bè</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.toolbarRow}>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="happy-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.toolIcon, styles.toolActive]}>
-                <Ionicons name="image" size={24} color="#0082f6" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="play-circle-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="link-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="location-outline" size={24} color="#757575" />
+              <TouchableOpacity style={styles.pickBtn} onPress={takePhoto}>
+                <Ionicons name="camera" size={20} color="#4caf50" />
               </TouchableOpacity>
             </View>
           </View>
@@ -307,6 +290,24 @@ const styles = StyleSheet.create({
   // Các style mới phục vụ danh sách ảnh được chọn preview
   selectedImageContainer: { marginRight: 10, position: 'relative', marginTop: 4 },
   selectedPreviewImage: { width: 72, height: 72, borderRadius: 8, borderWidth: 0.5, borderColor: '#e0e0e0' },
+  videoPreviewBox: {
+    backgroundColor: '#222',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoPreviewText: { color: '#fff', fontSize: 10, marginTop: 2, fontWeight: '600' },
+  videoBadge: {
+    position: 'absolute',
+    left: 4,
+    bottom: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  videoBadgeText: { color: '#fff', fontSize: 10, marginLeft: 3, fontWeight: '600' },
   removeImageBadge: { position: 'absolute', top: -6, right: -6, backgroundColor: '#fff', borderRadius: 9 },
 
   colorTextRow: { marginVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

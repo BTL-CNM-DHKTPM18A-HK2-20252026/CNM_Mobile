@@ -13,7 +13,10 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { PostCard, type PostCardData } from '@/components/post/PostCard';
+import StoryCard from '@/components/post/StoryCard';
+import StoryViewer from '@/components/post/StoryViewer';
 import { useTheme } from '@/context/ThemeContext';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +47,8 @@ export default function TimelineScreen() {
 
   // Trạng thái quản lý đóng/mở và id bài viết đang chọn cho Menu 3 chấm
   const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
+  const [storyViewerVisible, setStoryViewerVisible] = useState(false);
+  const [storyViewerIndex, setStoryViewerIndex] = useState(0);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -78,6 +83,7 @@ export default function TimelineScreen() {
       }
       const res: any = await api.get('/stories/feed', { headers: userId ? { 'X-User-Id': String(userId) } : undefined });
       const list = Array.isArray(res) ? res : res?.data || res || [];
+
       const mapped = (list || []).map((s: any) => ({
         id: s.storyId || s.id,
         name: s.authorName || s.name || 'Bạn bè',
@@ -85,7 +91,10 @@ export default function TimelineScreen() {
         mediaUrl: s.mediaUrl || s.media || s.cover,
         mediaType: s.mediaType || (s.mediaUrl && s.mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE'),
         isViewed: s.isViewedByMe || false,
+        // Thêm dòng này để giữ lại nội dung chữ của Story
+        caption: s.caption || s.content || s.text || '',
       }));
+
       setStories(mapped);
     } catch (err) {
       console.warn('Fetch stories error', err);
@@ -105,7 +114,7 @@ export default function TimelineScreen() {
           p.authorAvatarUrl ||
           p.avatarUrl ||
           null,
-        time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
+        time: formatPostTime(p.createdAt),
         text: p.content || p.text || p.body || '',
         images: Array.isArray(p.media) && p.media.length > 0
           ? p.media.map((m: any) => m.url || m)
@@ -126,6 +135,39 @@ export default function TimelineScreen() {
       setRefreshing(false);
     }
   };
+
+  function formatPostTime(createdAtString?: string | null): string {
+    if (!createdAtString) return 'Vừa xong';
+
+    const createdTime = new Date(createdAtString).getTime();
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - createdTime) / 1000);
+
+    if (diffInSeconds < 60) return 'Vừa xong';
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} phút`;
+    }
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+      return `${diffInHours} giờ`;
+    }
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) {
+      return `${diffInDays} ngày`;
+    }
+
+    const diffInMonths = Math.floor(diffInDays / 30);
+    if (diffInMonths < 12) {
+      return `${diffInMonths} tháng`;
+    }
+
+    const diffInYears = Math.floor(diffInMonths / 12);
+    return `${diffInYears} năm`;
+  }
 
   const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 
@@ -239,24 +281,20 @@ export default function TimelineScreen() {
     />
   );
 
+  const openStory = (idx: number) => {
+    setStoryViewerIndex(idx);
+    setStoryViewerVisible(true);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: '#ededed' }]}>
       <View style={[styles.zaloHeader, { paddingTop: insets.top }]}>
         <View style={styles.headerTop}>
-          <TextInput 
-            placeholder="Tìm kiếm" 
-            placeholderTextColor="rgba(255,255,255,0.7)" 
-            style={[styles.searchBar, { paddingLeft: 12 }]} 
+          <TextInput
+            placeholder="Tìm kiếm"
+            placeholderTextColor="rgba(255,255,255,0.7)"
+            style={[styles.searchBar, { paddingLeft: 12 }]}
           />
-        </View>
-
-        <View style={styles.tabBar}>
-          <TouchableOpacity style={[styles.tabItem, styles.tabActive]}>
-            <Text style={[styles.tabText, styles.tabTextActive]}>Nhật Ký</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem}>
-            <Text style={styles.tabText}>Zalo Video</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -274,7 +312,7 @@ export default function TimelineScreen() {
         ListHeaderComponent={
           <>
             <View style={styles.storySection}>
-              <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} />
+              <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} profile={profile} onOpenStory={openStory} />
             </View>
 
             <View style={styles.composerCard}>
@@ -284,7 +322,7 @@ export default function TimelineScreen() {
                   <Text style={{ color: '#7f7f7f', fontSize: 15 }}>Hôm nay bạn thế nào?</Text>
                 </TouchableOpacity>
               </View>
-              
+
               <View style={styles.composerButtons}>
                 <TouchableOpacity style={styles.composerBtn}><Ionicons name="image" size={18} color="#4caf50" /><Text style={styles.composerBtnTxt}>Ảnh</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.composerBtn}><Ionicons name="videocam" size={18} color="#e91e63" /><Text style={styles.composerBtnTxt}>Video</Text></TouchableOpacity>
@@ -294,6 +332,13 @@ export default function TimelineScreen() {
             </View>
           </>
         }
+      />
+
+      <StoryViewer
+        visible={storyViewerVisible}
+        stories={stories}
+        startIndex={storyViewerIndex}
+        onClose={() => setStoryViewerVisible(false)}
       />
 
       {/* Reaction picker modal */}
@@ -333,8 +378,11 @@ export default function TimelineScreen() {
                   keyExtractor={(c, i) => c.commentId || c.id || String(i)}
                   renderItem={({ item }) => (
                     <View style={styles.commentItem}>
-                      <Text style={styles.commentUser}>{item.userName || item.authorName || 'Người dùng'}</Text>
-                      <Text style={styles.commentText}>{item.content}</Text>
+                      <Image source={getAvatarSource(item.avatar || item.userAvatar || item.authorAvatar)} style={styles.commentAvatar} />
+                      <View style={styles.commentBody}>
+                        <Text style={styles.commentUser}>{item.userName || item.authorName || 'Người dùng'}</Text>
+                        <Text style={styles.commentText}>{item.content}</Text>
+                      </View>
                     </View>
                   )}
                 />
@@ -370,18 +418,18 @@ export default function TimelineScreen() {
         onRequestClose={() => setActiveMenuPostId(null)}
       >
         {/* Click ra ngoài để đóng menu */}
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setActiveMenuPostId(null)} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setActiveMenuPostId(null)}
         />
 
         {/* Khung Bottom Sheet chứa các chức năng tinh giản tên */}
         <View style={[styles.menuBottomSheetContainer, { paddingBottom: insets.bottom || 16 }]}>
           <View style={styles.sheetHandle} />
-          
+
           <View style={styles.menuOptionsList}>
-            
+
             {/* Chức năng 1: Xóa bài đăng */}
             <TouchableOpacity style={styles.menuItem} onPress={() => setActiveMenuPostId(null)}>
               <Ionicons name="trash-outline" size={24} color="#555" style={styles.menuIcon} />
@@ -433,48 +481,54 @@ export default function TimelineScreen() {
   );
 }
 
-const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onPressCreate?: () => void }) => {
+const ScrollViewHorizontal = ({ stories, onPressCreate, profile, onOpenStory }: { stories?: any[], onPressCreate?: () => void, profile?: any, onOpenStory?: (idx: number) => void }) => {
   const router = useRouter();
   const data = [null, ...(stories || [])];
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let mounted = true;
+    const loadThumbnails = async () => {
+      if (!stories || stories.length === 0) return;
+      for (const s of stories) {
+        const uri = s?.mediaUrl;
+        if (!uri) continue;
+        if (s.mediaType === 'VIDEO' && !thumbnails[uri]) {
+          try {
+            const result = await VideoThumbnails.getThumbnailAsync(uri, { time: 1000 });
+            if (mounted && result?.uri) {
+              setThumbnails(prev => ({ ...prev, [uri]: result.uri }));
+            }
+          } catch (err) {
+            console.warn('Thumbnail generation failed', err);
+          }
+        }
+      }
+    };
+    loadThumbnails();
+    return () => { mounted = false; };
+  }, [stories]);
+
   return (
     <FlatList
       data={data}
       horizontal
       showsHorizontalScrollIndicator={false}
       keyExtractor={(_, index) => String(index)}
-      renderItem={({ item, index }) => (
-        <View style={styles.storyCard}>
-          <Image 
-            source={{ uri: index === 0 ? 'https://via.placeholder.com/150/333' : (item?.mediaUrl || 'https://via.placeholder.com/150/ffc107') }} 
-            style={styles.storyCover} 
-          />
-          <View style={styles.storyOverlay} />
-          {index === 0 ? (
-            <>
-              <TouchableOpacity
-                onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
-                style={{ position: 'absolute', left: 12, top: 75 }}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <View style={styles.createStoryCircle}>
-                  <Ionicons name="camera" size={18} color="#fff" />
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
-                style={StyleSheet.absoluteFillObject}
-              />
-            </>
-          ) : (
-            <Image source={getAvatarSource(item?.avatar)} style={styles.storyAvatarBorder} />
-          )}
-          <View style={styles.storyNameWrap}>
-            <Text style={styles.storyName} numberOfLines={1}>
-              {index === 0 ? 'Tạo mới' : (item?.name || 'Bạn bè')}
-            </Text>
-          </View>
-        </View>
-      )}
+      renderItem={({ item, index }) => {
+        if (index === 0) {
+          return (
+            <StoryCard isCreate profile={profile} onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))} />
+          );
+        }
+
+        const uri = item?.mediaUrl || 'https://via.placeholder.com/150/ffc107';
+        const displayUri = item.mediaType === 'VIDEO' ? (thumbnails[item.mediaUrl] || uri) : uri;
+
+        return (
+          <StoryCard displayUri={displayUri} avatarSource={getAvatarSource(item?.avatar)} name={item?.name} onPress={() => onOpenStory && onOpenStory(index - 1)} />
+        );
+      }}
     />
   );
 };
@@ -489,15 +543,54 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomWidth: 3, borderBottomColor: '#fff' },
   tabText: { color: 'rgba(255,255,255,0.7)', fontWeight: '500', fontSize: 15 },
   tabTextActive: { color: '#fff', fontWeight: 'bold' },
-
   storySection: { backgroundColor: '#fff', paddingVertical: 12, paddingLeft: 12, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
   storyCard: { width: 105, height: 145, marginRight: 10, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f0f0f0', position: 'relative' },
   storyCover: { width: '100%', height: '100%' },
   storyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.15)' },
-  createStoryCircle: { position: 'absolute', left: 12, top: 75, width: 34, height: 34, borderRadius: 17, backgroundColor: '#0082f6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
-  storyAvatarBorder: { position: 'absolute', left: 12, top: 75, width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: '#0082f6' },
-  storyNameWrap: { position: 'absolute', bottom: 8, left: 8, right: 8, alignItems: 'flex-start' },
-  storyName: { color: '#fff', fontSize: 12, fontWeight: '600', maxWidth: 88 },
+  createStoryCircleCenter: {
+    position: 'absolute',
+    top: '45%',
+    left: '50%',
+    transform: [{ translateX: -19 }, { translateY: -19 }], // Căn giữa hoàn hảo vòng tròn đường kính 38
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#0082f6', // Màu xanh Zalo
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+
+  storyAvatarBorder: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: '#0082f6'
+  },
+  storyNameWrap: {
+    position: 'absolute',
+    bottom: 8,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 4
+  },
+  storyName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center'
+  },
 
   composerCard: { backgroundColor: '#fff', padding: 12, marginTop: 8, marginBottom: 4 },
   composerTop: { flexDirection: 'row', alignItems: 'center' },
@@ -516,7 +609,7 @@ const styles = StyleSheet.create({
   sponsoredText: { fontSize: 12, color: '#757575' },
   moreButton: { padding: 4 },
   contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#1c1c1c', lineHeight: 21 },
-  
+
   imageContainer: { marginTop: 10, width: width, position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
   singleImage: { width: '100%', height: '100%' },
   twoImageRow: { flexDirection: 'row', width: '100%', height: '100%' },
@@ -594,6 +687,8 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   commentItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 0.5,
@@ -603,6 +698,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     color: '#333',
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
+  },
+  commentBody: {
+    flex: 1,
   },
   commentText: {
     marginTop: 3,
