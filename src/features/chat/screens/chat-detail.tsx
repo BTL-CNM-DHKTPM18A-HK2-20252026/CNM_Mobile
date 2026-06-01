@@ -11,6 +11,7 @@ import ForwardedBanner from '@/components/chat/MessageItem/ForwardedBanner';
 import ReplySnippet from '@/components/chat/MessageItem/ReplySnippet';
 import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
+import { getPinnedMessagePreviewText, getPinnedMessageThumbnailUrl } from '@/components/chat/pinnedMessageDisplay';
 import PollCard from '@/components/chat/PollCard';
 import PollCreateModal from '@/components/chat/PollCreateModal';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
@@ -49,66 +50,66 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
-    Alert,
-    AppState,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Linking,
-    Modal,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
-    Platform,
-    Pressable,
-    ScrollView,
-    StatusBar,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  AppState,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MAX_PINNED_MESSAGES } from '../../../../components/chat/pinnedMessageDisplay';
 import {
-    checkPinMessagePermission,
-    checkSendMessagePermission,
-    type ConversationPermissions,
+  checkPinMessagePermission,
+  checkSendMessagePermission,
+  type ConversationPermissions,
 } from '../../../../utils/permissionHelper';
 import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
-    mapChatPayloadListToUiMessages,
-    mapChatPayloadToUiMessage,
-    type ChatUiMessage
+  mapChatPayloadListToUiMessages,
+  mapChatPayloadToUiMessage,
+  type ChatUiMessage
 } from '../services/chatMessageAdapter';
 import { webrtcService } from '../services/webrtcService';
 
 
 import ChatInfoPanel from '../components/ChatInfoPanel';
 import {
-    AI_TYPING_USER_ID, BLOCK_GAP_MS,
-    BROKER_URL,
-    isExpoGo,
-    MAX_IMAGE_SELECTION,
-    PAGE_SIZE,
-    REACTION_EMOJIS,
-    SCROLL_TOP_THRESHOLD
+  AI_TYPING_USER_ID, BLOCK_GAP_MS,
+  BROKER_URL,
+  isExpoGo,
+  MAX_IMAGE_SELECTION,
+  PAGE_SIZE,
+  REACTION_EMOJIS,
+  SCROLL_TOP_THRESHOLD
 } from '../constants/chatConstants';
 import type { ApiWrappedPayload, ForwardConversationItem, Message, MessagePageResponse, PinnedMessageItem } from '../types/chatTypes';
 import {
-    buildReactionSummary,
-    emojiToReactionType,
-    formatDateSeparator,
-    formatMessageTime,
-    getDisplayFileNameFromValue,
-    getFileExtensionFromMimeType,
-    getForwardAttachmentUrls,
-    getMessageMillis,
-    getReplySnippet,
-    isLikelyUrl,
-    parseMessageDate,
-    stripAiMarkdownMarkers,
-    toLocalIsoString
+  buildReactionSummary,
+  emojiToReactionType,
+  formatDateSeparator,
+  formatMessageTime,
+  getDisplayFileNameFromValue,
+  getFileExtensionFromMimeType,
+  getForwardAttachmentUrls,
+  getMessageMillis,
+  getReplySnippet,
+  isLikelyUrl,
+  parseMessageDate,
+  stripAiMarkdownMarkers,
+  toLocalIsoString
 } from '../utils/chatHelpers';
 
 export default function ChatDetailScreen() {
@@ -819,15 +820,6 @@ export default function ChatDetailScreen() {
     }
   }, [generateVideoThumbnail]);
 
-  const openMessageActionMenu = useCallback((message: Message) => {
-    if (!canUseMessageInteractions) {
-      return;
-    }
-
-    setSelectedMessage(message);
-    setIsMessageActionVisible(true);
-  }, [canUseMessageInteractions]);
-
   const isSelectedMessageMine = selectedMessage
     ? (currentUserId !== null && String(selectedMessage.senderId) === String(currentUserId))
     : false;
@@ -884,6 +876,26 @@ export default function ChatDetailScreen() {
       setPinnedMessages([]);
     }
   }, [canUseMessageInteractions, conversationId]);
+
+  const openMessageActionMenu = useCallback(async (message: Message) => {
+    if (!canUseMessageInteractions) {
+      return;
+    }
+
+    // Ensure pinned messages are loaded so the UI shows correct Pin/Unpin label
+    try {
+      const alreadyHasPin = pinnedMessages.some((p) => String(p.messageId) === String(message.messageId));
+      if (!alreadyHasPin) {
+        await fetchPinnedMessages();
+      }
+    } catch (err) {
+      // Best-effort: ignore fetch errors and still open the menu
+      console.warn('Failed to refresh pinned messages before opening action menu', err);
+    }
+
+    setSelectedMessage(message);
+    setIsMessageActionVisible(true);
+  }, [canUseMessageInteractions, fetchPinnedMessages, pinnedMessages]);
 
   const { statuses } = usePresence();
   const { isConnected, sendTyping, sendReadReceipt, sendCallSignal } = useChatSocket({
@@ -1041,44 +1053,20 @@ export default function ChatDetailScreen() {
           ? (isPartnerTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
           : t('chat.offline_recent', 'Truy cập gần đây');
 
-  const latestPinnedMessage = pinnedMessages.length > 0
-    ? pinnedMessages[pinnedMessages.length - 1]
-    : null;
-  const latestPinnedType = (latestPinnedMessage?.messageType || '').toUpperCase();
-  const latestPinnedIsImage = latestPinnedType === 'IMAGE' || latestPinnedType === 'IMAGE_GROUP';
-  const latestPinnedThumbUrl = latestPinnedMessage
-    ? (() => {
-      if (latestPinnedType === 'IMAGE') {
-        const candidate = String(latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
-        return isLikelyUrl(candidate) ? candidate : '';
-      }
+  const latestPinnedMessage = useMemo(() => {
+    if (pinnedMessages.length === 0) {
+      return null;
+    }
 
-      if (latestPinnedType === 'IMAGE_GROUP') {
-        const firstAttachment = latestPinnedMessage.attachments?.[0]?.url;
-        const candidate = String(firstAttachment || latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
-        return isLikelyUrl(candidate) ? candidate : '';
-      }
-
-      return '';
-    })()
-    : '';
-  const latestPinnedLabel = latestPinnedMessage
-    ? (() => {
-      const text = (latestPinnedMessage.content || '').trim();
-      if (latestPinnedType === 'IMAGE') return '[Hình ảnh]';
-      if (latestPinnedType === 'IMAGE_GROUP') {
-        const imageCount = latestPinnedMessage.attachments?.length ?? 0;
-        return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
-      }
-      if (latestPinnedType === 'VIDEO') return '[Video]';
-      if (latestPinnedType === 'VOICE') return '[Tin nhắn thoại]';
-      if (latestPinnedType === 'FILE' || latestPinnedType === 'MEDIA') {
-        const fileName = latestPinnedMessage.fileName || getDisplayFileNameFromValue(latestPinnedMessage.contentUrl || latestPinnedMessage.content);
-        return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
-      }
-      return text || t('chat.empty_message', 'Tin nhắn trống');
-    })()
-    : '';
+    return pinnedMessages.reduce((latest, candidate) => {
+      const latestPinnedAt = Date.parse(String(latest.pinnedAt ?? '')) || 0;
+      const candidatePinnedAt = Date.parse(String(candidate.pinnedAt ?? '')) || 0;
+      return candidatePinnedAt >= latestPinnedAt ? candidate : latest;
+    }, pinnedMessages[0]);
+  }, [pinnedMessages]);
+  const latestPinnedLabel = latestPinnedMessage ? getPinnedMessagePreviewText(latestPinnedMessage) : '';
+  const latestPinnedThumbUrl = latestPinnedMessage ? getPinnedMessageThumbnailUrl(latestPinnedMessage) : '';
+  const latestPinnedIsImage = Boolean(latestPinnedThumbUrl);
 
   const getPinnedPreviewText = useCallback((item: PinnedMessageItem) => {
     const pinnedType = (item.messageType || '').toUpperCase();

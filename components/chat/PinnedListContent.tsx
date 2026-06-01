@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getPinnedMessagePreviewText, getPinnedMessageThumbnailUrl } from './pinnedMessageDisplay';
 
 export type PinnedListContentProps = any;
 
 export const PinnedListContent: React.FC<PinnedListContentProps> = ({ pinnedMessages = [], onClose, onJump, onUnpin, colors, styles, t }) => {
   return (
-    <>
+    <SafeAreaView edges={['left', 'right', 'bottom']}>
       <View style={styles.pinnedHeader}>
         <Text style={[styles.pinnedTitle, { color: colors.text }]}>{t('chat.pinned_title', 'Tin nhắn đã ghim')}</Text>
         <TouchableOpacity onPress={onClose}>
@@ -42,7 +42,7 @@ export const PinnedListContent: React.FC<PinnedListContentProps> = ({ pinnedMess
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </>
+    </SafeAreaView>
   );
 };
 
