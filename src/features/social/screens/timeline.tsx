@@ -72,34 +72,34 @@ export default function TimelineScreen() {
   );
 
   const fetchStories = async () => {
-  try {
-    let userId = profile?.id || profile?.userId || profile?.user_id;
-    if (!userId) {
-      const p = await authService.getProfile();
-      if (p) {
-        setProfile(p);
-        userId = p.id || p.userId || p.user_id;
+    try {
+      let userId = profile?.id || profile?.userId || profile?.user_id;
+      if (!userId) {
+        const p = await authService.getProfile();
+        if (p) {
+          setProfile(p);
+          userId = p.id || p.userId || p.user_id;
+        }
       }
+      const res: any = await api.get('/stories/feed', { headers: userId ? { 'X-User-Id': String(userId) } : undefined });
+      const list = Array.isArray(res) ? res : res?.data || res || [];
+
+      const mapped = (list || []).map((s: any) => ({
+        id: s.storyId || s.id,
+        name: s.authorName || s.name || 'Bạn bè',
+        avatar: s.authorAvatarUrl || s.authorAvatar || s.avatar,
+        mediaUrl: s.mediaUrl || s.media || s.cover,
+        mediaType: s.mediaType || (s.mediaUrl && s.mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE'),
+        isViewed: s.isViewedByMe || false,
+        // Thêm dòng này để giữ lại nội dung chữ của Story
+        caption: s.caption || s.content || s.text || '',
+      }));
+
+      setStories(mapped);
+    } catch (err) {
+      console.warn('Fetch stories error', err);
     }
-    const res: any = await api.get('/stories/feed', { headers: userId ? { 'X-User-Id': String(userId) } : undefined });
-    const list = Array.isArray(res) ? res : res?.data || res || [];
-    
-    const mapped = (list || []).map((s: any) => ({
-      id: s.storyId || s.id,
-      name: s.authorName || s.name || 'Bạn bè',
-      avatar: s.authorAvatarUrl || s.authorAvatar || s.avatar,
-      mediaUrl: s.mediaUrl || s.media || s.cover,
-      mediaType: s.mediaType || (s.mediaUrl && s.mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE'),
-      isViewed: s.isViewedByMe || false,
-      // Thêm dòng này để giữ lại nội dung chữ của Story
-      caption: s.caption || s.content || s.text || '', 
-    }));
-    
-    setStories(mapped);
-  } catch (err) {
-    console.warn('Fetch stories error', err);
-  }
-};
+  };
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -114,7 +114,7 @@ export default function TimelineScreen() {
           p.authorAvatarUrl ||
           p.avatarUrl ||
           null,
-        time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
+        time: formatPostTime(p.createdAt),
         text: p.content || p.text || p.body || '',
         images: Array.isArray(p.media) && p.media.length > 0
           ? p.media.map((m: any) => m.url || m)
@@ -135,6 +135,39 @@ export default function TimelineScreen() {
       setRefreshing(false);
     }
   };
+
+  function formatPostTime(createdAtString?: string | null): string {
+    if (!createdAtString) return 'Vừa xong';
+
+    const createdTime = new Date(createdAtString).getTime();
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - createdTime) / 1000);
+
+    if (diffInSeconds < 60) return 'Vừa xong';
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} phút`;
+    }
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+      return `${diffInHours} giờ`;
+    }
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) {
+      return `${diffInDays} ngày`;
+    }
+
+    const diffInMonths = Math.floor(diffInDays / 30);
+    if (diffInMonths < 12) {
+      return `${diffInMonths} tháng`;
+    }
+
+    const diffInYears = Math.floor(diffInMonths / 12);
+    return `${diffInYears} năm`;
+  }
 
   const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 
@@ -257,10 +290,10 @@ export default function TimelineScreen() {
     <View style={[styles.container, { backgroundColor: '#ededed' }]}>
       <View style={[styles.zaloHeader, { paddingTop: insets.top }]}>
         <View style={styles.headerTop}>
-          <TextInput 
-            placeholder="Tìm kiếm" 
-            placeholderTextColor="rgba(255,255,255,0.7)" 
-            style={[styles.searchBar, { paddingLeft: 12 }]} 
+          <TextInput
+            placeholder="Tìm kiếm"
+            placeholderTextColor="rgba(255,255,255,0.7)"
+            style={[styles.searchBar, { paddingLeft: 12 }]}
           />
         </View>
       </View>
@@ -289,7 +322,7 @@ export default function TimelineScreen() {
                   <Text style={{ color: '#7f7f7f', fontSize: 15 }}>Hôm nay bạn thế nào?</Text>
                 </TouchableOpacity>
               </View>
-              
+
               <View style={styles.composerButtons}>
                 <TouchableOpacity style={styles.composerBtn}><Ionicons name="image" size={18} color="#4caf50" /><Text style={styles.composerBtnTxt}>Ảnh</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.composerBtn}><Ionicons name="videocam" size={18} color="#e91e63" /><Text style={styles.composerBtnTxt}>Video</Text></TouchableOpacity>
@@ -385,18 +418,18 @@ export default function TimelineScreen() {
         onRequestClose={() => setActiveMenuPostId(null)}
       >
         {/* Click ra ngoài để đóng menu */}
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPress={() => setActiveMenuPostId(null)} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setActiveMenuPostId(null)}
         />
 
         {/* Khung Bottom Sheet chứa các chức năng tinh giản tên */}
         <View style={[styles.menuBottomSheetContainer, { paddingBottom: insets.bottom || 16 }]}>
           <View style={styles.sheetHandle} />
-          
+
           <View style={styles.menuOptionsList}>
-            
+
             {/* Chức năng 1: Xóa bài đăng */}
             <TouchableOpacity style={styles.menuItem} onPress={() => setActiveMenuPostId(null)}>
               <Ionicons name="trash-outline" size={24} color="#555" style={styles.menuIcon} />
@@ -533,30 +566,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
   },
-  
-  storyAvatarBorder: { 
-    position: 'absolute', 
-    left: 8, 
+
+  storyAvatarBorder: {
+    position: 'absolute',
+    left: 8,
     top: 8,
-    width: 34, 
-    height: 34, 
-    borderRadius: 17, 
-    borderWidth: 2, 
-    borderColor: '#0082f6' 
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: '#0082f6'
   },
-  storyNameWrap: { 
-    position: 'absolute', 
-    bottom: 8, 
-    left: 0, 
-    right: 0, 
+  storyNameWrap: {
+    position: 'absolute',
+    bottom: 8,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingHorizontal: 4 
+    paddingHorizontal: 4
   },
-  storyName: { 
-    color: '#fff', 
-    fontSize: 12, 
-    fontWeight: '600', 
-    textAlign: 'center' 
+  storyName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center'
   },
 
   composerCard: { backgroundColor: '#fff', padding: 12, marginTop: 8, marginBottom: 4 },
@@ -576,7 +609,7 @@ const styles = StyleSheet.create({
   sponsoredText: { fontSize: 12, color: '#757575' },
   moreButton: { padding: 4 },
   contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#1c1c1c', lineHeight: 21 },
-  
+
   imageContainer: { marginTop: 10, width: width, position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
   singleImage: { width: '100%', height: '100%' },
   twoImageRow: { flexDirection: 'row', width: '100%', height: '100%' },
