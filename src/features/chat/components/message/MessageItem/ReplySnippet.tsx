@@ -17,10 +17,10 @@ export const ReplySnippet: React.FC<Props> = ({ senderLabel, snippet, onPress, i
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={[styles.replySnippetSender, { color: isCurrentUserMessage ? '#90CAF9' : '#0068FF' }]} numberOfLines={1}>
+      <Text style={styles.replySnippetSender} numberOfLines={1}>
         {senderLabel}
       </Text>
-      <Text style={[styles.replySnippetText, { color: isCurrentUserMessage ? 'rgba(255,255,255,0.8)' : '#7a7a7a' }]} numberOfLines={2}>
+      <Text style={[styles.replySnippetText, { color: '#4B5563' }]} numberOfLines={2}>
         {snippet}
       </Text>
     </TouchableOpacity>

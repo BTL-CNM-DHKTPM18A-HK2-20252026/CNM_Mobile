@@ -34,6 +34,14 @@ export interface ReadReceiptEvent {
   [key: string]: unknown;
 }
 
+export interface DeliveredEvent {
+  conversationId: string;
+  userId: string;
+  messageId: string;
+  lastDeliveredAt?: string;
+  [key: string]: unknown;
+}
+
 interface UseChatSocketOptions {
   conversationId?: string | null;
   brokerURL: string;
@@ -43,6 +51,7 @@ interface UseChatSocketOptions {
   onMessage?: (event: ChatMessageEvent) => void;
   onTyping?: (event: TypingEvent) => void;
   onReadReceipt?: (event: ReadReceiptEvent) => void;
+  onDelivered?: (event: DeliveredEvent) => void;
   onConnectionStateChange?: (state: ChatSocketConnectionState) => void;
   onConversationEvent?: (event: Record<string, unknown>) => void;
   onGroupEvent?: (event: Record<string, unknown>) => void;
@@ -92,6 +101,7 @@ export function useChatSocket(options: UseChatSocketOptions) {
     onMessage,
     onTyping,
     onReadReceipt,
+    onDelivered,
     onConnectionStateChange,
     onConversationEvent,
     onGroupEvent,
@@ -106,6 +116,7 @@ export function useChatSocket(options: UseChatSocketOptions) {
   const onMessageRef = useRef(onMessage);
   const onTypingRef = useRef(onTyping);
   const onReadReceiptRef = useRef(onReadReceipt);
+  const onDeliveredRef = useRef(onDelivered);
   const onConnectionStateChangeRef = useRef(onConnectionStateChange);
   const onConversationEventRef = useRef(onConversationEvent);
   const onGroupEventRef = useRef(onGroupEvent);
@@ -129,6 +140,10 @@ export function useChatSocket(options: UseChatSocketOptions) {
   useEffect(() => {
     onReadReceiptRef.current = onReadReceipt;
   }, [onReadReceipt]);
+
+  useEffect(() => {
+    onDeliveredRef.current = onDelivered;
+  }, [onDelivered]);
 
   useEffect(() => {
     onConnectionStateChangeRef.current = onConnectionStateChange;
@@ -180,7 +195,14 @@ export function useChatSocket(options: UseChatSocketOptions) {
       }
     });
 
-    const subs: StompSubscription[] = [messageSub, typingSub, readSub];
+    const deliveredSub = client.subscribe(`/topic/chat/${conversationId}/delivered`, (message) => {
+      const payload = parseJsonBody<DeliveredEvent>(message);
+      if (payload) {
+        onDeliveredRef.current?.(payload);
+      }
+    });
+
+    const subs: StompSubscription[] = [messageSub, typingSub, readSub, deliveredSub];
 
     // Subscribe to user-level conversation events (e.g. MESSAGE_LOCAL_DELETE from another device)
     if (userId) {
@@ -351,6 +373,23 @@ export function useChatSocket(options: UseChatSocketOptions) {
     []
   );
 
+  const sendDelivered = useCallback(
+    (targetConversationId: string, userId: string, messageId: string): boolean => {
+      const client = clientRef.current;
+      if (!client?.connected) {
+        return false;
+      }
+
+      client.publish({
+        destination: `/app/chat/${targetConversationId}/delivered`,
+        body: JSON.stringify({ userId, messageId }),
+      });
+
+      return true;
+    },
+    []
+  );
+
   useEffect(() => {
     void connect();
 
@@ -391,6 +430,7 @@ export function useChatSocket(options: UseChatSocketOptions) {
     disconnect,
     sendTyping,
     sendReadReceipt,
+    sendDelivered,
     sendCallSignal,
   };
 }

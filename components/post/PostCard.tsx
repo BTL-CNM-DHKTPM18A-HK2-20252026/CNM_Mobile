@@ -16,6 +16,8 @@ export type PostCardData = {
   text?: string;
   images?: string[];
   image?: string | null;
+  mediaType?: 'IMAGE' | 'VIDEO' | string;
+  hasVideo?: boolean;
   likes: number;
   isLikedByMe?: boolean;
   myReactionType?: string | null;
@@ -46,6 +48,18 @@ const REACTION_TO_EMOJI: Record<string, string> = {
 function reactionTypeToEmoji(type?: string | null) {
   if (!type) return '👍';
   return REACTION_TO_EMOJI[type] || '👍';
+}
+
+function isVideoUrl(uri?: string | null) {
+  if (!uri) return false;
+  const normalized = uri.split('?')[0].toLowerCase();
+  return normalized.endsWith('.mp4') || normalized.endsWith('.mov') || normalized.endsWith('.m4v') || normalized.endsWith('.webm') || normalized.endsWith('.m3u8');
+}
+
+function hasVideoMedia(post: PostCardData) {
+  if (post.hasVideo || post.mediaType === 'VIDEO') return true;
+  if (isVideoUrl(post.image)) return true;
+  return (post.images || []).some((uri) => isVideoUrl(uri));
 }
 
 function renderMedia(post: PostCardData) {
@@ -147,7 +161,7 @@ function renderMedia(post: PostCardData) {
         </View>
       )}
 
-      {!post.isSponsored ? (
+      {hasVideoMedia(post) ? (
         <View style={styles.muteButton}>
           <Ionicons name="volume-mute" size={16} color="#fff" />
         </View>

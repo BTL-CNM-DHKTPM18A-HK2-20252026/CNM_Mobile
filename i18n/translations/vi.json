@@ -142,6 +142,11 @@
     "ai_subheading": "Hỏi đáp với Fruvia Chatbot",
     "cloud_subheading": "Truyền file giữa các thiết bị của bạn",
     "offline_recent": "Truy cập gần đây",
+    "status": {
+      "sent": "Đã gửi",
+      "delivered": "Đã nhận",
+      "seen": "Đã xem"
+    },
     "snippet": {
       "image": "Hình ảnh",
       "video": "Video",

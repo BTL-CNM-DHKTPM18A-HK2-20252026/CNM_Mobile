@@ -142,6 +142,11 @@
     "ai_subheading": "Chat with Fruvia Chatbot",
     "cloud_subheading": "Transfer files between your devices",
     "offline_recent": "Recently active",
+    "status": {
+      "sent": "Sent",
+      "delivered": "Delivered",
+      "seen": "Seen"
+    },
     "snippet": {
       "image": "Photo",
       "video": "Video",

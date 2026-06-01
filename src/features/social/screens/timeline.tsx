@@ -11,6 +11,7 @@ import {
   TextInput,
   RefreshControl,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PostCard, type PostCardData } from '@/components/post/PostCard';
@@ -28,8 +29,51 @@ type Post = PostCardData;
 
 const samplePosts: Post[] = [];
 
+function inferHasVideo(media: any, mediaUrl?: string | null) {
+  const isVideoUrl = (uri?: string | null) => {
+    if (!uri) return false;
+    const normalized = uri.split('?')[0].toLowerCase();
+    return normalized.endsWith('.mp4') || normalized.endsWith('.mov') || normalized.endsWith('.m4v') || normalized.endsWith('.webm') || normalized.endsWith('.m3u8');
+  };
+
+  if (typeof media?.mediaType === 'string' && media.mediaType.toUpperCase() === 'VIDEO') return true;
+  if (typeof media?.type === 'string' && media.type.toUpperCase() === 'VIDEO') return true;
+  if (typeof media?.contentType === 'string' && media.contentType.toLowerCase().startsWith('video/')) return true;
+  if (isVideoUrl(mediaUrl)) return true;
+
+  if (Array.isArray(media)) {
+    return media.some((item) => {
+      const itemType = String(item?.mediaType || item?.type || item?.contentType || '').toUpperCase();
+      const itemUrl = typeof item === 'string' ? item : (item?.url || item?.mediaUrl || item?.source || item?.uri);
+      return itemType === 'VIDEO' || String(item?.contentType || '').toLowerCase().startsWith('video/') || isVideoUrl(itemUrl);
+    });
+  }
+
+  return false;
+}
+
+function formatPostTime(createdAt?: string, fallback?: string) {
+  if (!createdAt) return fallback || 'Vừa xong';
+
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return fallback || 'Vừa xong';
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) return 'Vừa xong';
+
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return 'Vừa xong';
+  if (diffMinutes < 60) return `${diffMinutes} phút trước`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function TimelineScreen() {
-  const { colors } = useTheme();
+  useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>(samplePosts);
@@ -105,12 +149,14 @@ export default function TimelineScreen() {
           p.authorAvatarUrl ||
           p.avatarUrl ||
           null,
-        time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
+        time: formatPostTime(p.createdAt, p.time),
         text: p.content || p.text || p.body || '',
         images: Array.isArray(p.media) && p.media.length > 0
           ? p.media.map((m: any) => m.url || m)
           : (p.images && Array.isArray(p.images) ? p.images : (p.image ? [p.image] : [])),
         image: (p.media && p.media[0]?.url) || p.image || null,
+        mediaType: p.mediaType || (inferHasVideo(p.media, p.media?.[0]?.url || p.image) ? 'VIDEO' : 'IMAGE'),
+        hasVideo: inferHasVideo(p.media, p.media?.[0]?.url || p.image),
         likes: p.likeCount || p.likes || 0,
         isLikedByMe: p.isLikedByMe || false,
         myReactionType: p.myReactionType || null,
@@ -240,24 +286,33 @@ export default function TimelineScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: '#ededed' }]}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2F80ED" />
       <View style={[styles.zaloHeader, { paddingTop: insets.top }]}>
         <View style={styles.headerTop}>
+          <Ionicons name="search-outline" size={30} color="#FFFFFF" style={styles.headerSearchIcon} />
           <TextInput 
             placeholder="Tìm kiếm" 
             placeholderTextColor="rgba(255,255,255,0.7)" 
-            style={[styles.searchBar, { paddingLeft: 12 }]} 
+            style={styles.searchBar} 
           />
+          <TouchableOpacity style={styles.headerIconBtn}>
+            <Ionicons name="image-outline" size={25} color="#FFFFFF" />
+            <Ionicons name="add" size={15} color="#FFFFFF" style={styles.headerIconPlus} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIconBtn}>
+            <Ionicons name="notifications-outline" size={27} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={styles.tabBar}>
-          <TouchableOpacity style={[styles.tabItem, styles.tabActive]}>
-            <Text style={[styles.tabText, styles.tabTextActive]}>Nhật Ký</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem}>
-            <Text style={styles.tabText}>Zalo Video</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.tabBar}>
+        <TouchableOpacity style={[styles.tabItem, styles.tabActive]}>
+          <Text style={[styles.tabText, styles.tabTextActive]}>Nhật Ký</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tabItem}>
+          <Text style={styles.tabText}>Zalo Video</Text>
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -273,15 +328,11 @@ export default function TimelineScreen() {
         )}
         ListHeaderComponent={
           <>
-            <View style={styles.storySection}>
-              <ScrollViewHorizontal stories={stories} onPressCreate={() => router.push('/story-creator')} />
-            </View>
-
             <View style={styles.composerCard}>
               <View style={styles.composerTop}>
                 <Image source={getAvatarSource(profile?.avatar_url || profile?.avatar || profile?.profile_picture)} style={styles.avatarSmall} />
                 <TouchableOpacity style={styles.composerInputMock} onPress={() => router.push('/create-post')}>
-                  <Text style={{ color: '#7f7f7f', fontSize: 15 }}>Hôm nay bạn thế nào?</Text>
+                  <Text style={styles.composerPlaceholder}>Hôm nay bạn thế nào?</Text>
                 </TouchableOpacity>
               </View>
               
@@ -289,8 +340,31 @@ export default function TimelineScreen() {
                 <TouchableOpacity style={styles.composerBtn}><Ionicons name="image" size={18} color="#4caf50" /><Text style={styles.composerBtnTxt}>Ảnh</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.composerBtn}><Ionicons name="videocam" size={18} color="#e91e63" /><Text style={styles.composerBtnTxt}>Video</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.composerBtn}><Ionicons name="images" size={18} color="#2196f3" /><Text style={styles.composerBtnTxt}>Album</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.composerBtn}><Ionicons name="color-palette" size={18} color="#9c27b0" /><Text style={styles.composerBtnTxt}>Nền</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.composerBtn}><Ionicons name="brush" size={18} color="#3b82f6" /><Text style={styles.composerBtnTxt}>Nền chữ</Text></TouchableOpacity>
               </View>
+            </View>
+
+            <View style={styles.statusPromptSection}>
+              <TouchableOpacity style={styles.statusPromptCard} activeOpacity={0.8}>
+                <View style={styles.statusPromptLeft}>
+                  <Ionicons name="happy-outline" size={20} color="#8E949F" />
+                  <Text style={styles.statusPromptText}>Cập nhật trạng thái 24 giờ</Text>
+                </View>
+                <View style={styles.statusPromptRight}>
+                  <View style={styles.newBadge}><Text style={styles.newBadgeText}>Mới</Text></View>
+                  <Ionicons name="flame" size={18} color="#6B7280" />
+                  <Text style={styles.statusCount}>0</Text>
+                  <Ionicons name="chevron-down" size={14} color="#6B7280" />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.storySection}>
+              <ScrollViewHorizontal
+                stories={stories}
+                createAvatar={profile?.avatar_url || profile?.avatar || profile?.profile_picture}
+                onPressCreate={() => router.push('/story-creator')}
+              />
             </View>
           </>
         }
@@ -433,7 +507,7 @@ export default function TimelineScreen() {
   );
 }
 
-const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onPressCreate?: () => void }) => {
+const ScrollViewHorizontal = ({ stories, createAvatar, onPressCreate }: { stories?: any[], createAvatar?: string | null, onPressCreate?: () => void }) => {
   const router = useRouter();
   const data = [null, ...(stories || [])];
   return (
@@ -443,17 +517,17 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
       showsHorizontalScrollIndicator={false}
       keyExtractor={(_, index) => String(index)}
       renderItem={({ item, index }) => (
-        <View style={styles.storyCard}>
+        <View style={[styles.storyCard, index === 0 && styles.createStoryCard]}>
           <Image 
-            source={{ uri: index === 0 ? 'https://via.placeholder.com/150/333' : (item?.mediaUrl || 'https://via.placeholder.com/150/ffc107') }} 
+            source={{ uri: index === 0 ? (createAvatar || 'https://via.placeholder.com/150/333') : (item?.mediaUrl || 'https://via.placeholder.com/150/ffc107') }} 
             style={styles.storyCover} 
           />
-          <View style={styles.storyOverlay} />
+          <View style={[styles.storyOverlay, index === 0 && styles.createStoryOverlay]} />
           {index === 0 ? (
             <>
               <TouchableOpacity
                 onPress={() => (onPressCreate ? onPressCreate() : router.push('/story-creator'))}
-                style={{ position: 'absolute', left: 12, top: 75 }}
+                style={styles.createStoryButton}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <View style={styles.createStoryCircle}>
@@ -480,42 +554,57 @@ const ScrollViewHorizontal = ({ stories, onPressCreate }: { stories?: any[], onP
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  zaloHeader: { backgroundColor: '#0082f6', paddingHorizontal: 16, paddingBottom: 0 },
-  headerTop: { flexDirection: 'row', alignItems: 'center', height: 48 },
-  searchBar: { flex: 1, color: '#fff', fontSize: 16, height: '100%' },
-  tabBar: { flexDirection: 'row', marginTop: 4 },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
-  tabActive: { borderBottomWidth: 3, borderBottomColor: '#fff' },
-  tabText: { color: 'rgba(255,255,255,0.7)', fontWeight: '500', fontSize: 15 },
-  tabTextActive: { color: '#fff', fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#E9EEF3' },
+  zaloHeader: { backgroundColor: '#3A8BF4', paddingHorizontal: 12, paddingBottom: 8 },
+  headerTop: { flexDirection: 'row', alignItems: 'center', height: 42 },
+  headerSearchIcon: { marginLeft: 2, marginRight: 10 },
+  searchBar: { flex: 1, color: '#fff', fontSize: 12, height: '100%', paddingHorizontal: 10 },
+  headerIconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginRight: 2, position: 'relative' },
+  headerIconPlus: { position: 'absolute', right: 5, top: 7 },
+  tabBar: { height: 46, flexDirection: 'row', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabActive: { borderBottomWidth: 3, borderBottomColor: '#111827' },
+  tabText: { color: '#6B7280', fontWeight: '500', fontSize: 12 },
+  tabTextActive: { color: '#111827' },
 
-  storySection: { backgroundColor: '#fff', paddingVertical: 12, paddingLeft: 12, borderBottomWidth: 0.5, borderBottomColor: '#e0e0e0' },
-  storyCard: { width: 105, height: 145, marginRight: 10, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f0f0f0', position: 'relative' },
+  storySection: { backgroundColor: '#fff', paddingVertical: 12, paddingLeft: 12, borderTopWidth: 8, borderTopColor: '#E9EEF3', borderBottomWidth: 8, borderBottomColor: '#E9EEF3' },
+  storyCard: { width: 84, height: 116, marginRight: 10, borderRadius: 8, overflow: 'hidden', backgroundColor: '#f0f0f0', position: 'relative' },
+  createStoryCard: { backgroundColor: '#26232f' },
   storyCover: { width: '100%', height: '100%' },
   storyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.15)' },
-  createStoryCircle: { position: 'absolute', left: 12, top: 75, width: 34, height: 34, borderRadius: 17, backgroundColor: '#0082f6', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
-  storyAvatarBorder: { position: 'absolute', left: 12, top: 75, width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: '#0082f6' },
-  storyNameWrap: { position: 'absolute', bottom: 8, left: 8, right: 8, alignItems: 'flex-start' },
-  storyName: { color: '#fff', fontSize: 12, fontWeight: '600', maxWidth: 88 },
+  createStoryOverlay: { backgroundColor: 'rgba(0,0,0,0.32)' },
+  createStoryButton: { position: 'absolute', left: 25, top: 56 },
+  createStoryCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#4B75FF', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
+  storyAvatarBorder: { position: 'absolute', left: 10, top: 62, width: 31, height: 31, borderRadius: 16, borderWidth: 2, borderColor: '#4F8CFF' },
+  storyNameWrap: { position: 'absolute', bottom: 7, left: 8, right: 8, alignItems: 'center' },
+  storyName: { color: '#fff', fontSize: 11, fontWeight: '500', maxWidth: 76 },
 
-  composerCard: { backgroundColor: '#fff', padding: 12, marginTop: 8, marginBottom: 4 },
+  composerCard: { backgroundColor: '#fff', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12 },
   composerTop: { flexDirection: 'row', alignItems: 'center' },
   avatarSmall: { width: 38, height: 38, borderRadius: 19 },
   composerInputMock: { flex: 1, marginLeft: 12, justifyContent: 'center' },
-  composerButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, borderTopWidth: 0.5, borderTopColor: '#f0f0f0', paddingTop: 10 },
-  composerBtn: { flexDirection: 'row', alignItems: 'center' },
-  composerBtnTxt: { marginLeft: 6, color: '#555', fontSize: 13, fontWeight: '500' },
+  composerPlaceholder: { color: '#8E949F', fontSize: 12 },
+  composerButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },
+  composerBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F6F7F9', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 7 },
+  composerBtnTxt: { marginLeft: 5, color: '#111827', fontSize: 11, fontWeight: '500' },
+  statusPromptSection: { backgroundColor: '#FFFFFF', borderTopWidth: 8, borderTopColor: '#E9EEF3', paddingHorizontal: 14, paddingVertical: 10 },
+  statusPromptCard: { height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: '#D2D6DC', borderStyle: 'dashed', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12 },
+  statusPromptLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  statusPromptText: { marginLeft: 6, color: '#9CA3AF', fontSize: 11 },
+  statusPromptRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  newBadge: { position: 'absolute', top: -22, right: -4, backgroundColor: '#5CBF73', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
+  newBadgeText: { color: '#FFFFFF', fontSize: 8, fontWeight: '700' },
+  statusCount: { color: '#111827', fontSize: 12, fontWeight: '600' },
 
   card: { marginTop: 6, paddingVertical: 12 },
   postHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
   avatar: { width: 42, height: 42, borderRadius: 21, marginRight: 10 },
-  author: { fontWeight: '600', fontSize: 15, color: '#000' },
+  author: { fontWeight: '600', fontSize: 13, color: '#000' },
   timeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   time: { fontSize: 12, color: '#757575' },
   sponsoredText: { fontSize: 12, color: '#757575' },
   moreButton: { padding: 4 },
-  contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#1c1c1c', lineHeight: 21 },
+  contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 13, color: '#1c1c1c', lineHeight: 19 },
   
   imageContainer: { marginTop: 10, width: width, position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
   singleImage: { width: '100%', height: '100%' },
@@ -660,7 +749,7 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: '#f2f2f2',
   },
@@ -673,14 +762,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuItemTitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#222',
     fontWeight: '400',
   },
   menuItemSubtitle: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#7c7c7c',
-    marginTop: 3,
-    lineHeight: 16,
+    marginTop: 2,
+    lineHeight: 13,
   },
 });

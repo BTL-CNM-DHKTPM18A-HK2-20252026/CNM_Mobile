@@ -249,7 +249,7 @@ export const chatDetailStyles = StyleSheet.create({
   },
   otherMessageBlock: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     marginRight: 48,
   },
   otherContentBlock: {
@@ -258,15 +258,17 @@ export const chatDetailStyles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   groupSenderName: {
-    fontSize: 11,
+    fontSize: 12,
     marginLeft: 6,
-    marginBottom: 4,
-    fontWeight: '500',
+    marginBottom: 3,
+    fontWeight: '600',
+    color: '#7B2CBF',
   },
   otherAvatarSlot: {
     width: 40,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+    paddingTop: 1,
   },
   peerAvatar: {
     width: 40,
@@ -276,10 +278,10 @@ export const chatDetailStyles = StyleSheet.create({
   },
   messageBubble: {
     paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderRadius: 18,
+    paddingVertical: 9,
+    borderRadius: 10,
     maxWidth: '85%',
-    minWidth: 48,
+    minWidth: 56,
     minHeight: 0,
     justifyContent: 'center' as const,
   },
@@ -292,11 +294,16 @@ export const chatDetailStyles = StyleSheet.create({
     paddingBottom: 4,
   },
   userBubble: {
-    backgroundColor: '#D0EAFF',
-    borderTopRightRadius: 6,
+    backgroundColor: '#D8F1FF',
+    borderTopRightRadius: 8,
+    borderWidth: 0.25,
+    borderColor: '#7CC8F2',
   },
   otherBubble: {
-    borderTopLeftRadius: 6,
+    borderTopLeftRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 0.25,
+    borderColor: '#7CC8F2',
   },
   richTextBubbleContent: {
     alignSelf: 'stretch',
@@ -308,8 +315,8 @@ export const chatDetailStyles = StyleSheet.create({
     marginBottom: 2,
   },
   messageText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: '400',
   },
   userMessageText: {
@@ -338,7 +345,7 @@ export const chatDetailStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   timestamp: {
-    fontSize: 10,
+    fontSize: 9,
     marginTop: 4,
     color: '#8D929C',
     fontWeight: '400',
@@ -982,27 +989,30 @@ export const chatDetailStyles = StyleSheet.create({
   },
   // ── Reply snippet inside bubble ───
   replySnippetBlock: {
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
     marginBottom: 6,
-    borderLeftWidth: 3,
-    borderLeftColor: '#0068FF',
+    borderWidth: 0.25,
+    borderColor: '#7CC8F2',
     maxWidth: '100%',
+    backgroundColor: '#FFFFFF',
   },
   replySnippetBlockUser: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#FFFFFF',
   },
   replySnippetBlockOther: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: '#FFFFFF',
   },
   replySnippetSender: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     marginBottom: 2,
+    color: '#7B2CBF',
   },
   replySnippetText: {
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 18,
   },
   // ── Forwarded banner ──────────────
   forwardedBanner: {

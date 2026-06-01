@@ -4,7 +4,7 @@ import { chatService } from '@/services/chatService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { Client, type StompSubscription } from '@stomp/stompjs';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -477,6 +477,7 @@ function buildStompBrokerUrl(): string {
 export default function ChatScreen() {
   const { isOnline } = usePresence();
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -484,11 +485,27 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ChatItem[]>(FALLBACK_ITEMS);
   const [quickMenuVisible, setQuickMenuVisible] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ item: ChatItem } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ item: ChatItem; pressY: number } | null>(null);
   const [showMuteSubMenu, setShowMuteSubMenu] = useState(false);
   const [showPinInput, setShowPinInput] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [hideTargetId, setHideTargetId] = useState<string | null>(null);
+
+  const closeContextMenu = () => {
+    setContextMenu(null);
+    setShowMuteSubMenu(false);
+  };
+
+  useEffect(() => {
+    const parent = navigation.getParent();
+    parent?.setOptions({
+      tabBarStyle: contextMenu ? { display: 'none' } : undefined,
+    });
+
+    return () => {
+      parent?.setOptions({ tabBarStyle: undefined });
+    };
+  }, [contextMenu, navigation]);
 
   // Sort: pinned first (newest pin first), then by time
   const sortedItems = useMemo(() => {
@@ -728,6 +745,29 @@ export default function ChatScreen() {
     setPinInput('');
   };
 
+  const handleClearConversation = (item: ChatItem) => {
+    closeContextMenu();
+    Alert.alert(
+      'Xóa hội thoại',
+      `Xóa lịch sử trò chuyện với "${item.title}"?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await chatService.clearConversation(item.id);
+              await fetchConversations({ silent: true });
+            } catch (e: any) {
+              Alert.alert('Lỗi', e?.message || 'Không thể xóa hội thoại');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const confirmHide = async () => {
     const convId = hideTargetId;
     if (!convId || pinInput.length !== 6) return;
@@ -839,12 +879,19 @@ export default function ChatScreen() {
   };
 
   const renderItem = ({ item }: { item: ChatItem }) => {
+    const isContextTarget = contextMenu?.item.id === item.id;
+
     return (
-      <View>
+      <View
+        style={[
+          isContextTarget && styles.contextTargetRow,
+          contextMenu && !isContextTarget && styles.contextDimmedRow,
+        ]}
+      >
         <TouchableOpacity
-          style={styles.chatItem}
+          style={[styles.chatItem, isContextTarget && styles.contextTargetChatItem]}
           onPress={() => handleOpenConversation(item)}
-          onLongPress={() => setContextMenu({ item })}
+          onLongPress={(event) => setContextMenu({ item, pressY: event.nativeEvent.pageY })}
           activeOpacity={0.8}
         >
           {renderAvatar(item)}
@@ -870,7 +917,7 @@ export default function ChatScreen() {
           </View>
         </TouchableOpacity>
 
-        <View style={styles.separator} />
+        {isContextTarget ? null : <View style={styles.separator} />}
       </View>
     );
   };
@@ -897,7 +944,7 @@ export default function ChatScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#2E7DE9" />
 
-      <View style={[styles.topHeader, { paddingTop: insets.top + 6 }]}>
+      <View style={[styles.topHeader, contextMenu && styles.contextDimmedHeader, { paddingTop: insets.top + 6 }]}>
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={28} color="#FFFFFF" style={styles.searchIcon} />
 
@@ -940,102 +987,137 @@ export default function ChatScreen() {
       </Modal>
 
       {/* Context menu (long press) */}
-      <Modal visible={contextMenu !== null} transparent animationType="fade" onRequestClose={() => { setContextMenu(null); setShowMuteSubMenu(false); }}>
-        <Pressable style={styles.quickMenuOverlay} onPress={() => { setContextMenu(null); setShowMuteSubMenu(false); }}>
-          {showMuteSubMenu ? (
-            <View style={styles.contextMenuCard}>
-              <Text style={[styles.contextMenuText, { paddingHorizontal: 16, paddingVertical: 6, color: '#888' }]}>Tắt thông báo</Text>
-              {[
-                { label: '1 giờ', value: '1h' },
-                { label: '4 giờ', value: '4h' },
-                { label: 'Đến 8 giờ sáng', value: 'until_8am' },
-                { label: 'Đến khi được mở lại', value: 'forever' },
-              ].map((opt) => (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={styles.contextMenuItem}
-                  activeOpacity={0.75}
-                  onPress={() => {
-                    const ctxItem = contextMenu?.item;
-                    setContextMenu(null);
-                    setShowMuteSubMenu(false);
-                    if (ctxItem) handleMuteConversation(ctxItem.id, opt.value);
-                  }}
-                >
-                  <Ionicons name="time-outline" size={18} color="#2E7DE9" />
-                  <Text style={styles.contextMenuText}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-              <View style={styles.quickMenuDivider} />
-              <TouchableOpacity
-                style={styles.contextMenuItem}
-                activeOpacity={0.75}
-                onPress={() => {
-                  const ctxItem = contextMenu?.item;
-                  setContextMenu(null);
-                  setShowMuteSubMenu(false);
-                  if (ctxItem) handleMuteConversation(ctxItem.id, 'off');
-                }}
-              >
-                <Ionicons name="notifications" size={18} color="#10B981" />
-                <Text style={[styles.contextMenuText, { color: '#10B981' }]}>Bật thông báo</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.contextMenuCard}>
-              <TouchableOpacity
-                style={styles.contextMenuItem}
-                activeOpacity={0.75}
-                onPress={() => {
-                  const ctxItem = contextMenu?.item;
-                  if (ctxItem) {
-                    setContextMenu(null);
-                    handlePinConversation(ctxItem.id, ctxItem.pinned);
-                  }
-                }}
-              >
-                <Ionicons name={contextMenu?.item?.pinned ? 'pin-outline' : 'pin'} size={18} color="#2E7DE9" />
-                <Text style={styles.contextMenuText}>{contextMenu?.item?.pinned ? 'Bỏ ghim' : 'Ghim'}</Text>
-              </TouchableOpacity>
+      <Modal visible={false} transparent animationType="fade" onRequestClose={closeContextMenu}>
+        <Pressable style={styles.contextOverlay} onPress={closeContextMenu}>
+          {contextMenu?.item ? (
+            <Pressable
+              style={[
+                styles.contextContent,
+                {
+                  marginTop: Math.max(
+                    insets.top + 96,
+                    Math.min(contextMenu.pressY - 42, 270),
+                  ),
+                },
+              ]}
+              onPress={(event) => event.stopPropagation()}
+            >
+              <View style={styles.contextPreviewCard}>
+                {renderAvatar(contextMenu.item)}
+                <View style={styles.contextPreviewBody}>
+                  <View style={styles.contextPreviewTop}>
+                    <Text style={styles.contextPreviewTitle} numberOfLines={1}>{contextMenu.item.title}</Text>
+                    <View style={styles.contextPreviewMeta}>
+                      {contextMenu.item.pinned ? <Ionicons name="pin" size={15} color="#9CA3AF" /> : null}
+                      <Text style={styles.contextPreviewTime}>{contextMenu.item.timeText}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.contextPreviewMessage} numberOfLines={1}>{contextMenu.item.lastMessage}</Text>
+                </View>
+              </View>
 
-              <TouchableOpacity
-                style={styles.contextMenuItem}
-                activeOpacity={0.75}
-                onPress={() => setShowMuteSubMenu(true)}
-              >
-                <Ionicons name="volume-mute" size={18} color="#F87171" />
-                <Text style={styles.contextMenuText}>Tắt thông báo</Text>
-              </TouchableOpacity>
+              {showMuteSubMenu ? (
+                <View style={styles.contextSheet}>
+                  <Text style={styles.contextSheetTitle}>Tắt thông báo</Text>
+                  {[
+                    { label: '1 giờ', value: '1h' },
+                    { label: '4 giờ', value: '4h' },
+                    { label: 'Đến 8 giờ sáng', value: 'until_8am' },
+                    { label: 'Đến khi được mở lại', value: 'forever' },
+                  ].map((opt) => (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={styles.contextAction}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        const ctxItem = contextMenu?.item;
+                        closeContextMenu();
+                        if (ctxItem) handleMuteConversation(ctxItem.id, opt.value);
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={23} color="#111827" style={styles.contextActionIcon} />
+                      <Text style={styles.contextActionText}>{opt.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <View style={styles.contextDivider} />
+                  <TouchableOpacity
+                    style={styles.contextAction}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      const ctxItem = contextMenu?.item;
+                      closeContextMenu();
+                      if (ctxItem) handleMuteConversation(ctxItem.id, 'off');
+                    }}
+                  >
+                    <Ionicons name="notifications-outline" size={23} color="#111827" style={styles.contextActionIcon} />
+                    <Text style={styles.contextActionText}>Bật thông báo</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.contextSheet}>
+                  <TouchableOpacity
+                    style={styles.contextAction}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      const ctxItem = contextMenu?.item;
+                      closeContextMenu();
+                      if (ctxItem) handleMarkUnread(ctxItem.id);
+                    }}
+                  >
+                    <Ionicons name="chatbubble-outline" size={24} color="#111827" style={styles.contextActionIcon} />
+                    <Text style={styles.contextActionText}>Đánh dấu chưa đọc</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.contextMenuItem}
-                activeOpacity={0.75}
-                onPress={() => {
-                  const ctxItem = contextMenu?.item;
-                  setContextMenu(null);
-                  if (ctxItem) handleMarkUnread(ctxItem.id);
-                }}
-              >
-                <Ionicons name="ellipse-outline" size={18} color="#22C55E" />
-                <Text style={styles.contextMenuText}>Đánh dấu chưa đọc</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.contextAction}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      const ctxItem = contextMenu?.item;
+                      closeContextMenu();
+                      if (ctxItem) handlePinConversation(ctxItem.id, ctxItem.pinned);
+                    }}
+                  >
+                    <Ionicons name={contextMenu.item.pinned ? 'pin-outline' : 'pin'} size={24} color="#111827" style={styles.contextActionIcon} />
+                    <Text style={styles.contextActionText}>{contextMenu.item.pinned ? 'Bỏ ghim' : 'Ghim'}</Text>
+                  </TouchableOpacity>
 
-              <View style={styles.quickMenuDivider} />
+                  <TouchableOpacity style={styles.contextAction} activeOpacity={0.75} onPress={() => setShowMuteSubMenu(true)}>
+                    <Ionicons name="notifications-off-outline" size={24} color="#111827" style={styles.contextActionIcon} />
+                    <Text style={styles.contextActionText}>Tắt thông báo</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.contextMenuItem}
-                activeOpacity={0.75}
-                onPress={() => {
-                  const ctxItem = contextMenu?.item;
-                  setContextMenu(null);
-                  if (ctxItem) handleHideConversation(ctxItem.id);
-                }}
-              >
-                <Ionicons name="eye-off-outline" size={18} color="#888" />
-                <Text style={[styles.contextMenuText, { color: '#888' }]}>Ẩn trò chuyện</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                  <TouchableOpacity
+                    style={styles.contextAction}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      const ctxItem = contextMenu?.item;
+                      closeContextMenu();
+                      if (ctxItem) handleHideConversation(ctxItem.id);
+                    }}
+                  >
+                    <Ionicons name="eye-off-outline" size={24} color="#111827" style={styles.contextActionIcon} />
+                    <Text style={styles.contextActionText}>Ẩn</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.contextAction}
+                    activeOpacity={0.75}
+                    onPress={() => handleClearConversation(contextMenu.item)}
+                  >
+                    <Ionicons name="trash-outline" size={24} color="#EF4444" style={styles.contextActionIcon} />
+                    <Text style={[styles.contextActionText, styles.contextDangerText]}>Xóa</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.contextDivider} />
+
+                  <TouchableOpacity style={styles.contextAction} activeOpacity={0.75} onPress={closeContextMenu}>
+                    <Ionicons name="checkmark-circle-outline" size={24} color="#111827" style={styles.contextActionIcon} />
+                    <Text style={styles.contextActionText}>Chọn nhiều</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </Pressable>
+          ) : null}
         </Pressable>
       </Modal>
 
@@ -1083,6 +1165,8 @@ export default function ChatScreen() {
             data={filteredItems}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
+            style={contextMenu ? styles.contextListRaised : undefined}
+            pointerEvents={contextMenu ? 'none' : 'auto'}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             refreshControl={
@@ -1096,6 +1180,125 @@ export default function ChatScreen() {
           />
         </>
       )}
+
+      {contextMenu?.item ? (
+        <>
+          <Pressable style={styles.contextOverlay} onPress={closeContextMenu} />
+          <Pressable
+            style={[
+              styles.contextContent,
+              {
+                top: Math.max(
+                  insets.top + 150,
+                  Math.min(contextMenu.pressY + 46, 410),
+                ),
+              },
+            ]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            {showMuteSubMenu ? (
+              <View style={styles.contextSheet}>
+                <Text style={styles.contextSheetTitle}>Tắt thông báo</Text>
+                {[
+                  { label: '1 giờ', value: '1h' },
+                  { label: '4 giờ', value: '4h' },
+                  { label: 'Đến 8 giờ sáng', value: 'until_8am' },
+                  { label: 'Đến khi được mở lại', value: 'forever' },
+                ].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={styles.contextAction}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      const ctxItem = contextMenu?.item;
+                      closeContextMenu();
+                      if (ctxItem) handleMuteConversation(ctxItem.id, opt.value);
+                    }}
+                  >
+                    <Ionicons name="time-outline" size={19} color="#111827" style={styles.contextActionIcon} />
+                    <Text style={styles.contextActionText}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+                <View style={styles.contextDivider} />
+                <TouchableOpacity
+                  style={styles.contextAction}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    const ctxItem = contextMenu?.item;
+                    closeContextMenu();
+                    if (ctxItem) handleMuteConversation(ctxItem.id, 'off');
+                  }}
+                >
+                  <Ionicons name="notifications-outline" size={19} color="#111827" style={styles.contextActionIcon} />
+                  <Text style={styles.contextActionText}>Bật thông báo</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.contextSheet}>
+                <TouchableOpacity
+                  style={styles.contextAction}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    const ctxItem = contextMenu?.item;
+                    closeContextMenu();
+                    if (ctxItem) handleMarkUnread(ctxItem.id);
+                  }}
+                >
+                  <Ionicons name="chatbubble-outline" size={20} color="#111827" style={styles.contextActionIcon} />
+                  <Text style={styles.contextActionText}>Đánh dấu chưa đọc</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.contextAction}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    const ctxItem = contextMenu?.item;
+                    closeContextMenu();
+                    if (ctxItem) handlePinConversation(ctxItem.id, ctxItem.pinned);
+                  }}
+                >
+                  <Ionicons name={contextMenu.item.pinned ? 'pin-outline' : 'pin'} size={20} color="#111827" style={styles.contextActionIcon} />
+                  <Text style={styles.contextActionText}>{contextMenu.item.pinned ? 'Bỏ ghim' : 'Ghim'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.contextAction} activeOpacity={0.75} onPress={() => setShowMuteSubMenu(true)}>
+                  <Ionicons name="notifications-off-outline" size={20} color="#111827" style={styles.contextActionIcon} />
+                  <Text style={styles.contextActionText}>Tắt thông báo</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.contextAction}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    const ctxItem = contextMenu?.item;
+                    closeContextMenu();
+                    if (ctxItem) handleHideConversation(ctxItem.id);
+                  }}
+                >
+                  <Ionicons name="eye-off-outline" size={20} color="#111827" style={styles.contextActionIcon} />
+                  <Text style={styles.contextActionText}>Ẩn</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.contextAction}
+                  activeOpacity={0.75}
+                  onPress={() => handleClearConversation(contextMenu.item)}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" style={styles.contextActionIcon} />
+                  <Text style={[styles.contextActionText, styles.contextDangerText]}>Xóa</Text>
+                </TouchableOpacity>
+
+                <View style={styles.contextDivider} />
+
+                <TouchableOpacity style={styles.contextAction} activeOpacity={0.75} onPress={closeContextMenu}>
+                  <Ionicons name="checkmark-circle-outline" size={20} color="#111827" style={styles.contextActionIcon} />
+                  <Text style={styles.contextActionText}>Chọn nhiều</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </Pressable>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -1109,6 +1312,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingBottom: 8,
     backgroundColor: '#3A8BF4',
+  },
+  contextDimmedHeader: {
+    opacity: 0.32,
   },
   searchRow: {
     height: 42,
@@ -1166,6 +1372,133 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#E6EAF2',
     marginHorizontal: 12,
+  },
+  contextOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.68)',
+    zIndex: 20,
+    elevation: 20,
+  },
+  contextContent: {
+    position: 'absolute',
+    left: 24,
+    width: '100%',
+    zIndex: 40,
+    elevation: 24,
+  },
+  contextPreviewCard: {
+    minHeight: 76,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 16,
+  },
+  contextPreviewBody: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  contextPreviewTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  contextPreviewTitle: {
+    flex: 1,
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '500',
+    marginRight: 12,
+  },
+  contextPreviewMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  contextPreviewTime: {
+    color: '#8B919C',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  contextPreviewMessage: {
+    color: '#8B919C',
+    fontSize: 13,
+    marginTop: 6,
+  },
+  contextSheet: {
+    width: '54%',
+    minWidth: 210,
+    maxWidth: 280,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 14,
+  },
+  contextSheetTitle: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 6,
+    color: '#7B818C',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  contextAction: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+  },
+  contextActionIcon: {
+    width: 25,
+    marginRight: 4,
+  },
+  contextActionText: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  contextDangerText: {
+    color: '#EF4444',
+  },
+  contextDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#DADDE3',
+  },
+  contextListRaised: {
+    zIndex: 30,
+    elevation: 30,
+  },
+  contextDimmedRow: {
+    opacity: 0.28,
+  },
+  contextTargetRow: {
+    zIndex: 35,
+    elevation: 22,
+  },
+  contextTargetChatItem: {
+    marginHorizontal: 12,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 22,
   },
   contextMenuCard: {
     position: 'absolute',

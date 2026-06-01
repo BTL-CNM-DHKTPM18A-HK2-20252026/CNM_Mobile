@@ -230,6 +230,14 @@ export const chatService = {
     return await api.get(`/messages/conversations/${conversationId}/pinned`);
   },
 
+  getReadStatus: async (conversationId: string) => {
+    return await api.get(`/conversations/${conversationId}/read-status`);
+  },
+
+  getDeliveredStatus: async (conversationId: string) => {
+    return await api.get(`/conversations/${conversationId}/delivered-status`);
+  },
+
   getConversationMembers: async (conversationId: string) => {
     return await api.get(`/conversations/${conversationId}/members`);
   },

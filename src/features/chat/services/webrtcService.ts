@@ -6,13 +6,35 @@
  * Signal types: CALL_REQUEST | CALL_ACCEPTED | CALL_REJECTED | OFFER | ANSWER | ICE_CANDIDATE | END_CALL | PEER_BUSY
  */
 
-import {
-  RTCPeerConnection,
-  RTCSessionDescription,
-  RTCIceCandidate,
-  MediaStream,
-  mediaDevices,
-} from 'react-native-webrtc';
+type WebRTCModule = {
+  RTCPeerConnection?: any;
+  RTCSessionDescription?: any;
+  RTCIceCandidate?: any;
+  MediaStream?: any;
+  mediaDevices?: any;
+};
+
+let nativeWebRTC: WebRTCModule | null = null;
+
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  nativeWebRTC = require('react-native-webrtc');
+} catch {
+  console.warn('[WebRTC] Native module unavailable, disabling call features in this runtime.');
+}
+
+const RTCPeerConnectionImpl = nativeWebRTC?.RTCPeerConnection ?? null;
+const RTCSessionDescriptionImpl = nativeWebRTC?.RTCSessionDescription ?? null;
+const RTCIceCandidateImpl = nativeWebRTC?.RTCIceCandidate ?? null;
+const MediaStreamImpl = nativeWebRTC?.MediaStream ?? null;
+const mediaDevicesImpl = nativeWebRTC?.mediaDevices ?? null;
+const WEBRTC_AVAILABLE = Boolean(
+  RTCPeerConnectionImpl &&
+    RTCSessionDescriptionImpl &&
+    RTCIceCandidateImpl &&
+    MediaStreamImpl &&
+    mediaDevicesImpl,
+);
 
 export type CallState = 'idle' | 'requesting' | 'incoming' | 'connecting' | 'connected' | 'ended';
 
@@ -37,7 +59,7 @@ export interface CallInfo {
 }
 
 type CallStateListener = (state: CallState, info: CallInfo | null) => void;
-type StreamListener = (stream: MediaStream | null) => void;
+type StreamListener = (stream: any | null) => void;
 type MediaErrorListener = (error: string) => void;
 type SignalSender = (signal: Partial<CallSignal>) => boolean;
 
@@ -58,9 +80,9 @@ const ICE_SERVERS = [
 ];
 
 class WebRTCService {
-  private pc: RTCPeerConnection | null = null;
-  private localStream: MediaStream | null = null;
-  private remoteStream: MediaStream | null = null;
+  private pc: any = null;
+  private localStream: any = null;
+  private remoteStream: any = null;
   private callState: CallState = 'idle';
   private callInfo: CallInfo | null = null;
 
@@ -85,10 +107,14 @@ class WebRTCService {
     this.stateListeners.forEach((fn) => fn(state, this.callInfo));
   }
 
+  isAvailable() {
+    return WEBRTC_AVAILABLE;
+  }
+
   getCallState(): CallState { return this.callState; }
   getCallInfo(): CallInfo | null { return this.callInfo; }
-  getLocalStream(): MediaStream | null { return this.localStream; }
-  getRemoteStream(): MediaStream | null { return this.remoteStream; }
+  getLocalStream(): any | null { return this.localStream; }
+  getRemoteStream(): any | null { return this.remoteStream; }
 
   setSignalSender(fn: SignalSender) {
     this.signalSender = fn;
@@ -132,6 +158,13 @@ class WebRTCService {
     try {
       const signal: CallSignal = typeof rawSignal === 'string' ? JSON.parse(rawSignal) : rawSignal;
 
+      if (!WEBRTC_AVAILABLE) {
+        if (signal?.type?.includes('CALL') || signal?.type === 'OFFER' || signal?.type === 'ANSWER' || signal?.type === 'ICE_CANDIDATE') {
+          console.warn(`[WebRTC] Ignoring ${signal.type} because native WebRTC is unavailable.`);
+        }
+        return;
+      }
+
       const signalKey = `${signal.type}:${signal.callId}:${signal.senderId}`;
       if (this.recentSignalKeys.has(signalKey)) return;
       this.recentSignalKeys.add(signalKey);
@@ -166,6 +199,11 @@ class WebRTCService {
     callerName?: string,
     callerAvatar?: string,
   ) {
+    if (!WEBRTC_AVAILABLE) {
+      console.warn('[WebRTC] startCall skipped because native WebRTC is unavailable.');
+      return;
+    }
+
     if (this.callState !== 'idle') {
       console.warn('[WebRTC] Cannot start — not idle');
       return;
@@ -205,6 +243,10 @@ class WebRTCService {
   // ── Incoming Call ──────────────────────────────────
 
   private handleIncomingCall(signal: CallSignal) {
+    if (!WEBRTC_AVAILABLE) {
+      return;
+    }
+
     if (this.callState !== 'idle') {
       console.warn('[WebRTC] Busy — auto-rejecting');
       this.sendSignal({
@@ -239,6 +281,11 @@ class WebRTCService {
   // ── Accept / Reject / End ──────────────────────────
 
   async acceptCall() {
+    if (!WEBRTC_AVAILABLE) {
+      console.warn('[WebRTC] acceptCall skipped because native WebRTC is unavailable.');
+      return;
+    }
+
     if (!this.callInfo || this.callState !== 'incoming') return;
 
     if (this.incomingTimeoutId) {
@@ -293,6 +340,10 @@ class WebRTCService {
 
   private async handleCallAccepted(_signal: CallSignal) {
     if (!this.callInfo?.isCaller) return;
+    if (!WEBRTC_AVAILABLE) {
+      console.warn('[WebRTC] Ignoring CALL_ACCEPTED because native WebRTC is unavailable.');
+      return;
+    }
     console.log('[WebRTC] Call accepted — handshake...');
     this.setState('connecting');
     await this.acquireMedia();
@@ -302,6 +353,10 @@ class WebRTCService {
 
   private async handleOffer(signal: CallSignal) {
     if (!this.callInfo) return;
+    if (!WEBRTC_AVAILABLE) {
+      console.warn('[WebRTC] Ignoring OFFER because native WebRTC is unavailable.');
+      return;
+    }
 
     // Wait for media if not ready yet
     if (!this.localStream) {
@@ -321,7 +376,7 @@ class WebRTCService {
     this.createPeerConnection();
 
     try {
-      await this.pc!.setRemoteDescription(new RTCSessionDescription(signal.payload));
+      await this.pc!.setRemoteDescription(new RTCSessionDescriptionImpl(signal.payload));
       await this.flushPendingCandidates();
 
       const answer = await this.pc!.createAnswer();
@@ -341,9 +396,13 @@ class WebRTCService {
 
   private async handleAnswer(signal: CallSignal) {
     if (!this.pc) return;
+    if (!WEBRTC_AVAILABLE) {
+      console.warn('[WebRTC] Ignoring ANSWER because native WebRTC is unavailable.');
+      return;
+    }
     console.log('[WebRTC] Processing ANSWER');
     try {
-      await this.pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+      await this.pc.setRemoteDescription(new RTCSessionDescriptionImpl(signal.payload));
       await this.flushPendingCandidates();
     } catch (err) {
       console.error('[WebRTC] Answer error:', err);
@@ -351,9 +410,13 @@ class WebRTCService {
   }
 
   private async handleIceCandidate(signal: CallSignal) {
+    if (!WEBRTC_AVAILABLE) {
+      return;
+    }
+
     if (this.pc?.remoteDescription) {
       try {
-        await this.pc.addIceCandidate(new RTCIceCandidate(signal.payload));
+        await this.pc.addIceCandidate(new RTCIceCandidateImpl(signal.payload));
       } catch (err) {
         console.error('[WebRTC] ICE error:', err);
       }
@@ -365,8 +428,14 @@ class WebRTCService {
   // ── Media ──────────────────────────────────────────
 
   private async acquireMedia() {
+    if (!WEBRTC_AVAILABLE) {
+      this.mediaErrorListeners.forEach((cb) => cb('Cuộc gọi video chưa khả dụng trong môi trường hiện tại.'));
+      return;
+    }
+
     // Set audio to speakerphone for video calls
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const InCallManager = require('react-native-incall-manager').default;
       InCallManager.setSpeakerphoneOn(true);
       InCallManager.setKeepScreenOn(true);
@@ -375,24 +444,24 @@ class WebRTCService {
 
     try {
       console.log('[WebRTC] Getting media...');
-      const stream = await mediaDevices.getUserMedia({
+      const stream = await mediaDevicesImpl.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } },
         audio: true,
       });
 
-      this.localStream = stream as unknown as MediaStream;
+      this.localStream = stream as any;
       console.log('[WebRTC] Media ready');
       this.localStreamListeners.forEach((cb) => cb(this.localStream));
     } catch (err: any) {
       console.warn('[WebRTC] Video failed, audio only:', err.message);
       try {
-        const audioStream = await mediaDevices.getUserMedia({ video: false, audio: true });
-        this.localStream = audioStream as unknown as MediaStream;
+        const audioStream = await mediaDevicesImpl.getUserMedia({ video: false, audio: true });
+        this.localStream = audioStream as any;
         this.mediaErrorListeners.forEach((cb) => cb('Chỉ có audio (Camera không khả dụng)'));
         this.localStreamListeners.forEach((cb) => cb(this.localStream));
       } catch (err2: any) {
         console.error('[WebRTC] No media:', err2.message);
-        this.localStream = new MediaStream();
+        this.localStream = new MediaStreamImpl();
         this.mediaErrorListeners.forEach((cb) => cb('Không thể mở camera/mic'));
         this.localStreamListeners.forEach((cb) => cb(this.localStream));
       }
@@ -403,14 +472,17 @@ class WebRTCService {
 
   private createPeerConnection() {
     if (this.pc) return;
+    if (!WEBRTC_AVAILABLE) {
+      return;
+    }
 
     console.log('[WebRTC] Creating PeerConnection');
-    this.pc = new RTCPeerConnection({
+    this.pc = new RTCPeerConnectionImpl({
       iceServers: ICE_SERVERS,
       iceCandidatePoolSize: 2,
       iceTransportPolicy: 'all',
     });
-    this.remoteStream = new MediaStream();
+    this.remoteStream = new MediaStreamImpl();
 
     if (this.localStream) {
       let hasAudio = false, hasVideo = false;
@@ -467,6 +539,9 @@ class WebRTCService {
 
   private async createAndSendOffer() {
     if (!this.pc || !this.callInfo) return;
+    if (!WEBRTC_AVAILABLE) {
+      return;
+    }
     console.log('[WebRTC] Creating OFFER...');
     try {
       const offer = await this.pc.createOffer();
@@ -486,9 +561,13 @@ class WebRTCService {
 
   private async flushPendingCandidates() {
     if (this.pendingCandidates.length === 0) return;
+    if (!WEBRTC_AVAILABLE) {
+      this.pendingCandidates = [];
+      return;
+    }
     console.log(`[WebRTC] Flushing ${this.pendingCandidates.length} ICE candidates`);
     for (const c of this.pendingCandidates) {
-      try { await this.pc!.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+      try { await this.pc!.addIceCandidate(new RTCIceCandidateImpl(c)); } catch {}
     }
     this.pendingCandidates = [];
   }
@@ -526,6 +605,7 @@ class WebRTCService {
 
     // Release InCallManager
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const InCallManager = require('react-native-incall-manager').default;
       InCallManager.setSpeakerphoneOn(false);
       InCallManager.setKeepScreenOn(false);

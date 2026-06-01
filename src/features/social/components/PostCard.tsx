@@ -16,6 +16,8 @@ export type PostCardData = {
   text?: string;
   images?: string[];
   image?: string | null;
+  mediaType?: 'IMAGE' | 'VIDEO' | string;
+  hasVideo?: boolean;
   likes: number;
   isLikedByMe?: boolean;
   myReactionType?: string | null;
@@ -46,6 +48,18 @@ const REACTION_TO_EMOJI: Record<string, string> = {
 function reactionTypeToEmoji(type?: string | null) {
   if (!type) return '👍';
   return REACTION_TO_EMOJI[type] || '👍';
+}
+
+function isVideoUrl(uri?: string | null) {
+  if (!uri) return false;
+  const normalized = uri.split('?')[0].toLowerCase();
+  return normalized.endsWith('.mp4') || normalized.endsWith('.mov') || normalized.endsWith('.m4v') || normalized.endsWith('.webm') || normalized.endsWith('.m3u8');
+}
+
+function hasVideoMedia(post: PostCardData) {
+  if (post.hasVideo || post.mediaType === 'VIDEO') return true;
+  if (isVideoUrl(post.image)) return true;
+  return (post.images || []).some((uri) => isVideoUrl(uri));
 }
 
 function renderMedia(post: PostCardData) {
@@ -147,7 +161,7 @@ function renderMedia(post: PostCardData) {
         </View>
       )}
 
-      {!post.isSponsored ? (
+      {hasVideoMedia(post) ? (
         <View style={styles.muteButton}>
           <Ionicons name="volume-mute" size={16} color="#fff" />
         </View>
@@ -219,20 +233,20 @@ export function PostCard({
 
 const styles = StyleSheet.create({
   card: {
-    marginTop: 6,
-    paddingVertical: 12,
+    marginTop: 8,
+    paddingTop: 12,
     backgroundColor: '#fff',
   },
   postHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
   avatar: { width: 42, height: 42, borderRadius: 21, marginRight: 10 },
   headerTextWrap: { flex: 1 },
-  author: { fontWeight: '600', fontSize: 15, color: '#000' },
+  author: { fontWeight: '500', fontSize: 12, color: '#111' },
   timeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   time: { fontSize: 12, color: '#757575' },
   sponsoredText: { fontSize: 12, color: '#757575' },
   moreButton: { padding: 4 },
-  contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#1c1c1c', lineHeight: 21 },
-  imageContainer: { marginTop: 10, width: '100%', position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
+  contentText: { marginTop: 10, paddingHorizontal: 12, fontSize: 15, color: '#73B96C', lineHeight: 22, fontWeight: '600' },
+  imageContainer: { marginTop: 8, width: '100%', position: 'relative', overflow: 'hidden', backgroundColor: '#fff', borderRadius: 12 },
   singleImage: { width: '100%', height: '100%' },
   twoImageRow: { flexDirection: 'row', width: '100%', height: '100%' },
   twoImageTile: { height: '100%' },
@@ -251,9 +265,9 @@ const styles = StyleSheet.create({
   },
   moreOverlayText: { color: '#fff', fontSize: 26, fontWeight: '700' },
   muteButton: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  actionsRow: { flexDirection: 'row', marginTop: 12, paddingHorizontal: 12, alignItems: 'center' },
+  actionsRow: { flexDirection: 'row', marginTop: 10, paddingHorizontal: 12, alignItems: 'center' },
   leftActions: { flexDirection: 'row', alignItems: 'center' },
-  actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 24, backgroundColor: '#f5f5f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 12, backgroundColor: '#f6f6f6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   actionCount: { marginLeft: 6, fontSize: 13, color: '#333', fontWeight: '500' },
   reactionEmoji: { fontSize: 20, marginRight: 4 },
 });

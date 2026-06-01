@@ -28,6 +28,7 @@ import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import { loadCachedMessages, saveCachedMessages } from '@chat/services/messageCache';
 import GroupCallCard from '@/src/components/chat/GroupCallCard';
 import { serializePlainTextToTiptapJson } from '@/utils/chat/plainTextToTiptap';
 import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
@@ -137,8 +138,14 @@ export default function ChatDetailScreen() {
   const [isMentionDropdownVisible, setIsMentionDropdownVisible] = useState(false);
   const [mentionSearchText, setMentionSearchText] = useState('');
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessageItem[]>([]);
+  const [pinReplaceMessageId, setPinReplaceMessageId] = useState<string | null>(null);
+  const [showPinReplaceModal, setShowPinReplaceModal] = useState(false);
+  const [selectedOldPinId, setSelectedOldPinId] = useState<string | null>(null);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  // Read/Delivered receipts (1-1 chat parity with web): messageId the partner has seen/received
+  const [seenMessageId, setSeenMessageId] = useState<string | null>(null);
+  const [deliveredMessageId, setDeliveredMessageId] = useState<string | null>(null);
   const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
   const [isCustomImagePickerVisible, setIsCustomImagePickerVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -860,7 +867,7 @@ export default function ChatDetailScreen() {
   }, [canUseMessageInteractions, conversationId]);
 
   const { statuses } = usePresence();
-  const { isConnected, sendTyping, sendReadReceipt, sendCallSignal } = useChatSocket({
+  const { isConnected, sendTyping, sendReadReceipt, sendDelivered, sendCallSignal } = useChatSocket({
     conversationId,
     brokerURL: BROKER_URL,
     userId: currentUserId,
@@ -879,6 +886,19 @@ export default function ChatDetailScreen() {
           // Logic hiển thị thông báo hệ thống nếu cần xử lý riêng
         }
         appendOrUpdateMessage(mappedMessage);
+
+        // Gửi xác nhận "đã nhận" (delivered) cho tin nhắn đến từ người khác — parity với web
+        const incomingSenderId = String(mappedMessage.senderId ?? '');
+        if (
+          canUseRealtimeIndicators &&
+          currentUserId &&
+          incomingSenderId &&
+          incomingSenderId !== String(currentUserId) &&
+          mappedMessage.messageType !== 'SYSTEM' &&
+          mappedMessage.messageId
+        ) {
+          sendDelivered(conversationId, currentUserId, String(mappedMessage.messageId));
+        }
       } else {
         void loadInitialMessages(currentUserId, true);
       }
@@ -901,8 +921,20 @@ export default function ChatDetailScreen() {
       }
 
       const isFromOtherUser = String(event.userId) !== String(currentUserId);
-      if (isFromOtherUser) {
-        // Placeholder: update read status in UI model when app has read indicator.
+      if (isFromOtherUser && event.messageId) {
+        // Đối phương đã xem tới messageId này → cập nhật nhãn "Đã xem"
+        setSeenMessageId(String(event.messageId));
+      }
+    },
+    onDelivered: (event) => {
+      if (!currentUserId || !canUseRealtimeIndicators) {
+        return;
+      }
+
+      const isFromOtherUser = String(event.userId) !== String(currentUserId);
+      if (isFromOtherUser && event.messageId) {
+        // Đối phương đã nhận tới messageId này → cập nhật nhãn "Đã nhận"
+        setDeliveredMessageId(String(event.messageId));
       }
     },
     onConversationEvent: async (event) => {
@@ -952,6 +984,29 @@ export default function ChatDetailScreen() {
   const partnerId = isPrivateConversation && type !== 'CLOUD' ? conversationId.split('_').find(id => id !== currentUserId) : null;
   const isPartnerOnline = partnerId ? statuses.get(partnerId)?.online : false;
   const isPartnerTyping = isPartnerOnline && isTyping;
+
+  // ID tin nhắn cuối cùng do chính mình gửi (messages sắp xếp mới nhất ở đầu)
+  const lastOwnMessageId = useMemo(() => {
+    if (!currentUserId) return null;
+    for (const m of messages) {
+      if (isSystemMessage(m)) continue;
+      if (String(m.senderId) === String(currentUserId)) return String(m.messageId);
+    }
+    return null;
+  }, [messages, currentUserId]);
+
+  // Nhãn trạng thái (Đã xem / Đã nhận / Đã gửi) cho tin cuối của mình — parity với web
+  const ownMessageStatusLabel = useMemo(() => {
+    if (!lastOwnMessageId || !canUseRealtimeIndicators || !isPrivateConversation) return null;
+    const indexOfId = (id: string | null) => (id ? messages.findIndex((m) => String(m.messageId) === id) : -1);
+    const ownIdx = indexOfId(lastOwnMessageId);
+    const seenIdx = indexOfId(seenMessageId);
+    const deliveredIdx = indexOfId(deliveredMessageId);
+    // index 0 = tin mới nhất → index nhỏ hơn nghĩa là mới hơn
+    if (seenIdx !== -1 && ownIdx !== -1 && seenIdx <= ownIdx) return t('chat.status.seen', 'Đã xem');
+    if (deliveredIdx !== -1 && ownIdx !== -1 && deliveredIdx <= ownIdx) return t('chat.status.delivered', 'Đã nhận');
+    return t('chat.status.sent', 'Đã gửi');
+  }, [lastOwnMessageId, seenMessageId, deliveredMessageId, messages, canUseRealtimeIndicators, isPrivateConversation, t]);
 
   // Fetch group members for online status
   useEffect(() => {
@@ -1201,10 +1256,84 @@ export default function ChatDetailScreen() {
       // Load locally-deleted IDs BEFORE loading messages so they get filtered (via hook)
       await localDeleted.initDeletedSet(conversationId, uid || 'anonymous');
       locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
+
+      // Hiển thị tin nhắn từ cache offline ngay lập tức (giống IndexedDB trên web)
+      try {
+        const cached = await loadCachedMessages(conversationId);
+        if (cached && cached.length > 0) {
+          const visibleCached = filterDeletedMessages(cached);
+          setMessages((prev) => (prev.length === 0 ? visibleCached : prev));
+        }
+      } catch {
+        // Bỏ qua lỗi đọc cache.
+      }
+
       await loadInitialMessages(uid);
     };
     initialize();
   }, [conversationId, loadInitialMessages]);
+
+  // Lưu tin nhắn gần nhất vào cache offline (debounce nhẹ khi danh sách thay đổi)
+  useEffect(() => {
+    if (!conversationId || messages.length === 0) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void saveCachedMessages(conversationId, messages);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [conversationId, messages]);
+
+  // Tải trạng thái "đã xem" / "đã nhận" ban đầu của đối phương (chat 1-1) — parity với web
+  useEffect(() => {
+    if (!conversationId || !canUseRealtimeIndicators || !isPrivateConversation) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadReceiptStatus = async () => {
+      const myId = await SecureStore.getItemAsync('user_id');
+
+      try {
+        const readRes = await chatService.getReadStatus(conversationId);
+        const readList = chatService.unwrapApiPayload<any[]>(readRes);
+        if (!cancelled && Array.isArray(readList)) {
+          const other = readList.find(
+            (s) => s?.userId && String(s.userId) !== String(myId) && s.messageId
+          );
+          if (other?.messageId) {
+            setSeenMessageId(String(other.messageId));
+          }
+        }
+      } catch {
+        // Bỏ qua: trạng thái đã xem là phụ trợ.
+      }
+
+      try {
+        const deliveredRes = await chatService.getDeliveredStatus(conversationId);
+        const deliveredList = chatService.unwrapApiPayload<any[]>(deliveredRes);
+        if (!cancelled && Array.isArray(deliveredList)) {
+          const other = deliveredList.find(
+            (s) => s?.userId && String(s.userId) !== String(myId) && s.messageId
+          );
+          if (other?.messageId) {
+            setDeliveredMessageId(String(other.messageId));
+          }
+        }
+      } catch {
+        // Bỏ qua: trạng thái đã nhận là phụ trợ.
+      }
+    };
+
+    void loadReceiptStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, canUseRealtimeIndicators, isPrivateConversation]);
 
   const loadOlderMessages = useCallback(async () => {
     if (!conversationId || !hasMoreOlder || isLoadingOlder || loadingOlderRef.current) {
@@ -2252,17 +2381,47 @@ export default function ChatDetailScreen() {
     try {
       if (isSelectedMessagePinned) {
         await chatService.unpinMessage(selectedMessage.messageId);
+        closeMessageActionMenu();
+        await fetchPinnedMessages();
       } else {
+        // Check pin limit before pinning
+        if (pinnedMessages.length >= 5) {
+          closeMessageActionMenu();
+          setPinReplaceMessageId(selectedMessage.messageId);
+          setSelectedOldPinId(null);
+          setShowPinReplaceModal(true);
+          return;
+        }
         await chatService.pinMessage(selectedMessage.messageId);
+        closeMessageActionMenu();
+        await fetchPinnedMessages();
       }
-
-      closeMessageActionMenu();
-      await fetchPinnedMessages();
     } catch (error) {
       console.error('Failed to toggle pin message:', error);
       closeMessageActionMenu();
     }
-  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, selectedMessage]);
+  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, selectedMessage, pinnedMessages.length]);
+
+  const handlePinReplaceConfirm = useCallback(async () => {
+    if (!selectedOldPinId || !pinReplaceMessageId) return;
+    try {
+      await chatService.unpinMessage(selectedOldPinId);
+      await chatService.pinMessage(pinReplaceMessageId);
+      await fetchPinnedMessages();
+    } catch (error) {
+      console.error('Failed to replace pin:', error);
+    } finally {
+      setShowPinReplaceModal(false);
+      setPinReplaceMessageId(null);
+      setSelectedOldPinId(null);
+    }
+  }, [selectedOldPinId, pinReplaceMessageId, fetchPinnedMessages]);
+
+  const handleCancelPinReplace = useCallback(() => {
+    setShowPinReplaceModal(false);
+    setPinReplaceMessageId(null);
+    setSelectedOldPinId(null);
+  }, []);
 
   const handleOpenPinnedList = useCallback(async () => {
     await fetchPinnedMessages();
@@ -3054,6 +3213,7 @@ const renderOlderMessagesLoading = () => {
         colors={colors}
         styles={styles as any}
         playingVoiceId={playingVoiceId}
+        statusLabel={isCurrentUserMessage && String(item.messageId) === lastOwnMessageId ? ownMessageStatusLabel : null}
       />
     );
   };
@@ -3704,6 +3864,88 @@ const renderOlderMessagesLoading = () => {
                 styles={styles}
                 t={t}
               />
+            </Pressable>
+          </Pressable>
+        </Modal>
+
+        {/* Pin Replace Modal - shown when limit reached */}
+        <Modal
+          visible={showPinReplaceModal}
+          transparent
+          animationType="fade"
+          onRequestClose={handleCancelPinReplace}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={handleCancelPinReplace}>
+            <Pressable style={[styles.pinnedSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 }}>
+                  Đã đạt giới hạn 5 tin nhắn ghim
+                </Text>
+                <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 12 }}>
+                  Vui lòng chọn một tin nhắn ghim cũ để thay thế:
+                </Text>
+                <ScrollView style={{ maxHeight: 280 }}>
+                  {pinnedMessages.map((pin) => {
+                    const previewText = (() => {
+                      try {
+                        const parsed = JSON.parse(pin.content || '');
+                        return parsed.text || parsed.content || pin.content || '';
+                      } catch { return pin.content || ''; }
+                    })();
+                    const displayText = previewText.length > 50 ? `${previewText.slice(0, 50)}...` : previewText;
+                    const isSelected = selectedOldPinId === pin.messageId;
+                    return (
+                      <TouchableOpacity
+                        key={pin.id || pin.messageId}
+                        onPress={() => setSelectedOldPinId(pin.messageId)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          marginBottom: 4,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: isSelected ? '#0068FF' : 'transparent',
+                          backgroundColor: isSelected ? 'rgba(0,104,255,0.08)' : 'transparent',
+                        }}
+                      >
+                        <View style={{
+                          width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                          borderColor: isSelected ? '#0068FF' : colors.border,
+                          backgroundColor: isSelected ? '#0068FF' : 'transparent',
+                          alignItems: 'center', justifyContent: 'center', marginRight: 10,
+                        }}>
+                          {isSelected && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }} numberOfLines={1}>
+                            {pin.senderName || 'Người dùng'}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                            {displayText || '(Không có nội dung)'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                  <TouchableOpacity onPress={handleCancelPinReplace} style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                    <Text style={{ fontSize: 14, color: colors.textSecondary, fontWeight: '500' }}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => { void handlePinReplaceConfirm(); }}
+                    disabled={!selectedOldPinId}
+                    style={{
+                      paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6,
+                      backgroundColor: selectedOldPinId ? '#0068FF' : '#0068FF80',
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: '#fff', fontWeight: '600' }}>Xác nhận</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </Pressable>
           </Pressable>
         </Modal>

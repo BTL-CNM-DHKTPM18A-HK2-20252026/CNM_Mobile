@@ -29,6 +29,29 @@ export default function PersonalScreen() {
   const [commentInput, setCommentInput] = useState('');
   const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
 
+  const inferHasVideo = (media: any, mediaUrl?: string | null) => {
+    const isVideoUrl = (uri?: string | null) => {
+      if (!uri) return false;
+      const normalized = uri.split('?')[0].toLowerCase();
+      return normalized.endsWith('.mp4') || normalized.endsWith('.mov') || normalized.endsWith('.m4v') || normalized.endsWith('.webm') || normalized.endsWith('.m3u8');
+    };
+
+    if (typeof media?.mediaType === 'string' && media.mediaType.toUpperCase() === 'VIDEO') return true;
+    if (typeof media?.type === 'string' && media.type.toUpperCase() === 'VIDEO') return true;
+    if (typeof media?.contentType === 'string' && media.contentType.toLowerCase().startsWith('video/')) return true;
+    if (isVideoUrl(mediaUrl)) return true;
+
+    if (Array.isArray(media)) {
+      return media.some((item) => {
+        const itemType = String(item?.mediaType || item?.type || item?.contentType || '').toUpperCase();
+        const itemUrl = typeof item === 'string' ? item : (item?.url || item?.mediaUrl || item?.source || item?.uri);
+        return itemType === 'VIDEO' || String(item?.contentType || '').toLowerCase().startsWith('video/') || isVideoUrl(itemUrl);
+      });
+    }
+
+    return false;
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchUserProfile();
@@ -71,6 +94,8 @@ export default function PersonalScreen() {
           ? p.media.map((m: any) => m.url || m)
           : (p.images && Array.isArray(p.images) ? p.images : (p.image ? [p.image] : [])),
         image: (p.media && p.media[0]?.url) || p.image || null,
+        mediaType: p.mediaType || (inferHasVideo(p.media, p.media?.[0]?.url || p.image) ? 'VIDEO' : 'IMAGE'),
+        hasVideo: inferHasVideo(p.media, p.media?.[0]?.url || p.image),
         likes: p.likeCount || p.likes || 0,
         isLikedByMe: p.isLikedByMe || false,
         myReactionType: p.myReactionType || null,
@@ -763,7 +788,7 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: '#f2f2f2',
   },
@@ -776,15 +801,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuItemTitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#222',
     fontWeight: '400',
   },
   menuItemSubtitle: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#7c7c7c',
-    marginTop: 3,
-    lineHeight: 16,
+    marginTop: 2,
+    lineHeight: 13,
   },
   cameraIconBadge: {
     position: 'absolute',

@@ -26,6 +26,7 @@ export interface MessageItemProps {
   isLastInBlock?: boolean;
   onReactionPress?: () => void;
   isCompactBubble?: boolean;
+  statusLabel?: string | null;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -48,6 +49,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   isLastInBlock = false,
   onReactionPress,
   isCompactBubble = false,
+  statusLabel = null,
 }) => {
   return (
     <View
@@ -74,10 +76,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </View>
 
           {showTimestamp ? <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text> : null}
+          {statusLabel ? <Text style={[styles.timestamp, styles.timestampRight, { marginTop: 1, opacity: 0.85 }]}>{statusLabel}</Text> : null}
         </View>
       ) : (
         <View style={styles.otherMessageBlock}>
-          <View style={[styles.otherAvatarSlot, { marginBottom: isLastInBlock ? 2 : 2 }]}>
+          <View style={styles.otherAvatarSlot}>
             {showAvatar && senderAvatarSource ? <Image source={senderAvatarSource} style={styles.peerAvatar} /> : null}
           </View>
           <View style={styles.otherContentBlock}>

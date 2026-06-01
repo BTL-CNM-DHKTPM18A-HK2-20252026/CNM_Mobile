@@ -70,7 +70,7 @@ export default function TabLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  const TAB_BAR_HEIGHT = 60 + (insets.bottom > 0 ? insets.bottom - 10 : 0);
+  const TAB_BAR_HEIGHT = 58 + (insets.bottom > 0 ? insets.bottom : 0);
   
   useEffect(() => {
     const checkAuth = async () => {
@@ -91,13 +91,17 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
         tabBarShowLabel: false,
         tabBarStyle: {
-          height: Math.max(65, TAB_BAR_HEIGHT),
+          height: Math.max(62, TAB_BAR_HEIGHT),
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
           backgroundColor: colors.tabBar,
-          paddingTop: 8,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+          paddingTop: 2,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 3,
+        },
+        tabBarItemStyle: {
+          height: 56,
+          justifyContent: 'center',
         },
       }}>
       <Tabs.Screen
@@ -177,22 +181,25 @@ const styles = StyleSheet.create({
   tabIconGroup: {
     alignItems: 'center',
     justifyContent: 'center',
+    height: 52,
     minWidth: 70,
   },
   iconContainer: {
-    height: 28,
+    width: 42,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
   },
   tabLabel: {
-    fontSize: 9, // Hạ tiếp từ 10
+    fontSize: 9,
     fontWeight: '500',
-    marginTop: 4,
+    marginTop: 1,
   },
   badge: {
     position: 'absolute',
-    right: -8,
-    top: -4,
+    right: 1,
+    top: -2,
     backgroundColor: '#ff3b30',
     borderRadius: 8,
     minWidth: 16,
@@ -206,8 +213,8 @@ const styles = StyleSheet.create({
   dotBadge: {
     width: 10,
     height: 10,
-    right: -4,
-    top: 0,
+    right: 4,
+    top: 1,
   },
   badgeText: {
     color: '#fff',

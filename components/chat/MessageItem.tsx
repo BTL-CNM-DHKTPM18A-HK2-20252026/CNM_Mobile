@@ -26,6 +26,7 @@ export interface MessageItemProps {
   isLastInBlock?: boolean;
   onReactionPress?: () => void;
   isCompactBubble?: boolean;
+  statusLabel?: string | null;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -48,6 +49,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   isLastInBlock = false,
   onReactionPress,
   isCompactBubble = false,
+  statusLabel = null,
 }) => {
   return (
     <View
@@ -74,6 +76,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </View>
 
           {showTimestamp ? <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text> : null}
+          {statusLabel ? <Text style={[styles.timestamp, styles.timestampRight, { marginTop: 1, opacity: 0.85 }]}>{statusLabel}</Text> : null}
         </View>
       ) : (
         <View style={styles.otherMessageBlock}>

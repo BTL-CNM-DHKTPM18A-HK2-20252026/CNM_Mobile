@@ -1,24 +1,21 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Vibration, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
 import { webrtcService, CallState, CallInfo } from '@chat/services/webrtcService';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@react-navigation/native';
 
 // Tránh lỗi trên Expo Go khi component native không tồn tại
 let RTCView: any = View;
 try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const WebRTC = require('react-native-webrtc');
   if (WebRTC && WebRTC.RTCView) {
     RTCView = WebRTC.RTCView;
   }
-} catch (e) {
+} catch {
   console.log('[CallOverlay] RTCView not available, using fallback View');
 }
 
-const { width, height } = Dimensions.get('window');
-
 export const CallOverlay = ({ currentUserId }: { currentUserId: string }) => {
-  const { colors } = useTheme() as any;
   const [callState, setCallState] = useState<CallState>('idle');
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [localStream, setLocalStream] = useState<any>(null);
