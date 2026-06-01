@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { ResizeMode, Video } from 'expo-av';
 import React, { useEffect, useState } from 'react';
-import { Dimensions, Image as RNImage, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, FlatList, Image as RNImage, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { MediaViewer } from '@/components/chat/MediaViewer';
 import { getAvatarSource } from '@/services/mediaUtils';
 
 const { width } = Dimensions.get('window');
@@ -20,7 +22,7 @@ export type PostCardData = {
   isLikedByMe?: boolean;
   myReactionType?: string | null;
   comments: number;
-  reactions?: Array<{ type: string; count: number }>;
+  reactions?: { type: string; count: number }[];
   isSponsored?: boolean;
 };
 
@@ -32,6 +34,11 @@ type PostCardProps = {
   onCommentPress?: (postId: string) => void;
   showMenu?: boolean;
   showActions?: boolean;
+};
+
+type MediaItem = {
+  uri: string;
+  type: 'image' | 'video';
 };
 
 const REACTION_TO_EMOJI: Record<string, string> = {
@@ -46,6 +53,21 @@ const REACTION_TO_EMOJI: Record<string, string> = {
 function reactionTypeToEmoji(type?: string | null) {
   if (!type) return '👍';
   return REACTION_TO_EMOJI[type] || '👍';
+}
+
+function isVideoUri(uri?: string | null) {
+  if (!uri) return false;
+  const lowerUri = uri.toLowerCase();
+  return lowerUri.endsWith('.mp4') || lowerUri.endsWith('.mov') || lowerUri.endsWith('.m4v') || lowerUri.endsWith('.webm');
+}
+
+function buildMediaItems(post: PostCardData): MediaItem[] {
+  // keep all media for the viewer (UI will still only render first 4 tiles)
+  const uris = post.images?.length ? post.images : post.image ? [post.image] : [];
+  return uris.filter(Boolean).map((uri) => ({
+    uri,
+    type: isVideoUri(uri) ? 'video' : 'image',
+  }));
 }
 
 function useImageAspectRatio(imageUri?: string | null) {
@@ -81,11 +103,18 @@ function useImageAspectRatio(imageUri?: string | null) {
   return aspectRatio;
 }
 
-function renderMedia(post: PostCardData, singleImageAspectRatio: number | null, firstPairAspectRatio: number | null) {
-  const images = post.images?.length ? post.images.slice(0, 4) : post.image ? [post.image] : [];
-  if (images.length === 0) return null;
+function renderMedia(
+  post: PostCardData,
+  mediaItems: MediaItem[],
+  singleImageAspectRatio: number | null,
+  firstPairAspectRatio: number | null,
+  onOpenViewer: (index: number) => void,
+) {
+  if (mediaItems.length === 0) return null;
 
-  const count = images.length;
+  // Only render up to 4 tiles in the post UI, but viewer will show all mediaItems
+  const visibleItems = mediaItems.slice(0, 4);
+  const count = visibleItems.length;
   const gutter = 2;
   const mediaInset = 12;
   const innerWidth = width - mediaInset * 2;
@@ -110,61 +139,105 @@ function renderMedia(post: PostCardData, singleImageAspectRatio: number | null, 
       ]}
     >
       {count === 1 ? (
-        <Image
-          source={{ uri: images[0] }}
-          style={[styles.singleImage, { aspectRatio: singleImageAspectRatio ?? 1 }]}
-          contentFit="contain"
-          transition={120}
-        />
+        <TouchableOpacity activeOpacity={0.95} onPress={() => onOpenViewer(0)}>
+          {visibleItems[0].type === 'video' ? (
+            <View style={[styles.singleImage, styles.videoPreview, { aspectRatio: singleImageAspectRatio ?? 1 }]}> 
+              <Ionicons name="videocam" size={34} color="#fff" />
+              <Text style={styles.videoPreviewText}>Video</Text>
+            </View>
+          ) : (
+            <Image
+              source={{ uri: visibleItems[0].uri }}
+              style={[styles.singleImage, { aspectRatio: singleImageAspectRatio ?? 1 }]}
+              contentFit="contain"
+              transition={120}
+            />
+          )}
+        </TouchableOpacity>
       ) : count === 2 ? (
         <View style={[styles.twoImageRow, { height: pairHeight }]}> 
-          {images.map((uri, index) => (
-            <Image
-              key={uri + index}
-              source={{ uri }}
+          {visibleItems.map((item, index) => (
+            <TouchableOpacity
+              key={item.uri + index}
               style={[
                 styles.twoImageTile,
                 { width: squareSize, height: pairHeight, marginRight: index === 0 ? gutter : 0 },
               ]}
-              contentFit="cover"
-              transition={120}
-            />
+              activeOpacity={0.95}
+              onPress={() => onOpenViewer(index)}
+            >
+              {item.type === 'video' ? (
+                <View style={styles.videoPreview}>
+                  <Ionicons name="videocam" size={30} color="#fff" />
+                  <Text style={styles.videoPreviewText}>Video</Text>
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: item.uri }}
+                  style={styles.fillImage}
+                  contentFit="cover"
+                  transition={120}
+                />
+              )}
+            </TouchableOpacity>
           ))}
         </View>
       ) : count === 3 ? (
         <View style={styles.threeImageLayout}>
-          <Image
-            source={{ uri: images[0] }}
-            style={[styles.threeMainImage, { width: '100%', height: topImageHeight, marginBottom: gutter }]}
-            contentFit="cover"
-            transition={120}
-          />
-          <View style={styles.threeBottomRow}>
-            {images.slice(1, 3).map((uri, index) => (
+          <TouchableOpacity activeOpacity={0.95} onPress={() => onOpenViewer(0)}>
+            {visibleItems[0].type === 'video' ? (
+              <View style={[styles.threeMainImage, styles.videoPreview, { width: '100%', height: topImageHeight, marginBottom: gutter }]}> 
+                <Ionicons name="videocam" size={30} color="#fff" />
+                <Text style={styles.videoPreviewText}>Video</Text>
+              </View>
+            ) : (
               <Image
-                key={uri + index}
-                source={{ uri }}
+                source={{ uri: visibleItems[0].uri }}
+                style={[styles.threeMainImage, { width: '100%', height: topImageHeight, marginBottom: gutter }]}
+                contentFit="cover"
+                transition={120}
+              />
+            )}
+          </TouchableOpacity>
+          <View style={styles.threeBottomRow}>
+            {visibleItems.slice(1, 3).map((item, index) => (
+              <TouchableOpacity
+                key={item.uri + index}
                 style={[
                   styles.threeBottomTile,
                   { width: squareSize, height: squareSize, marginRight: index === 0 ? gutter : 0 },
                 ]}
-                contentFit="cover"
-                transition={120}
-              />
+                activeOpacity={0.95}
+                onPress={() => onOpenViewer(index + 1)}
+              >
+                {item.type === 'video' ? (
+                  <View style={styles.videoPreview}>
+                    <Ionicons name="videocam" size={26} color="#fff" />
+                    <Text style={styles.videoPreviewText}>Video</Text>
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: item.uri }}
+                    style={styles.fillImage}
+                    contentFit="cover"
+                    transition={120}
+                  />
+                )}
+              </TouchableOpacity>
             ))}
           </View>
         </View>
       ) : (
         <View style={styles.fourGrid}>
-          {images.map((uri, index) => {
+          {visibleItems.map((item, index) => {
             const isLastVisibleTile = index === 3;
             const extraCount = (post.images?.length || 0) - 4;
             const isLeftColumn = index % 2 === 0;
             const isTopRow = index < 2;
 
             return (
-              <View
-                key={uri + index}
+              <TouchableOpacity
+                key={item.uri + index}
                 style={[
                   styles.fourGridTile,
                   {
@@ -174,14 +247,23 @@ function renderMedia(post: PostCardData, singleImageAspectRatio: number | null, 
                     marginBottom: isTopRow ? gutter : 0,
                   },
                 ]}
+                activeOpacity={0.95}
+                onPress={() => onOpenViewer(index)}
               >
-                <Image source={{ uri }} style={styles.fourGridImage} contentFit="cover" transition={120} />
+                {item.type === 'video' ? (
+                  <View style={styles.videoPreview}>
+                    <Ionicons name="videocam" size={28} color="#fff" />
+                    <Text style={styles.videoPreviewText}>Video</Text>
+                  </View>
+                ) : (
+                  <Image source={{ uri: item.uri }} style={styles.fourGridImage} contentFit="cover" transition={120} />
+                )}
                 {isLastVisibleTile && (post.images?.length || 0) > 4 ? (
                   <View style={styles.moreOverlay}>
                     <Text style={styles.moreOverlayText}>+{extraCount}</Text>
                   </View>
                 ) : null}
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -206,9 +288,16 @@ export function PostCard({
   showActions = true,
 }: PostCardProps) {
   const canShowMenu = showMenu && typeof onMenuPress === 'function';
-  const images = post.images?.length ? post.images.slice(0, 4) : post.image ? [post.image] : [];
-  const singleImageAspectRatio = useImageAspectRatio(images.length === 1 ? images[0] : null);
-  const firstPairAspectRatio = useImageAspectRatio(images.length === 2 ? images[0] : null);
+  const mediaItems = buildMediaItems(post);
+  const singleImageAspectRatio = useImageAspectRatio(mediaItems.length === 1 && mediaItems[0].type === 'image' ? mediaItems[0].uri : null);
+  const firstPairAspectRatio = useImageAspectRatio(mediaItems.length === 2 && mediaItems[0].type === 'image' ? mediaItems[0].uri : null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
+  const openViewer = (index: number) => {
+    setViewerIndex(index);
+    setViewerVisible(true);
+  };
 
   return (
     <View style={styles.card}>
@@ -230,7 +319,41 @@ export function PostCard({
 
       {post.text ? <Text style={styles.contentText}>{post.text}</Text> : null}
 
-      {renderMedia(post, singleImageAspectRatio, firstPairAspectRatio)}
+      {renderMedia(post, mediaItems, singleImageAspectRatio, firstPairAspectRatio, openViewer)}
+
+      <MediaViewer visible={viewerVisible} onClose={() => setViewerVisible(false)}>
+        <View style={styles.viewerBackdrop}>
+          <TouchableOpacity style={styles.viewerCloseButton} onPress={() => setViewerVisible(false)}>
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+
+          <FlatList
+            key={`viewer-${viewerIndex}`}
+            data={mediaItems}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={viewerIndex}
+            getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            keyExtractor={(item, index) => `${item.uri}-${index}`}
+            renderItem={({ item }) => (
+              <View style={styles.viewerPage}>
+                {item.type === 'video' ? (
+                  <Video
+                    source={{ uri: item.uri }}
+                    style={styles.viewerMedia}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay
+                  />
+                ) : (
+                  <Image source={{ uri: item.uri }} style={styles.viewerMedia} contentFit="contain" transition={120} />
+                )}
+              </View>
+            )}
+          />
+        </View>
+      </MediaViewer>
 
       {showActions ? (
         <View style={styles.actionsRow}>
@@ -303,9 +426,43 @@ const styles = StyleSheet.create({
   },
   moreOverlayText: { color: '#fff', fontSize: 26, fontWeight: '700' },
   muteButton: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  videoPreview: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#111',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoPreviewText: { color: '#fff', fontSize: 12, fontWeight: '600', marginTop: 4 },
   actionsRow: { flexDirection: 'row', marginTop: 12, paddingHorizontal: 12, alignItems: 'center' },
   leftActions: { flexDirection: 'row', alignItems: 'center' },
   actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 24, backgroundColor: '#f5f5f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
   actionCount: { marginLeft: 6, fontSize: 13, color: '#333', fontWeight: '500' },
   reactionEmoji: { fontSize: 20, marginRight: 4 },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  viewerCloseButton: {
+    position: 'absolute',
+    top: 52,
+    right: 16,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerPage: {
+    width,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerMedia: {
+    width: '100%',
+    height: '100%',
+  },
 });
