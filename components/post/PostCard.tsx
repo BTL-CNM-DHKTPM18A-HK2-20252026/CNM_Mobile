@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { ResizeMode, Video } from 'expo-av';
 import React, { useEffect, useState } from 'react';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Dimensions, FlatList, Image as RNImage, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { MediaViewer } from '@/components/chat/MediaViewer';
@@ -109,6 +110,7 @@ function renderMedia(
   singleImageAspectRatio: number | null,
   firstPairAspectRatio: number | null,
   onOpenViewer: (index: number) => void,
+  thumbnails: Record<string, string>,
 ) {
   if (mediaItems.length === 0) return null;
 
@@ -141,10 +143,19 @@ function renderMedia(
       {count === 1 ? (
         <TouchableOpacity activeOpacity={0.95} onPress={() => onOpenViewer(0)}>
           {visibleItems[0].type === 'video' ? (
-            <View style={[styles.singleImage, styles.videoPreview, { aspectRatio: singleImageAspectRatio ?? 1 }]}> 
-              <Ionicons name="videocam" size={34} color="#fff" />
-              <Text style={styles.videoPreviewText}>Video</Text>
-            </View>
+            thumbnails[visibleItems[0].uri] ? (
+              <View style={[styles.singleImage, { aspectRatio: singleImageAspectRatio ?? 1 }]}> 
+                <Image source={{ uri: thumbnails[visibleItems[0].uri] }} style={[styles.singleImage, { aspectRatio: singleImageAspectRatio ?? 1 }]} contentFit="cover" />
+                <View style={styles.playOverlay} pointerEvents="none">
+                  <Ionicons name="play" size={36} color="#fff" />
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.singleImage, styles.videoPreview, { aspectRatio: singleImageAspectRatio ?? 1 }]}> 
+                <Ionicons name="videocam" size={34} color="#fff" />
+                <Text style={styles.videoPreviewText}>Video</Text>
+              </View>
+            )
           ) : (
             <Image
               source={{ uri: visibleItems[0].uri }}
@@ -167,10 +178,19 @@ function renderMedia(
               onPress={() => onOpenViewer(index)}
             >
               {item.type === 'video' ? (
-                <View style={styles.videoPreview}>
-                  <Ionicons name="videocam" size={30} color="#fff" />
-                  <Text style={styles.videoPreviewText}>Video</Text>
-                </View>
+                thumbnails[item.uri] ? (
+                  <View style={styles.fillImage}>
+                    <Image source={{ uri: thumbnails[item.uri] }} style={styles.fillImage} contentFit="cover" />
+                    <View style={styles.playOverlaySmall} pointerEvents="none">
+                      <Ionicons name="play" size={22} color="#fff" />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.videoPreview}>
+                    <Ionicons name="videocam" size={30} color="#fff" />
+                    <Text style={styles.videoPreviewText}>Video</Text>
+                  </View>
+                )
               ) : (
                 <Image
                   source={{ uri: item.uri }}
@@ -211,10 +231,19 @@ function renderMedia(
                 onPress={() => onOpenViewer(index + 1)}
               >
                 {item.type === 'video' ? (
-                  <View style={styles.videoPreview}>
-                    <Ionicons name="videocam" size={26} color="#fff" />
-                    <Text style={styles.videoPreviewText}>Video</Text>
-                  </View>
+                  thumbnails[item.uri] ? (
+                    <View style={styles.fillImage}>
+                      <Image source={{ uri: thumbnails[item.uri] }} style={styles.fillImage} contentFit="cover" />
+                      <View style={styles.playOverlaySmall} pointerEvents="none">
+                        <Ionicons name="play" size={20} color="#fff" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.videoPreview}>
+                      <Ionicons name="videocam" size={26} color="#fff" />
+                      <Text style={styles.videoPreviewText}>Video</Text>
+                    </View>
+                  )
                 ) : (
                   <Image
                     source={{ uri: item.uri }}
@@ -251,10 +280,19 @@ function renderMedia(
                 onPress={() => onOpenViewer(index)}
               >
                 {item.type === 'video' ? (
-                  <View style={styles.videoPreview}>
-                    <Ionicons name="videocam" size={28} color="#fff" />
-                    <Text style={styles.videoPreviewText}>Video</Text>
-                  </View>
+                  thumbnails[item.uri] ? (
+                    <View style={styles.fourGridImage}>
+                      <Image source={{ uri: thumbnails[item.uri] }} style={styles.fourGridImage} contentFit="cover" />
+                      <View style={styles.playOverlaySmall} pointerEvents="none">
+                        <Ionicons name="play" size={22} color="#fff" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.videoPreview}>
+                      <Ionicons name="videocam" size={28} color="#fff" />
+                      <Text style={styles.videoPreviewText}>Video</Text>
+                    </View>
+                  )
                 ) : (
                   <Image source={{ uri: item.uri }} style={styles.fourGridImage} contentFit="cover" transition={120} />
                 )}
@@ -269,11 +307,7 @@ function renderMedia(
         </View>
       )}
 
-      {!post.isSponsored ? (
-        <View style={styles.muteButton}>
-          <Ionicons name="volume-mute" size={16} color="#fff" />
-        </View>
-      ) : null}
+      {/* removed mute icon for cleaner UI */}
     </View>
   );
 }
@@ -289,6 +323,7 @@ export function PostCard({
 }: PostCardProps) {
   const canShowMenu = showMenu && typeof onMenuPress === 'function';
   const mediaItems = buildMediaItems(post);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const singleImageAspectRatio = useImageAspectRatio(mediaItems.length === 1 && mediaItems[0].type === 'image' ? mediaItems[0].uri : null);
   const firstPairAspectRatio = useImageAspectRatio(mediaItems.length === 2 && mediaItems[0].type === 'image' ? mediaItems[0].uri : null);
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -298,6 +333,26 @@ export function PostCard({
     setViewerIndex(index);
     setViewerVisible(true);
   };
+
+  useEffect(() => {
+    let mounted = true;
+    const generate = async () => {
+      for (const item of mediaItems) {
+        if (item.type === 'video' && !thumbnails[item.uri]) {
+          try {
+            const res = await VideoThumbnails.getThumbnailAsync(item.uri, { time: 1000 });
+            if (mounted && res?.uri) setThumbnails(prev => ({ ...prev, [item.uri]: res.uri }));
+          } catch (err) {
+            // ignore thumbnail errors
+            console.warn('Video thumbnail error', err);
+          }
+        }
+      }
+    };
+
+    generate();
+    return () => { mounted = false; };
+  }, [mediaItems, thumbnails]);
 
   return (
     <View style={styles.card}>
@@ -319,7 +374,7 @@ export function PostCard({
 
       {post.text ? <Text style={styles.contentText}>{post.text}</Text> : null}
 
-      {renderMedia(post, mediaItems, singleImageAspectRatio, firstPairAspectRatio, openViewer)}
+      {renderMedia(post, mediaItems, singleImageAspectRatio, firstPairAspectRatio, openViewer, thumbnails)}
 
       <MediaViewer visible={viewerVisible} onClose={() => setViewerVisible(false)}>
         <View style={styles.viewerBackdrop}>
@@ -425,7 +480,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   moreOverlayText: { color: '#fff', fontSize: 26, fontWeight: '700' },
-  muteButton: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.6)', width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  /* muteButton removed */
   videoPreview: {
     width: '100%',
     height: '100%',
@@ -434,6 +489,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   videoPreviewText: { color: '#fff', fontSize: 12, fontWeight: '600', marginTop: 4 },
+  playOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  playOverlaySmall: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
   actionsRow: { flexDirection: 'row', marginTop: 12, paddingHorizontal: 12, alignItems: 'center' },
   leftActions: { flexDirection: 'row', alignItems: 'center' },
   actionItem: { flexDirection: 'row', alignItems: 'center', marginRight: 24, backgroundColor: '#f5f5f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
