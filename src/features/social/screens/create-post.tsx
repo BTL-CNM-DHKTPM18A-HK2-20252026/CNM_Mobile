@@ -214,51 +214,12 @@ export default function CreatePostScreen() {
               />
             )}
 
-            <View style={styles.colorTextRow}>
-              <TouchableOpacity style={styles.circleColorButton}>
-                <Text style={styles.circleColorText}>Aa</Text>
+            <View style={styles.pickButtonsRow}>
+              <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary}>
+                <Ionicons name="image" size={20} color="#0082f6" />
               </TouchableOpacity>
-
-              <View style={styles.pickButtonsRow}>
-                <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary}>
-                  <Ionicons name="image" size={20} color="#0082f6" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.pickBtn} onPress={takePhoto}>
-                  <Ionicons name="camera" size={20} color="#4caf50" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.tagsRow}>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="musical-notes-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Nhạc</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="images-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Album</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="pricetag-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Với bạn bè</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.toolbarRow}>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="happy-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.toolIcon, styles.toolActive]}>
-                <Ionicons name="image" size={24} color="#0082f6" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="play-circle-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="link-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="location-outline" size={24} color="#757575" />
+              <TouchableOpacity style={styles.pickBtn} onPress={takePhoto}>
+                <Ionicons name="camera" size={20} color="#4caf50" />
               </TouchableOpacity>
             </View>
           </View>
