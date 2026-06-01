@@ -33,13 +33,13 @@ import { SCREEN_WIDTH } from '@chat/constants/chatConstants';
 import { chatFileService } from '@chat/services/chatFileService';
 import { chatService } from '@chat/services/chatService';
 import type { Message, PinnedMessageItem } from '@chat/types/chatTypes';
-import {
-    getDisplayFileNameFromValue,
-    getMessageMillis,
-    isLikelyUrl
-} from '@chat/utils/chatHelpers';
+import { getMessageMillis } from '@chat/utils/chatHelpers';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
 import { friendService } from '@friends/services/friendService';
+import {
+    getPinnedMessagePreviewText,
+    getPinnedMessageThumbnailUrl,
+} from '../../../../components/chat/pinnedMessageDisplay';
 import {
     checkAddMembersPermission,
     checkEditGroupInfoPermission,
@@ -244,36 +244,15 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   }, [props.isCloudConversation]);
 
   const getPinnedPreviewText = useCallback((item: PinnedMessageItem) => {
-    const pinnedType = (item.messageType || '').toUpperCase();
-    if (pinnedType === 'IMAGE') return '[Hình ảnh]';
-    if (pinnedType === 'IMAGE_GROUP') {
-      const imageCount = item.attachments?.length ?? 0;
-      return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
+    const text = getPinnedMessagePreviewText(item);
+    if (text === '[Tin nhắn]') {
+      return t('chat.empty_message', 'Tin nhắn trống');
     }
-    if (pinnedType === 'VIDEO') return '[Video]';
-    if (pinnedType === 'VOICE') return '[Tin nhắn thoại]';
-    if (pinnedType === 'FILE' || pinnedType === 'MEDIA') {
-      const fileName = item.fileName || getDisplayFileNameFromValue(item.contentUrl || item.content);
-      return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
-    }
-    const text = (item.content || '').trim();
-    if (!text) return t('chat.empty_message', 'Tin nhắn trống');
-    if (isLikelyUrl(text)) return '[Nội dung media]';
     return text;
   }, [t]);
 
   const getPinnedPreviewThumb = useCallback((item: PinnedMessageItem) => {
-    const pinnedType = (item.messageType || '').toUpperCase();
-    if (pinnedType === 'IMAGE') {
-      const candidate = String(item.contentUrl || item.content || '').trim();
-      return isLikelyUrl(candidate) ? candidate : '';
-    }
-    if (pinnedType === 'IMAGE_GROUP') {
-      const firstAttachment = item.attachments?.[0]?.url;
-      const candidate = String(firstAttachment || item.contentUrl || item.content || '').trim();
-      return isLikelyUrl(candidate) ? candidate : '';
-    }
-    return '';
+    return getPinnedMessageThumbnailUrl(item);
   }, []);
 
   const handleUnpinFromPinnedList = useCallback(async (messageId: string) => {

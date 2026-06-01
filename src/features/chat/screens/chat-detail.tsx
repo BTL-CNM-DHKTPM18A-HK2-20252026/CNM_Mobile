@@ -69,6 +69,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MAX_PINNED_MESSAGES } from '../../../../components/chat/pinnedMessageDisplay';
 import {
     checkPinMessagePermission,
     checkSendMessagePermission,
@@ -2379,6 +2380,15 @@ export default function ChatDetailScreen() {
       if (isSelectedMessagePinned) {
         await chatService.unpinMessage(selectedMessage.messageId);
       } else {
+        if (pinnedMessages.length >= MAX_PINNED_MESSAGES) {
+          Alert.alert(
+            'Đã ghim tối đa',
+            `Chỉ được ghim tối đa ${MAX_PINNED_MESSAGES} tin nhắn. Hãy xóa 1 tin ghim trước khi ghim thêm.`
+          );
+          closeMessageActionMenu();
+          return;
+        }
+
         await chatService.pinMessage(selectedMessage.messageId);
       }
 
@@ -2388,7 +2398,7 @@ export default function ChatDetailScreen() {
       console.error('Failed to toggle pin message:', error);
       closeMessageActionMenu();
     }
-  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, selectedMessage, type, currentUserRole, conversationPermissions]);
+  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, pinnedMessages.length, selectedMessage, type, currentUserRole, conversationPermissions]);
 
   const canShowPinSelectedMessageAction =
     checkPinMessagePermission(type, currentUserRole as any, conversationPermissions as any).allowed;
