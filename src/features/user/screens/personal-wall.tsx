@@ -297,9 +297,6 @@ export default function PersonalScreen() {
                 source={getAvatarSource(profile?.avatar_url)}
                 style={styles.avatar}
               />
-              <View style={styles.cameraIconBadge}>
-                <Ionicons name="camera" size={20} color="#fff" />
-              </View>
             </View>
           </TouchableOpacity>
         </View>
@@ -314,6 +311,7 @@ export default function PersonalScreen() {
           </Text>
 
           <View style={styles.postsSection}>
+            <View style={{backgroundColor: '#ddd', height: 8}}></View>
             {posts.length === 0 ? (
               <View style={styles.emptyStateCard}>
                 <View style={styles.emptyStateVisual}>
@@ -832,18 +830,5 @@ const styles = StyleSheet.create({
     color: '#7c7c7c',
     marginTop: 3,
     lineHeight: 16,
-  },
-  cameraIconBadge: {
-    position: 'absolute',
-    bottom: 5,
-    right: 5,
-    backgroundColor: COLORS.primary, // Hoặc màu xanh bạn thích
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#fff', // Tạo viền trắng xung quanh icon cho nổi bật
   },
 });

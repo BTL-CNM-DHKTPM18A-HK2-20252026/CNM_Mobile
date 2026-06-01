@@ -92,8 +92,9 @@ export default function FriendRequestsScreen() {
             } else if (actionType === 'reject') {
                 res = await friendService.rejectRequest(requestId) as unknown as ApiResponse;
             } else {
-                // Thu hồi (Dùng unfriend theo logic cũ của bạn)
-                res = await friendService.unfriend(requestId) as unknown as ApiResponse;
+                // Thu hồi yêu cầu đã gửi bằng userId của người nhận
+                const targetUserId = senderInfo?.senderId || requestId;
+                res = await friendService.unfriend(targetUserId) as unknown as ApiResponse;
             }
 
             if (res.success) {
@@ -183,7 +184,11 @@ export default function FriendRequestsScreen() {
                         ) : (
                             <TouchableOpacity
                                 style={[styles.button, { backgroundColor: isDark ? colors.border : '#f0f2f5', flex: 1 }]}
-                                onPress={() => handleAction(item.requestId, 'recall')}
+                                onPress={() => handleAction(item.requestId, 'recall', {
+                                    senderId: item.receiverId,
+                                    senderName: item.receiverName,
+                                    senderAvatarUrl: item.receiverAvatarUrl,
+                                })}
                                 disabled={processingRequests.has(item.requestId)}
                             >
                                 <Text style={[styles.buttonText, { color: colors.text }]}>
