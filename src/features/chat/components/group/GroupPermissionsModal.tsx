@@ -1,8 +1,6 @@
-import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
-import React, { useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface GroupPermissionsModalProps {
   visible: boolean;
@@ -23,25 +22,23 @@ interface GroupPermissionsModalProps {
   currentPermissions: {
     canEditInfo?: boolean;
     canPinMessages?: boolean;
-    canCreateNotes?: boolean;
-    canCreatePolls?: boolean;
     canSendMessages?: boolean;
     isMemberApprovalRequired?: boolean;
-    isHighlightAdminMessages?: boolean;
-    canNewMembersReadRecentMessages?: boolean;
   };
 }
+
+type GroupPermissionKey =
+  | 'canEditInfo'
+  | 'canPinMessages'
+  | 'canSendMessages'
+  | 'isMemberApprovalRequired';
 
 const PERMISSIONS = [
   { key: 'canEditInfo', label: 'Chỉnh sửa thông tin nhóm', description: 'Cho phép thành viên sửa tên, ảnh nhóm' },
   { key: 'canPinMessages', label: 'Ghim tin nhắn', description: 'Cho phép thành viên ghim/bỏ ghim tin nhắn' },
-  { key: 'canCreateNotes', label: 'Tạo ghi chú', description: 'Cho phép thành viên tạo ghi chú' },
-  { key: 'canCreatePolls', label: 'Tạo bình chọn', description: 'Cho phép thành viên tạo bình chọn' },
   { key: 'canSendMessages', label: 'Gửi tin nhắn', description: 'Cho phép thành viên gửi tin nhắn' },
-  { key: 'isMemberApprovalRequired', label: 'Duyệt thành viên', description: 'Admin phải duyệt khi có thành viên mới' },
-  { key: 'isHighlightAdminMessages', label: 'Làm nổi bật tin nhắn QTV', description: 'Tin nhắn của QTV được highlight' },
-  { key: 'canNewMembersReadRecentMessages', label: 'Thành viên mới xem tin cũ', description: 'Cho phép TV mới đọc tin nhắn trước đó' },
-];
+  
+] as const;
 
 export default function GroupPermissionsModal({
   visible,
@@ -49,19 +46,27 @@ export default function GroupPermissionsModal({
   conversationId,
   currentPermissions,
 }: GroupPermissionsModalProps) {
-  const { colors, isDark } = useTheme();
-  const { t } = useTranslation();
+  const { colors } = useTheme();
   const [settings, setSettings] = useState({ ...currentPermissions });
   const [saving, setSaving] = useState(false);
 
-  const toggleSetting = (key: string) => {
-    setSettings((prev) => ({ ...prev, [key]: !(prev as any)[key] }));
+  useEffect(() => {
+    setSettings({ ...currentPermissions });
+  }, [currentPermissions, visible]);
+
+  const toggleSetting = (key: GroupPermissionKey) => {
+    setSettings((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await chatService.updatePermissions(conversationId, settings);
+      await chatService.updatePermissions(conversationId, {
+        canEditInfo: settings.canEditInfo,
+        canPinMessages: settings.canPinMessages,
+        canSendMessages: settings.canSendMessages,
+        isMemberApprovalRequired: settings.isMemberApprovalRequired,
+      });
       Alert.alert('Thành công', 'Đã cập nhật quyền hạn nhóm');
       onClose();
     } catch (err: any) {
@@ -73,7 +78,7 @@ export default function GroupPermissionsModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <SafeAreaView style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
         <View style={[styles.modal, { backgroundColor: colors.card }]}>
           {/* Header */}
@@ -86,7 +91,7 @@ export default function GroupPermissionsModal({
 
           <ScrollView style={styles.body}>
             {PERMISSIONS.map((perm) => {
-              const value = (settings as any)[perm.key] ?? true;
+              const value = settings[perm.key] ?? true;
               return (
                 <TouchableOpacity
                   key={perm.key}
@@ -124,7 +129,7 @@ export default function GroupPermissionsModal({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

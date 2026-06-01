@@ -1,5 +1,5 @@
 import { useTheme } from '@/context/ThemeContext';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -14,6 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import DeadlinePicker from './DeadlinePicker';
 
 interface PollCreateModalProps {
   visible: boolean;
@@ -38,11 +40,172 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
   const [options, setOptions] = useState(['', '']);
   const [showSettings, setShowSettings] = useState(false);
   const [deadline, setDeadline] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState('');
+  const [deadlineTime, setDeadlineTime] = useState('');
+  const [deadlinePickerVisible, setDeadlinePickerVisible] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const next = new Date();
+    next.setHours(0, 0, 0, 0);
+    return next;
+  });
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [timeHour, setTimeHour] = useState('12');
+  const [timeMinute, setTimeMinute] = useState('00');
+  const [timeAmPm, setTimeAmPm] = useState<'AM' | 'PM'>('PM');
   const [isPinned, setIsPinned] = useState(false);
   const [multipleChoices, setMultipleChoices] = useState(true);
   const [allowAddOptions, setAllowAddOptions] = useState(true);
   const [hideResultsBeforeVote, setHideResultsBeforeVote] = useState(false);
   const [hideVoters, setHideVoters] = useState(false);
+
+  const formatLocalDateTime = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  };
+
+  const buildDeadlineFromState = () => {
+    const [datePart, timePart] = [deadlineDate.trim(), deadlineTime.trim()];
+    if (!datePart || !timePart) return undefined;
+
+    const dateMatch = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const timeMatch = timePart.match(/^(\d{2}):(\d{2})$/);
+    if (!dateMatch || !timeMatch) return undefined;
+
+    const [, yearStr, monthStr, dayStr] = dateMatch;
+    const [, hourStr, minuteStr] = timeMatch;
+    const year = Number.parseInt(yearStr, 10);
+    const month = Number.parseInt(monthStr, 10);
+    const day = Number.parseInt(dayStr, 10);
+    const hour = Number.parseInt(hourStr, 10);
+    const minute = Number.parseInt(minuteStr, 10);
+
+    const next = new Date(year, month - 1, day, hour, minute, 0);
+    if (Number.isNaN(next.getTime())) return undefined;
+    return formatLocalDateTime(next);
+  };
+
+  const parseDeadlineToState = (value?: string | null) => {
+    if (!value) return { date: '', time: '' };
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return { date: '', time: '' };
+    }
+    const pad = (v: number) => String(v).padStart(2, '0');
+    return {
+      date: `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
+      time: `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`,
+    };
+  };
+
+  const openDeadlineModal = () => {
+    const next = parseDeadlineToState(deadline);
+    setDeadlineDate(next.date);
+    setDeadlineTime(next.time);
+    if (next.date) {
+      const [year, month] = next.date.split('-').map((part) => Number.parseInt(part, 10));
+      const parsedMonth = new Date(year, month - 1, 1);
+      if (!Number.isNaN(parsedMonth.getTime())) setCalendarMonth(parsedMonth);
+    }
+    setDeadlinePickerVisible(true);
+  };
+
+  const getMonthLabel = (date: Date) => {
+    const months = [
+      'Tháng 1',
+      'Tháng 2',
+      'Tháng 3',
+      'Tháng 4',
+      'Tháng 5',
+      'Tháng 6',
+      'Tháng 7',
+      'Tháng 8',
+      'Tháng 9',
+      'Tháng 10',
+      'Tháng 11',
+      'Tháng 12',
+    ];
+    return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  const formatDateValue = (date: Date) => {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+
+  const formatDateLabel = (value: string) => {
+    const parsed = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return value;
+    const pad = (v: number) => String(v).padStart(2, '0');
+    return `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}/${parsed.getFullYear()}`;
+  };
+
+  const formatTime12From24 = (time24: string) => {
+    const m = time24.match(/^(\d{2}):(\d{2})$/);
+    if (!m) return time24;
+    let hh = Number.parseInt(m[1], 10);
+    const mm = m[2];
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    hh = hh % 12 === 0 ? 12 : hh % 12;
+    return `${String(hh).padStart(2, '0')}:${mm} ${ampm}`;
+  };
+
+  const formatDeadlineDisplay = (iso?: string) => {
+    if (!iso) return '';
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const pad = (v: number) => String(v).padStart(2, '0');
+    const hh24 = parsed.getHours();
+    const mm = pad(parsed.getMinutes());
+    const ampm = hh24 >= 12 ? 'PM' : 'AM';
+    let hh12 = hh24 % 12;
+    if (hh12 === 0) hh12 = 12;
+    const datePart = `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
+    return `${String(hh12).padStart(2, '0')}:${mm} ${ampm} ${formatDateLabel(datePart)}`;
+  };
+
+  const getDeadlineDisplayValue = () => {
+    if (deadlineDate && deadlineTime) return `${formatTime12From24(deadlineTime)} ${formatDateLabel(deadlineDate)}`;
+    if (deadline) return formatDeadlineDisplay(deadline) || 'Chưa đặt';
+    return 'Chưa đặt';
+  };
+
+  const getCalendarDays = (month: Date) => {
+    const start = new Date(month.getFullYear(), month.getMonth(), 1);
+    const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+    const daysInMonth = end.getDate();
+    const firstDay = (start.getDay() + 6) % 7;
+    const cells: Array<{ date?: Date; key: string; empty?: boolean }> = [];
+
+    for (let i = 0; i < firstDay; i += 1) {
+      cells.push({ key: `empty-${i}`, empty: true });
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const date = new Date(month.getFullYear(), month.getMonth(), day);
+      cells.push({ key: formatDateValue(date), date });
+    }
+
+    return cells;
+  };
+
+  const selectCalendarDate = (date: Date) => {
+    setDeadlineDate(formatDateValue(date));
+    setCalendarVisible(false);
+  };
+
+  const generateTimeOptions = () => {
+    const optionsList: { label: string; value: string }[] = [];
+    const hours = [6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22];
+    hours.forEach((hour) => {
+      [0, 30].forEach((minute) => {
+        const hh = String(hour).padStart(2, '0');
+        const mm = String(minute).padStart(2, '0');
+        optionsList.push({ label: `${hh}:${mm}`, value: `${hh}:${mm}` });
+      });
+    });
+    return optionsList;
+  };
 
   const handleAddOption = () => {
     setOptions((prev) => [...prev, '']);
@@ -81,6 +244,8 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setQuestion('');
     setOptions(['', '']);
     setDeadline('');
+    setDeadlineDate('');
+    setDeadlineTime('');
     setIsPinned(false);
     setMultipleChoices(true);
     setAllowAddOptions(true);
@@ -93,6 +258,8 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setQuestion('');
     setOptions(['', '']);
     setDeadline('');
+    setDeadlineDate('');
+    setDeadlineTime('');
     setIsPinned(false);
     setMultipleChoices(true);
     setAllowAddOptions(true);
@@ -101,6 +268,8 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
     setShowSettings(false);
   };
 
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -108,11 +277,11 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <View style={[styles.modal, { backgroundColor: colors.card }]}>
+        <SafeAreaView style={[styles.modal, { backgroundColor: colors.card, paddingBottom: Platform.OS === 'ios' ? Math.max(34, insets.bottom) : Math.max(16, insets.bottom) }]}>
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose}>
-              <Text style={[styles.cancelBtn, { color: colors.subText }]}>Huỷ</Text>
+              <Text style={[styles.cancelBtn, { color: colors.textSecondary }]}>Huỷ</Text>
             </TouchableOpacity>
             <Text style={[styles.title, { color: colors.text }]}>Tạo bình chọn</Text>
             <TouchableOpacity onPress={() => setShowSettings((s) => !s)}>
@@ -131,7 +300,7 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
                 { borderColor: colors.border, color: colors.text, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
               ]}
               placeholder="Nhập câu hỏi..."
-              placeholderTextColor={colors.subText}
+              placeholderTextColor={colors.textPlaceholder}
               value={question}
               onChangeText={setQuestion}
             />
@@ -140,14 +309,14 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
             <Text style={[styles.label, { color: colors.text, marginTop: 16 }]}>Phương án</Text>
             {options.map((opt, idx) => (
               <View key={idx} style={styles.optionRow}>
-                <Text style={[styles.optionNumber, { color: colors.subText }]}>{idx + 1}</Text>
+                <Text style={[styles.optionNumber, { color: colors.textSecondary }]}>{idx + 1}</Text>
                 <TextInput
                   style={[
                     styles.optionInput,
                     { borderColor: colors.border, color: colors.text, backgroundColor: isDark ? '#1c1c1c' : '#fff' },
                   ]}
                   placeholder={`Phương án ${idx + 1}`}
-                  placeholderTextColor={colors.subText}
+                  placeholderTextColor={colors.textPlaceholder}
                   value={opt}
                   onChangeText={(val) => handleOptionChange(idx, val)}
                 />
@@ -165,11 +334,14 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
             {/* Settings */}
             {showSettings && (
               <View style={[styles.settingsSection, { borderTopColor: colors.border }]}>
-                <SettingRow label="Ghim bình chọn" value={isPinned} onValueChange={setIsPinned} colors={colors} />
+                <DeadlineSettingRow
+                  label="Hạn chót"
+                  value={deadline ? formatDeadlineDisplay(deadline) || (deadlineDate && deadlineTime ? `${formatTime12From24(deadlineTime)} ${formatDateLabel(deadlineDate)}` : 'Chưa đặt') : 'Chưa đặt'}
+                  onPress={openDeadlineModal}
+                  colors={colors}
+                />
                 <SettingRow label="Cho phép chọn nhiều" value={multipleChoices} onValueChange={setMultipleChoices} colors={colors} />
                 <SettingRow label="Cho thêm phương án" value={allowAddOptions} onValueChange={setAllowAddOptions} colors={colors} />
-                <SettingRow label="Ẩn kết quả trước khi vote" value={hideResultsBeforeVote} onValueChange={setHideResultsBeforeVote} colors={colors} />
-                <SettingRow label="Ẩn danh người vote" value={hideVoters} onValueChange={setHideVoters} colors={colors} />
               </View>
             )}
           </ScrollView>
@@ -184,7 +356,22 @@ export default function PollCreateModal({ visible, onClose, onSubmit }: PollCrea
               <Text style={styles.submitText}>Tạo bình chọn</Text>
             </TouchableOpacity>
           </View>
-        </View>
+
+          <DeadlinePicker
+            visible={deadlinePickerVisible}
+            initial={deadline || undefined}
+            onClose={() => setDeadlinePickerVisible(false)}
+            onConfirm={(iso) => {
+              if (iso) {
+                setDeadline(iso);
+                const next = parseDeadlineToState(iso);
+                setDeadlineDate(next.date);
+                setDeadlineTime(next.time);
+              }
+              setDeadlinePickerVisible(false);
+            }}
+          />
+          </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -211,6 +398,53 @@ function SettingRow({
         thumbColor={value ? '#0068FF' : '#f4f3f4'}
       />
     </View>
+  );
+}
+
+function DeadlineSettingRow({
+  label,
+  value,
+  onPress,
+  colors,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+  colors: any;
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.deadlineRow} activeOpacity={0.8}>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
+        <Text style={[styles.deadlineValue, { color: colors.textSecondary }]} numberOfLines={1}>
+          {value || 'Chưa đặt'}
+        </Text>
+      </View>
+      <Text style={{ color: '#0068FF', fontWeight: '600' }}>Chọn</Text>
+    </TouchableOpacity>
+  );
+}
+
+function DeadlinePickerButton({
+  label,
+  value,
+  onPress,
+  colors,
+  style,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+  colors: any;
+  style?: any;
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.deadlineField, style]}>
+      <Text style={[styles.deadlineFieldLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <View style={[styles.deadlineFieldInput, { borderColor: colors.border }]}>
+        <Text style={{ color: value === 'Chọn ngày' || value === 'Chọn giờ' ? colors.textPlaceholder : colors.text }}>{value}</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -304,6 +538,12 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
   },
+  deadlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,6 +553,10 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: 14,
     flex: 1,
+  },
+  deadlineValue: {
+    fontSize: 12,
+    marginTop: 4,
   },
   footer: {
     borderTopWidth: 0.5,
@@ -329,5 +573,195 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  deadlineCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  deadlineGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  deadlineInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  deadlineInputGroup: {
+    flex: 1,
+  },
+  deadlineField: {
+    flex: 1,
+  },
+  compactDeadlineRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  compactDeadlineField: {
+    minWidth: 0,
+  },
+  deadlineFieldLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  deadlineFieldInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  deadlineTextInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  calendarCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+  },
+  timePickerCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    width: '90%',
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  timeColumn: {
+    width: '30%',
+    maxHeight: 200,
+  },
+  timeItem: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  timeItemSelected: {
+    backgroundColor: '#0068FF14',
+    borderRadius: 8,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  calendarNavBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: '#0068FF14',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  weekdayText: {
+    width: 34,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDayCell: {
+    width: '14.2857%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  todayDot: {
+    marginTop: 4,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#0068FF',
+  },
+  pickerSection: {
+    marginTop: 16,
+  },
+  pickerSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  chipRow: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  chip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+    flexWrap: 'wrap',
+  },
+  quickChip: {
+    backgroundColor: '#0068FF14',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  quickChipText: {
+    color: '#0068FF',
+    fontWeight: '700',
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  deadlinePreview: {
+    marginTop: 10,
+    fontSize: 12,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
+  },
+  modalBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
 });

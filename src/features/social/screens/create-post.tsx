@@ -1,61 +1,71 @@
-import React, { useState } from 'react';
+import api from '@/services/api';
+import { authService } from '@/services/authService';
+import { getAvatarSource } from '@/services/mediaUtils';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   FlatList,
   Image,
-  Dimensions,
   Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import api from '@/services/api';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const { width } = Dimensions.get('window');
-const COLUMN_SIZE = width / 3;
-
-const mockGalleryImages = [
-  { id: 'cam', type: 'camera' },
-  { id: '1', url: 'https://via.placeholder.com/300/2e7d32/fff?text=Le+Tong+Ket' },
-  { id: '2', url: 'https://via.placeholder.com/300/0d47a1/fff?text=FIFA+2026' },
-  { id: '3', url: 'https://via.placeholder.com/300/ff3b30/fff?text=UI+Zalo' },
-  { id: '4', url: 'https://via.placeholder.com/300/ff9500/fff?text=Code+React' },
-  { id: '5', url: 'https://via.placeholder.com/300/4cd964/fff?text=Screen' },
-];
+type UserProfile = {
+  displayName?: string;
+  full_name?: string;
+  avatar_url?: string | null;
+};
 
 export default function CreatePostScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedImages, setSelectedImages] = useState<any[]>([]);
+  const [selectedImages, setSelectedImages] = useState<Array<{ uri: string; type?: string }>>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') return;
-    const res = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'], // Sửa thành mảng chuỗi trực tiếp ở đây
-      quality: 0.8
-    });
+  useEffect(() => {
+    let active = true;
 
-    if (!res.canceled && res.assets && res.assets.length > 0) {
-      setSelectedImages(prev => [...prev, { uri: res.assets[0].uri }]);
-    }
+    const loadProfile = async () => {
+      try {
+        const data = await authService.getProfile();
+        if (active) {
+          setProfile(data ?? null);
+        }
+      } catch (error) {
+        console.warn('Load profile error', error);
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const isVideoAsset = (uri: string, type?: string) => {
+    const ext = uri.split('.').pop()?.toLowerCase();
+    return type === 'video' || ext === 'mp4' || ext === 'mov' || ext === 'm4v';
   };
 
   const pickFromLibrary = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], // Sửa thành mảng chuỗi trực tiếp ở đây
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsMultipleSelection: true,
-      quality: 0.8
+      quality: 0.8,
     });
 
     if (!res.canceled && res.assets && res.assets.length > 0) {
@@ -63,11 +73,31 @@ export default function CreatePostScreen() {
         ...prev,
         ...res.assets
           .filter((asset) => !!asset.uri)
-          .map((asset) => ({ uri: asset.uri })),
+          .map((asset) => ({ uri: asset.uri, type: asset.type })),
       ]);
     }
   };
+const takePhoto = async () => {
+  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  if (status !== 'granted') {
+    alert('Cần cấp quyền truy cập camera để chụp ảnh!');
+    return;
+  }
+  
+  const res = await ImagePicker.launchCameraAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.All,
+    quality: 0.8,
+  });
 
+  if (!res.canceled && res.assets && res.assets.length > 0) {
+    setSelectedImages(prev => [
+      ...prev,
+      ...res.assets
+        .filter((asset) => !!asset.uri)
+        .map((asset) => ({ uri: asset.uri, type: asset.type })),
+    ]);
+  }
+};
   const submit = async () => {
     if (!content.trim()) return;
     setLoading(true);
@@ -78,13 +108,16 @@ export default function CreatePostScreen() {
         let appendedCount = 0;
         selectedImages.forEach((it, idx) => {
           const uri = it.uri;
+          const mediaType = isVideoAsset(uri, it.type) ? 'video' : 'image';
 
           // Lớp bảo vệ: Bỏ qua nếu cấu trúc uri trống
           if (!uri) return;
 
           const filename = uri.split('/').pop() || `photo_${idx}.jpg`;
           const fileType = (filename.match(/\.(\w+)$/)?.[1] || 'jpg').toLowerCase();
-          const mime = fileType === 'png' ? 'image/png' : 'image/jpeg';
+          const mime = mediaType === 'video'
+            ? (fileType === 'mov' ? 'video/quicktime' : 'video/mp4')
+            : (fileType === 'png' ? 'image/png' : 'image/jpeg');
 
           uploadForm.append('files', {
             uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
@@ -116,54 +149,92 @@ export default function CreatePostScreen() {
     }
   };
 
-  const renderGalleryItem = ({ item }: { item: any }) => {
-    if (item.type === 'camera') {
-      return (
-        <TouchableOpacity style={styles.cameraItem} onPress={takePhoto}>
-          <Ionicons name="camera-outline" size={32} color="#727272" />
-          <Text style={styles.cameraText}>Chụp ảnh</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    const isSelected = selectedImages.some(s => s.uri === item.url);
-    return (
-      <TouchableOpacity
-        style={styles.galleryItem}
-        onPress={() => {
-          if (isSelected) setSelectedImages(prev => prev.filter(p => p.uri !== item.url));
-          else setSelectedImages(prev => [...prev, { uri: item.url }]);
-        }}
-      >
-        <Image source={{ uri: item.url }} style={styles.galleryImage} />
-        <View style={[styles.selectCircle, isSelected && { backgroundColor: '#0082f6' }]} />
-      </TouchableOpacity>
-    );
-  };
+  const renderGalleryItem = ({ item }: { item: any }) => null;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#111" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.privacyDropdown}>
-          <Ionicons name="people" size={18} color="#4f4f4f" />
-          <View style={styles.privacyTextContainer}>
-            <View style={styles.privacyRow}>
-              <Text style={styles.privacyTitle}>Bạn bè Zalo</Text>
-              <Ionicons name="caret-down" size={12} color="#4f4f4f" style={{ marginLeft: 4 }} />
-            </View>
-            <Text style={styles.privacySubtitle}>Trừ bạn bè đã bị chặn xem</Text>
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.aaBadge}>
-            <Text style={styles.aaText}>Aa</Text>
-            <Ionicons name="megaphone" size={14} color="#fff" style={styles.iconInBadge} />
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: Math.max(0, insets.top * 0.25) }]}>
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => router.back()}>
+            <Ionicons name="close" size={30}  />
           </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>Bài viết mới</Text>
+
+  
+        </View>
+
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 128 + insets.bottom }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.authorRow}>
+            <Image source={getAvatarSource(profile?.avatar_url)} style={styles.avatar} />
+            <Text style={styles.authorName} numberOfLines={1}>
+              {profile?.displayName || profile?.full_name || 'Bạn'}
+            </Text>
+          </View>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Bạn đang nghĩ gì?"
+            multiline
+            value={content}
+            placeholderTextColor="rgba(0, 0, 0, 0.45)"
+            onChangeText={setContent}
+          />
+
+          {selectedImages.length > 0 ? (
+            <FlatList
+              data={selectedImages}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(_, index) => index.toString()}
+              contentContainerStyle={styles.selectedList}
+              renderItem={({ item, index }) => (
+                <View style={styles.selectedImageContainer}>
+                  {isVideoAsset(item.uri, item.type) ? (
+                    <View style={[styles.selectedPreviewImage, styles.videoPreviewBox]}>
+                      <Ionicons name="videocam" size={22} />
+                      <Text style={styles.videoPreviewText}>Video</Text>
+                    </View>
+                  ) : (
+                    <Image source={{ uri: item.uri }} style={styles.selectedPreviewImage} />
+                  )}
+
+                  {isVideoAsset(item.uri, item.type) ? (
+                    <View style={styles.videoBadge}>
+                      <Ionicons name="play" size={12} />
+                      <Text style={styles.videoBadgeText}>Video</Text>
+                    </View>
+                  ) : null}
+
+                  <TouchableOpacity
+                    onPress={() => setSelectedImages((prev) => prev.filter((_, i) => i !== index))}
+                    style={styles.removeImageBadge}
+                  >
+                    <Ionicons name="close-circle" size={18} color="rgba(255, 0, 0, 1)" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+          ) : null}
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>
+          <View style={styles.actionButtonsGroup}>
+            <TouchableOpacity style={styles.libraryButton} onPress={takePhoto}>
+              <Ionicons name="camera-outline" size={20} color="#000000" />
+              
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.libraryButton} onPress={pickFromLibrary}>
+            <Ionicons name="image-outline" size={20} />
+          </TouchableOpacity>
+          </View>
+          
+
 
           <TouchableOpacity
             onPress={submit}
@@ -174,203 +245,152 @@ export default function CreatePostScreen() {
           </TouchableOpacity>
         </View>
       </View>
-
-      <FlatList
-        data={mockGalleryImages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderGalleryItem}
-        numColumns={3}
-        contentContainerStyle={{ paddingBottom: insets.bottom }}
-        ListHeaderComponent={
-          <View style={styles.mainContent}>
-            <TextInput
-              style={styles.input}
-              placeholder="Bạn đang nghĩ gì?"
-              placeholderTextColor="#a1a1a1"
-              multiline
-              value={content}
-              onChangeText={setContent}
-            />
-
-            {/* PHẦN HIỂN THỊ DANH SÁCH HÌNH ẢNH THỰC TẾ ĐÃ CHỌN ĐỂ ĐĂNG BÀI */}
-            {selectedImages.length > 0 && (
-              <FlatList
-                data={selectedImages}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={(item, index) => index.toString()}
-                contentContainerStyle={{ paddingBottom: 12 }}
-                renderItem={({ item, index }) => (
-                  <View style={styles.selectedImageContainer}>
-                    <Image source={{ uri: item.uri }} style={styles.selectedPreviewImage} />
-                    <TouchableOpacity
-                      onPress={() => setSelectedImages(prev => prev.filter((_, i) => i !== index))}
-                      style={styles.removeImageBadge}
-                    >
-                      <Ionicons name="close-circle" size={18} color="rgba(0,0,0,0.7)" />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              />
-            )}
-
-            <View style={styles.colorTextRow}>
-              <TouchableOpacity style={styles.circleColorButton}>
-                <Text style={styles.circleColorText}>Aa</Text>
-              </TouchableOpacity>
-
-              <View style={styles.pickButtonsRow}>
-                <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary}>
-                  <Ionicons name="image" size={20} color="#0082f6" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.pickBtn} onPress={takePhoto}>
-                  <Ionicons name="camera" size={20} color="#4caf50" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.tagsRow}>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="musical-notes-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Nhạc</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="images-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Album</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tagItem}>
-                <Ionicons name="pricetag-outline" size={16} color="#111" />
-                <Text style={styles.tagText}>Với bạn bè</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.toolbarRow}>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="happy-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.toolIcon, styles.toolActive]}>
-                <Ionicons name="image" size={24} color="#0082f6" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="play-circle-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="link-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.toolIcon}>
-                <Ionicons name="location-outline" size={24} color="#757575" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        }
-      />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    height: 56,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)', // Đổi viền ngăn cách sang màu đen trong suốt
   },
-  backButton: { padding: 4 },
-  privacyDropdown: { flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 16 },
-  privacyTextContainer: { marginLeft: 8 },
-  privacyRow: { flexDirection: 'row', alignItems: 'center' },
-  privacyTitle: { fontWeight: '600', fontSize: 15, color: '#111' },
-  privacySubtitle: { fontSize: 11, color: '#888', marginTop: 1 },
-  headerActions: { flexDirection: 'row', alignItems: 'center' },
-  aaBadge: {
-    flexDirection: 'row',
-    backgroundColor: '#0082f6',
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  headerIconButton: {
+    width: 42,
+    height: 42,
     alignItems: 'center',
-    marginRight: 12,
-  },
-  aaText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-  iconInBadge: { marginLeft: 4 },
-  postBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
-  postBtnActive: { backgroundColor: '#0082f6' },
-  postBtnDisabled: { backgroundColor: '#e0e0e0' },
-  postBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  mainContent: { paddingHorizontal: 16, paddingTop: 16 },
-  input: { minHeight: 120, fontSize: 18, color: '#111', textAlignVertical: 'top' },
-
-  // Các style mới phục vụ danh sách ảnh được chọn preview
-  selectedImageContainer: { marginRight: 10, position: 'relative', marginTop: 4 },
-  selectedPreviewImage: { width: 72, height: 72, borderRadius: 8, borderWidth: 0.5, borderColor: '#e0e0e0' },
-  removeImageBadge: { position: 'absolute', top: -6, right: -6, backgroundColor: '#fff', borderRadius: 9 },
-
-  colorTextRow: { marginVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  circleColorButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f9f9f9',
   },
-  circleColorText: { fontSize: 12, fontWeight: 'bold', color: '#555' },
-  pickButtonsRow: { flexDirection: 'row' },
-  pickBtn: { marginLeft: 12, backgroundColor: '#f2f2f2', padding: 8, borderRadius: 8 },
-  tagsRow: { flexDirection: 'row', marginBottom: 16 },
-  tagItem: {
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 19,
+    fontWeight: '800',
+    marginHorizontal: 8,
+  },
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: 20,
+  },
+  authorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    backgroundColor: '#fcfcfc',
+    marginBottom: 22,
   },
-  tagText: { marginLeft: 6, fontSize: 13, color: '#333', fontWeight: '500' },
-  toolbarRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 0.5,
-    borderTopColor: '#e0e0e0',
-    paddingVertical: 12,
-    marginBottom: 4,
+  avatar: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#E5E5EA', // Đổi nền xám sáng (khi chưa load được ảnh)
+    marginRight: 14,
   },
-  toolIcon: { padding: 4 },
-  toolActive: { borderBottomWidth: 2, borderBottomColor: '#0082f6' },
-  cameraItem: {
-    width: COLUMN_SIZE - 2,
-    height: COLUMN_SIZE - 2,
-    backgroundColor: '#f7f7f7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 1,
+  authorName: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '800',
   },
-  cameraText: { fontSize: 12, color: '#727272', marginTop: 4 },
-  galleryItem: {
-    width: COLUMN_SIZE - 2,
-    height: COLUMN_SIZE - 2,
-    margin: 1,
+  input: {
+    minHeight: 240,
+    fontSize: 18,
+    lineHeight: 30,
+    textAlignVertical: 'top',
+    paddingVertical: 0,
+  },
+  selectedList: {
+    paddingTop: 18,
+    paddingBottom: 6,
+  },
+  selectedImageContainer: {
+    marginRight: 10,
     position: 'relative',
   },
-  galleryImage: { width: '100%', height: '100%' },
-  selectCircle: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    backgroundColor: 'rgba(0,0,0,0.1)',
+  selectedPreviewImage: {
+    width: 84,
+    height: 84,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
+  videoPreviewBox: {
+    backgroundColor: '#F2F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoPreviewText: { color: '#fff', fontSize: 10, marginTop: 2, fontWeight: '600' },
+  videoBadge: {
+    position: 'absolute',
+    left: 6,
+    bottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  videoBadgeText: { color: '#fff', fontSize: 10, marginLeft: 3, fontWeight: '600' },
+  removeImageBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.1)', // Đổi viền ngăn cách sang đen nhạt
+    backgroundColor: '#FFFFFF',
+  },
+  libraryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#F2F2F7',
+  },
+  actionButtonsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 14,
+  },
+  actionButtonText: {
+    color: '#000000',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  libraryButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  postBtn: {
+    minWidth: 112,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  postBtnActive: { backgroundColor: '#3E6DF7' },
+  postBtnDisabled: { backgroundColor: '#D1D1D6' },
+  postBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });

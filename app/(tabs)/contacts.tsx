@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { COLORS } from '@/constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { friendService } from '@/services/friendService';
 import { getAvatarSource } from '@/services/mediaUtils';
 import GroupTab from '@/components/GroupTab';
@@ -79,9 +79,11 @@ export default function ContactsScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchContactsData();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchContactsData();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

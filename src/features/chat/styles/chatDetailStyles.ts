@@ -42,7 +42,9 @@ export const chatDetailStyles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 36,
+    height: 48,
+    alignItems:'center',
+    justifyContent: 'center',
     color: '#FFF',
     fontSize: 16,
     paddingHorizontal: 0,
@@ -256,6 +258,7 @@ export const chatDetailStyles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     alignItems: 'flex-start',
+    paddingTop: 3,
   },
   groupSenderName: {
     fontSize: 12,
@@ -268,7 +271,7 @@ export const chatDetailStyles = StyleSheet.create({
     width: 40,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: 1,
+    paddingTop: 4,
   },
   peerAvatar: {
     width: 40,
@@ -291,6 +294,7 @@ export const chatDetailStyles = StyleSheet.create({
   },
   bubbleWrapper: {
     position: 'relative' as const,
+    paddingTop: 1,
     paddingBottom: 4,
   },
   userBubble: {

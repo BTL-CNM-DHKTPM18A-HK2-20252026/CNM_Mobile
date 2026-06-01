@@ -1,33 +1,31 @@
-import { COLORS } from '@/constants/theme';
 import { useTheme } from '@/context/ThemeContext';
 import { chatService } from '@/services/chatService';
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   Alert,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 
 interface PollCardProps {
   poll: any;
   currentUserId?: string;
   conversationId: string;
+  messageId?: string;
   onClose?: () => void;
+  readOnly?: boolean;
 }
 
-export default function PollCard({ poll, currentUserId, conversationId, onClose }: PollCardProps) {
+import { useRouter } from 'expo-router';
+
+export default function PollCard({ poll, currentUserId, conversationId, messageId, onClose, readOnly }: PollCardProps) {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const router = useRouter();
 
   if (!poll) return null;
 
@@ -41,24 +39,7 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
   const hasVoted = uniqueVoters.has(currentUserId || '');
   const showResults = !poll.hideResultsBeforeVote || hasVoted;
 
-  // Largest remainder method for % calculation
-  const rawPercents = (poll.options || []).map((opt: any) => {
-    const votes = opt.voterIds?.length || 0;
-    return totalVotesCast > 0 ? (votes / totalVotesCast) * 100 : 0;
-  });
-  const floored = rawPercents.map((p: number) => Math.floor(p));
-  const remainder = Math.min(
-    100 - floored.reduce((a: number, b: number) => a + b, 0),
-    poll.options?.length || 0
-  );
-  const remainders = rawPercents.map((p: number, i: number) => ({
-    idx: i,
-    frac: p - floored[i],
-  }));
-  remainders.sort((a: any, b: any) => b.frac - a.frac);
-  for (let r = 0; r < remainder && r < remainders.length; r++) {
-    if (remainders[r]) floored[remainders[r].idx]++;
-  }
+  // Percent calculation will use unique voter count (same as details screen)
 
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(() => {
     return poll.options
@@ -97,34 +78,69 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
     }
   };
 
+  // Show only top 3 options in the preview: by percent desc, tie-breaker by original order
+  const displayOptions = useMemo(() => {
+    const opts = Array.isArray(poll.options) ? poll.options : [];
+    if (opts.length <= 3) return opts;
+
+    // If results are hidden, just show the first 3 options in original order
+    if (!showResults) return opts.slice(0, 3);
+
+    const withMeta = opts.map((o: any, i: number) => {
+      const optVotes = o.voterIds?.length || 0;
+      const percent = totalUniqueVoters > 0 ? Math.round((optVotes / totalUniqueVoters) * 100) : 0;
+      return { opt: o, idx: i, percent, votes: optVotes } as { opt: any; idx: number; percent: number; votes: number };
+    }) as { opt: any; idx: number; percent: number; votes: number }[];
+
+    withMeta.sort((a: { opt: any; idx: number; percent: number; votes: number }, b: { opt: any; idx: number; percent: number; votes: number }) => {
+      if (b.percent !== a.percent) return b.percent - a.percent; // higher percent first
+      return a.idx - b.idx; // tie-break by original index (ascending)
+    });
+
+    return withMeta.slice(0, 3).map((m: { opt: any; idx: number; percent: number; votes: number }) => m.opt);
+  }, [poll.options, showResults, totalUniqueVoters]);
+
   return (
     <View style={[styles.container, { borderColor: colors.border, backgroundColor: colors.card }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: '#0068FF' }]}>
         <Text style={styles.headerIcon}>📊</Text>
         <View style={styles.headerText}>
-          <Text style={styles.headerLabel}>BÌNH CHỌN NHÓM</Text>
+          <Text style={styles.headerLabel}>CUỘC BÌNH CHỌN</Text>
           <Text style={styles.headerQuestion} numberOfLines={2}>{poll.question}</Text>
         </View>
       </View>
 
       {/* Settings bar */}
       <View style={[styles.settingsBar, { backgroundColor: isDark ? '#1c1c1c' : '#f5f5f5' }]}>
-        <Text style={[styles.settingsText, { color: colors.subText }]}>
+        <Text style={[styles.settingsText, { color: colors.textSecondary }]}> 
           {poll.multipleChoices ? 'Chọn nhiều phương án' : 'Chọn một phương án'}
         </Text>
-        {poll.hideVoters && (
-          <Text style={[styles.badge, { backgroundColor: isDark ? '#333' : '#e0e0e0', color: colors.subText }]}>
-            Ẩn danh
-          </Text>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {poll.hideVoters && (
+            <Text style={[styles.badge, { backgroundColor: isDark ? '#333' : '#e0e0e0', color: colors.textSecondary }]}>Ẩn danh</Text>
+          )}
+          <TouchableOpacity onPress={() => {
+            if (!messageId) return;
+            router.push({
+              pathname: '/poll-details',
+              params: {
+                messageId: String(messageId),
+                conversationId: String(conversationId),
+                poll: JSON.stringify(poll),
+              },
+            });
+          }}>
+            <Text style={{ color: '#0B74FF', fontWeight: '700' }}>{(poll && poll.options) ? (new Set((poll.options || []).flatMap((o: any) => o.voterIds || [])).size) : 0} người bình chọn</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Options */}
       <View style={styles.optionsContainer}>
-        {(poll.options || []).map((opt: any, idx: number) => {
+        {(displayOptions || []).map((opt: any, idx: number) => {
           const optVotes = opt.voterIds?.length || 0;
-          const percent = showResults ? (totalVotesCast > 0 ? floored[idx] : 0) : 0;
+          const percent = showResults ? (totalUniqueVoters > 0 ? Math.round((optVotes / totalUniqueVoters) * 100) : 0) : 0;
           const isSelected = selectedOptionIds.includes(opt.optionId);
 
           return (
@@ -132,14 +148,11 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
               key={opt.optionId}
               style={[
                 styles.optionRow,
-                {
-                  borderColor: isSelected ? '#0068FF' : colors.border,
-                  backgroundColor: isSelected ? (isDark ? '#1a2744' : '#f0f6ff') : colors.card,
-                },
+                { borderColor: colors.border, backgroundColor: colors.card },
               ]}
-              onPress={() => handleOptionClick(opt.optionId)}
-              disabled={isSubmitting}
-              activeOpacity={0.7}
+              onPress={readOnly ? undefined : () => handleOptionClick(opt.optionId)}
+              disabled={isSubmitting || Boolean(readOnly)}
+              activeOpacity={readOnly ? 1 : 0.7}
             >
               {/* Progress bar background */}
               {showResults && (
@@ -154,34 +167,8 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
                 />
               )}
 
-              {/* Checkbox / Radio */}
+              {/* Option content (checkbox removed for preview) */}
               <View style={styles.optionContent}>
-                <View style={styles.checkboxWrap}>
-                  {poll.multipleChoices ? (
-                    <View
-                      style={[
-                        styles.checkbox,
-                        {
-                          borderColor: isSelected ? '#0068FF' : colors.border,
-                          backgroundColor: isSelected ? '#0068FF' : 'transparent',
-                        },
-                      ]}
-                    >
-                      {isSelected && <Text style={styles.checkIcon}>✓</Text>}
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.radio,
-                        {
-                          borderColor: isSelected ? '#0068FF' : colors.border,
-                        },
-                      ]}
-                    >
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
-                  )}
-                </View>
                 <Text
                   style={[styles.optionText, { color: colors.text }]}
                   numberOfLines={3}
@@ -189,14 +176,6 @@ export default function PollCard({ poll, currentUserId, conversationId, onClose 
                   {opt.content}
                 </Text>
 
-                {/* Voter avatars inline */}
-                {showResults && !poll.hideVoters && opt.voterIds?.length > 0 && (
-                  <View style={styles.voterInline}>
-                    <Text style={{ fontSize: 11, color: colors.subText }}>
-                      {opt.voterIds.length} phiếu
-                    </Text>
-                  </View>
-                )}
               </View>
 
               {/* Percent */}
@@ -292,39 +271,7 @@ const styles = StyleSheet.create({
     gap: 8,
     zIndex: 1,
   },
-  checkboxWrap: {
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkIcon: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#0068FF',
-  },
+  /* checkbox removed for preview-only PollCard */
   optionText: {
     fontSize: 13,
     fontWeight: '500',

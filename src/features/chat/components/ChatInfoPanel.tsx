@@ -33,13 +33,18 @@ import { SCREEN_WIDTH } from '@chat/constants/chatConstants';
 import { chatFileService } from '@chat/services/chatFileService';
 import { chatService } from '@chat/services/chatService';
 import type { Message, PinnedMessageItem } from '@chat/types/chatTypes';
-import {
-  getDisplayFileNameFromValue,
-  getMessageMillis,
-  isLikelyUrl
-} from '@chat/utils/chatHelpers';
+import { getMessageMillis } from '@chat/utils/chatHelpers';
 import { chatDetailStyles as styles } from '@features/chat/styles/chatDetailStyles';
 import { friendService } from '@friends/services/friendService';
+import {
+  getPinnedMessagePreviewText,
+  getPinnedMessageThumbnailUrl,
+} from '../../../../components/chat/pinnedMessageDisplay';
+import {
+  checkAddMembersPermission,
+  checkEditGroupInfoPermission,
+  type MemberRole,
+} from '../../../../utils/permissionHelper';
 
 interface ChatInfoPanelProps {
   visible: boolean;
@@ -101,9 +106,11 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   const [infoUpdatingGroupAvatar, setInfoUpdatingGroupAvatar] = useState(false);
   const [infoPermissionsVisible, setInfoPermissionsVisible] = useState(false);
   const [currentPermissions, setCurrentPermissions] = useState<any>({});
+  const [infoCurrentUserRole, setInfoCurrentUserRole] = useState<MemberRole | null>(null);
 
   const infoVideoThumbGeneratingRef = useRef<Set<string>>(new Set());
   const infoMediaGalleryRef = useRef<FlatList>(null);
+  const infoSkipPermissionsFetchRef = useRef(false);
 
   const fetchPinnedMessages = useCallback(async () => {
     if (!props.conversationId) {
@@ -132,9 +139,39 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   const fetchInfoMembers = useCallback(async () => {
     if (!props.conversationId || !props.isGroupConversation) return;
     try {
-      setInfoMembers(await fetchConversationMembers(props.conversationId));
+      const members = await fetchConversationMembers(props.conversationId);
+      setInfoMembers(members);
+      // Get current user's role
+      const currentMember = members.find((m: any) => m.userId === props.currentUserId);
+      setInfoCurrentUserRole(currentMember?.role || 'MEMBER');
     } catch {
       setInfoMembers([]);
+      setInfoCurrentUserRole(null);
+    }
+  }, [props.conversationId, props.isGroupConversation, props.currentUserId]);
+
+  const fetchInfoPermissions = useCallback(async () => {
+    if (!props.conversationId || !props.isGroupConversation) return;
+    if (infoSkipPermissionsFetchRef.current) {
+      setCurrentPermissions(null);
+      return;
+    }
+    try {
+      const response = await chatService.getPermissions(props.conversationId);
+      const permsData = response?.data || response;
+      setCurrentPermissions({
+        canEditInfo: permsData?.canEditInfo,
+        canPinMessages: permsData?.canPinMessages,
+        canSendMessages: permsData?.canSendMessages,
+        isMemberApprovalRequired: permsData?.isMemberApprovalRequired,
+      });
+    } catch (err: any) {
+      const status = Number(err?.response?.status ?? 0);
+      if (status === 404 || status === 405 || status >= 500) {
+        infoSkipPermissionsFetchRef.current = true;
+        console.warn('Permissions endpoint unavailable in ChatInfoPanel, using role-only checks');
+      }
+      setCurrentPermissions(null);
     }
   }, [props.conversationId, props.isGroupConversation]);
 
@@ -207,36 +244,15 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   }, [props.isCloudConversation]);
 
   const getPinnedPreviewText = useCallback((item: PinnedMessageItem) => {
-    const pinnedType = (item.messageType || '').toUpperCase();
-    if (pinnedType === 'IMAGE') return '[Hình ảnh]';
-    if (pinnedType === 'IMAGE_GROUP') {
-      const imageCount = item.attachments?.length ?? 0;
-      return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
+    const text = getPinnedMessagePreviewText(item);
+    if (text === '[Tin nhắn]') {
+      return t('chat.empty_message', 'Tin nhắn trống');
     }
-    if (pinnedType === 'VIDEO') return '[Video]';
-    if (pinnedType === 'VOICE') return '[Tin nhắn thoại]';
-    if (pinnedType === 'FILE' || pinnedType === 'MEDIA') {
-      const fileName = item.fileName || getDisplayFileNameFromValue(item.contentUrl || item.content);
-      return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
-    }
-    const text = (item.content || '').trim();
-    if (!text) return t('chat.empty_message', 'Tin nhắn trống');
-    if (isLikelyUrl(text)) return '[Nội dung media]';
     return text;
   }, [t]);
 
   const getPinnedPreviewThumb = useCallback((item: PinnedMessageItem) => {
-    const pinnedType = (item.messageType || '').toUpperCase();
-    if (pinnedType === 'IMAGE') {
-      const candidate = String(item.contentUrl || item.content || '').trim();
-      return isLikelyUrl(candidate) ? candidate : '';
-    }
-    if (pinnedType === 'IMAGE_GROUP') {
-      const firstAttachment = item.attachments?.[0]?.url;
-      const candidate = String(firstAttachment || item.contentUrl || item.content || '').trim();
-      return isLikelyUrl(candidate) ? candidate : '';
-    }
-    return '';
+    return getPinnedMessageThumbnailUrl(item);
   }, []);
 
   const handleUnpinFromPinnedList = useCallback(async (messageId: string) => {
@@ -332,8 +348,8 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
 
   useEffect(() => {
     if (!props.visible) return;
-    void Promise.all([fetchInfoMembers(), fetchInfoMedia(), fetchInfoStorageStats(), fetchPinnedMessages()]);
-  }, [props.visible, fetchInfoMembers, fetchInfoMedia, fetchInfoStorageStats, fetchPinnedMessages]);
+    void Promise.all([fetchInfoMembers(), fetchInfoPermissions(), fetchInfoMedia(), fetchInfoStorageStats(), fetchPinnedMessages()]);
+  }, [props.visible, fetchInfoMembers, fetchInfoPermissions, fetchInfoMedia, fetchInfoStorageStats, fetchPinnedMessages]);
 
   const infoMediaBrowserItems = useMemo(() => infoMediaItems.filter((item: any) => {
     const mediaType = getInfoMediaType(item);
@@ -352,10 +368,10 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
     setTimeout(() => { void props.onJumpToPinnedMessage(targetMessageId); }, 180);
   }, [closeInfoMediaGallery, infoMediaGalleryIndex, infoMediaItems, props]);
 
-  const infoCurrentUserRole = infoMembers.find((m: any) => m.userId === props.currentUserId)?.role;
   const infoIsAdmin = infoCurrentUserRole === 'ADMIN';
   const infoIsDeputy = infoCurrentUserRole === 'DEPUTY';
   const infoCanAddMembers = infoIsAdmin || infoIsDeputy;
+  const infoCanEditGroupInfo = checkEditGroupInfoPermission('GROUP', infoCurrentUserRole, currentPermissions).allowed;
   const infoMemberCount = infoMembers.length;
   const infoRemainingMemberSlots = getRemainingGroupMemberSlots(infoMemberCount);
   const infoGroupIsFull = isGroupAtCapacity(infoMemberCount);
@@ -367,6 +383,14 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
 
   const handleInfoUpdateGroupAvatar = useCallback(async (avatarUri: string) => {
     if (!props.conversationId || !props.isGroupConversation || infoUpdatingGroupAvatar) return;
+    
+    // ========== CHECK EDIT GROUP INFO PERMISSION ==========
+    const permCheck = checkEditGroupInfoPermission('GROUP', infoCurrentUserRole, currentPermissions);
+    if (!permCheck.allowed) {
+      Alert.alert('Không thể cập nhật ảnh đại diện', permCheck.reason || 'Bạn không có quyền chỉnh sửa thông tin nhóm');
+      return;
+    }
+    
     setInfoUpdatingGroupAvatar(true);
     try {
       let finalAvatarUrl = avatarUri.trim();
@@ -388,7 +412,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
       if (status === 403) Alert.alert('Không có quyền', 'Bạn chưa có quyền đổi ảnh đại diện nhóm');
       else Alert.alert('Lỗi', err?.message || 'Không thể cập nhật ảnh đại diện nhóm');
     } finally { setInfoUpdatingGroupAvatar(false); }
-  }, [props.conversationId, props.isGroupConversation, infoUpdatingGroupAvatar, props]);
+  }, [props.conversationId, props.isGroupConversation, infoUpdatingGroupAvatar, props, infoCurrentUserRole, currentPermissions]);
 
   const handlePickInfoGroupAvatar = useCallback(async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -414,6 +438,14 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
 
   const handleInfoUpdateGroupName = useCallback(async () => {
     if (!props.conversationId || !props.isGroupConversation || infoUpdatingGroupName) return;
+    
+    // ========== CHECK EDIT GROUP INFO PERMISSION ==========
+    const permCheck = checkEditGroupInfoPermission('GROUP', infoCurrentUserRole, currentPermissions);
+    if (!permCheck.allowed) {
+      Alert.alert('Không thể cập nhật', permCheck.reason || 'Bạn không có quyền chỉnh sửa thông tin nhóm');
+      return;
+    }
+    
     const trimmedName = infoEditNameValue.trim();
     if (!trimmedName) { Alert.alert('Thiếu thông tin', 'Vui lòng nhập tên nhóm'); return; }
     setInfoUpdatingGroupName(true);
@@ -429,7 +461,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
       if (status === 403) Alert.alert('Không có quyền', 'Bạn chưa có quyền đổi tên nhóm');
       else Alert.alert('Lỗi', err?.message || 'Không thể cập nhật tên nhóm');
     } finally { setInfoUpdatingGroupName(false); }
-  }, [props.conversationId, props.isGroupConversation, infoEditNameValue, infoUpdatingGroupName, props]);
+  }, [props.conversationId, props.isGroupConversation, infoUpdatingGroupName, infoEditNameValue, infoCurrentUserRole, currentPermissions, props]);
 
   const getFriendId = useCallback((friend: any) => String(friend?.user_id ?? friend?.userId ?? friend?.id ?? '').trim(), []);
   const getFriendDisplayName = useCallback((friend: any) => String(friend?.display_name ?? friend?.displayName ?? friend?.full_name ?? friend?.name ?? 'Unknown'), []);
@@ -474,6 +506,14 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
   const handleInfoAddMembers = useCallback(async () => {
     const validMemberIds = Array.from(new Set(infoSelectedMembers.map((id) => String(id).trim()).filter(Boolean)));
     if (validMemberIds.length === 0 || infoAddingMembers || !props.conversationId) return;
+    
+    // ========== CHECK ADD MEMBERS PERMISSION ==========
+    const permCheck = checkAddMembersPermission('GROUP', infoCurrentUserRole, currentPermissions);
+    if (!permCheck.allowed) {
+      Alert.alert('Không thể thêm thành viên', permCheck.reason || 'Bạn không có quyền thêm thành viên vào nhóm');
+      return;
+    }
+    
     if (validMemberIds.length > infoRemainingMemberSlots) { Alert.alert('Giới hạn nhóm', `Nhóm chỉ còn chỗ cho ${infoRemainingMemberSlots} thành viên.`); return; }
     setInfoAddingMembers(true);
     try {
@@ -484,7 +524,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
       const backendMessage = err?.response?.data?.message || err?.response?.data?.error || err?.response?.data?.data?.message || err?.message;
       Alert.alert('Lỗi', backendMessage || 'Không thể thêm thành viên');
     } finally { setInfoAddingMembers(false); }
-  }, [props.conversationId, fetchInfoMembers, handleCloseInfoAddMemberModal, infoAddingMembers, infoRemainingMemberSlots, infoSelectedMembers]);
+  }, [props.conversationId, fetchInfoMembers, handleCloseInfoAddMemberModal, infoAddingMembers, infoRemainingMemberSlots, infoSelectedMembers, infoCurrentUserRole, currentPermissions]);
 
   const handleInfoRemoveMember = useCallback((memberId: string, memberName: string) => {
     Alert.alert('Xóa thành viên', `Bạn có chắc muốn xóa ${memberName} khỏi nhóm?`, [
@@ -614,7 +654,7 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
             </View>
             <View style={styles.infoPanelNameRow}>
               <Text style={[styles.infoPanelName, { color: colors.text }]} numberOfLines={2}>{props.conversationDisplayName}</Text>
-              {props.isGroupConversation && (
+              {props.isGroupConversation && infoCanEditGroupInfo && (
                 <TouchableOpacity style={styles.infoPanelNameEditBtn} onPress={handleOpenInfoEditNameModal}>
                   <Ionicons name="pencil" size={16} color={colors.text} />
                 </TouchableOpacity>
@@ -637,24 +677,28 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
                   </View>
                   <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Thêm {'\n'}thành viên</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.infoPanelQuickAction} onPress={handleSelectInfoGroupAvatarSource}>
-                  <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="camera" size={22} color={colors.text} />
-                  </View>
-                  <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Đổi ảnh {'\n'}đại diện</Text>
-                </TouchableOpacity>
+                {infoCanEditGroupInfo && (
+                  <TouchableOpacity style={styles.infoPanelQuickAction} onPress={handleSelectInfoGroupAvatarSource}>
+                    <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Ionicons name="camera" size={22} color={colors.text} />
+                    </View>
+                    <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Đổi ảnh {'\n'}đại diện</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.infoPanelQuickAction} onPress={() => Alert.alert('Tắt thông báo', 'Chức năng đang phát triển')}>
                   <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     <Ionicons name="notifications-off-outline" size={22} color={colors.text} />
                   </View>
                   <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Tắt {'\n'}thông báo</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.infoPanelQuickAction} onPress={() => setInfoPermissionsVisible(true)}>
-                  <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="settings-outline" size={22} color={colors.text} />
-                  </View>
-                  <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Phân {'\n'}quyền</Text>
-                </TouchableOpacity>
+                {(infoIsAdmin || infoIsDeputy) && (
+                  <TouchableOpacity style={styles.infoPanelQuickAction} onPress={() => setInfoPermissionsVisible(true)}>
+                    <View style={[styles.infoPanelQuickActionIcon, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Ionicons name="settings-outline" size={22} color={colors.text} />
+                    </View>
+                    <Text style={[styles.infoPanelQuickActionLabel, { color: colors.text }]}>Phân {'\n'}quyền</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -707,7 +751,19 @@ export default function ChatInfoPanel(props: ChatInfoPanelProps) {
 
           {/* Group Members */}
           {props.isGroupConversation && (
-            <TouchableOpacity style={[styles.infoPanelSection, { borderBottomColor: colors.border }]} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={[styles.infoPanelSection, { borderBottomColor: colors.border }]}
+              activeOpacity={0.85}
+              onPress={() => {
+                router.push({
+                  pathname: '/member-detail',
+                  params: {
+                    members: encodeURIComponent(JSON.stringify(infoMembers)),
+                    currentUserId: props.currentUserId ?? '',
+                  },
+                });
+              }}
+            >
               <View style={styles.infoPanelSectionToggleLeft}>
                 <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
                 <Text style={[styles.infoPanelSectionTitle, { color: colors.text, marginLeft: 8 }]}>Xem Thành viên ({infoMembers.length})</Text>

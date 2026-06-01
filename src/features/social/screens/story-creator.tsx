@@ -55,6 +55,12 @@ export default function StoryCreator({ onCreated }: Props) {
     if (!previewUri) return;
     setUploading(true);
     try {
+      const userId = await SecureStore.getItemAsync('user_id');
+      if (!userId) {
+        Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
+        return;
+      }
+
       const uri = previewUri;
       const uploadForm = new FormData();
       const filename = uri.split('/').pop() || `story_${Date.now()}.jpg`;
@@ -87,7 +93,11 @@ export default function StoryCreator({ onCreated }: Props) {
       if (!fileUrl) throw new Error('Upload failed');
 
       const body = { mediaUrl: fileUrl, mediaType: isVideo ? 'VIDEO' : 'IMAGE', caption: caption || '' };
-      await api.post('/stories', body);
+      await api.post('/stories', body, {
+        headers: {
+          'X-User-Id': String(userId),
+        },
+      });
 
       onCreated && onCreated();
       router.back();

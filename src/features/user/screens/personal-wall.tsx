@@ -58,6 +58,39 @@ export default function PersonalScreen() {
     }, [])
   );
 
+  function formatPostTime(createdAtString?: string | null): string {
+    if (!createdAtString) return 'Vừa xong';
+
+    const createdTime = new Date(createdAtString).getTime();
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - createdTime) / 1000);
+
+    if (diffInSeconds < 60) return 'Vừa xong';
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} phút`;
+    }
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+      return `${diffInHours} giờ`;
+    }
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) {
+      return `${diffInDays} ngày`;
+    }
+
+    const diffInMonths = Math.floor(diffInDays / 30);
+    if (diffInMonths < 12) {
+      return `${diffInMonths} tháng`;
+    }
+
+    const diffInYears = Math.floor(diffInMonths / 12);
+    return `${diffInYears} năm`;
+  }
+
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
@@ -88,7 +121,7 @@ export default function PersonalScreen() {
         authorId: String(p.authorId || p.userId || p.createdById || p.createdBy || ''),
         author: p.author?.displayName || p.authorName || p.createdBy || p.userName || 'Người dùng',
         avatar: p.authorAvatarUrl || p.avatarUrl || null,
-        time: p.createdAt ? `${Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 60000)} phút` : p.time || 'Vừa xong',
+        time: formatPostTime(p.createdAt),
         text: p.content || p.text || p.body || '',
         images: Array.isArray(p.media) && p.media.length > 0
           ? p.media.map((m: any) => m.url || m)
@@ -289,9 +322,6 @@ export default function PersonalScreen() {
                 source={getAvatarSource(profile?.avatar_url)}
                 style={styles.avatar}
               />
-              <View style={styles.cameraIconBadge}>
-                <Ionicons name="camera" size={20} color="#fff" />
-              </View>
             </View>
           </TouchableOpacity>
         </View>
@@ -306,6 +336,7 @@ export default function PersonalScreen() {
           </Text>
 
           <View style={styles.postsSection}>
+            <View style={{backgroundColor: '#ddd', height: 8}}></View>
             {posts.length === 0 ? (
               <View style={styles.emptyStateCard}>
                 <View style={styles.emptyStateVisual}>
@@ -387,8 +418,11 @@ export default function PersonalScreen() {
                   keyExtractor={(c, index) => c.commentId || c.id || String(index)}
                   renderItem={({ item }) => (
                     <View style={styles.commentItem}>
-                      <Text style={styles.commentUser}>{item.userName || item.authorName || 'Người dùng'}</Text>
-                      <Text style={styles.commentText}>{item.content}</Text>
+                      <Image source={getAvatarSource(item.avatar || item.userAvatar || item.authorAvatar)} style={styles.commentAvatar} />
+                      <View style={styles.commentBody}>
+                        <Text style={styles.commentUser}>{item.userName || item.authorName || 'Người dùng'}</Text>
+                        <Text style={styles.commentText}>{item.content}</Text>
+                      </View>
                     </View>
                   )}
                 />
@@ -724,6 +758,8 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   commentItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 0.5,
@@ -733,6 +769,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     color: '#333',
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
+  },
+  commentBody: {
+    flex: 1,
   },
   commentText: {
     marginTop: 3,
@@ -810,18 +855,5 @@ const styles = StyleSheet.create({
     color: '#7c7c7c',
     marginTop: 2,
     lineHeight: 13,
-  },
-  cameraIconBadge: {
-    position: 'absolute',
-    bottom: 5,
-    right: 5,
-    backgroundColor: COLORS.primary, // Hoặc màu xanh bạn thích
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#fff', // Tạo viền trắng xung quanh icon cho nổi bật
   },
 });

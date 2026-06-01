@@ -11,6 +11,7 @@ import ForwardedBanner from '@/components/chat/MessageItem/ForwardedBanner';
 import ReplySnippet from '@/components/chat/MessageItem/ReplySnippet';
 import { MessageList } from '@/components/chat/MessageList';
 import { PinnedListContent } from '@/components/chat/PinnedListContent';
+import { getPinnedMessagePreviewText, getPinnedMessageThumbnailUrl, MAX_PINNED_MESSAGES } from '@/components/chat/pinnedMessageDisplay';
 import PollCard from '@/components/chat/PollCard';
 import PollCreateModal from '@/components/chat/PollCreateModal';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
@@ -70,6 +71,11 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  checkPinMessagePermission,
+  checkSendMessagePermission,
+  type ConversationPermissions,
+} from '../../../../utils/permissionHelper';
 import { fetchConversationMembers } from '../services/chatConversationMembers';
 import {
   mapChatPayloadListToUiMessages,
@@ -153,6 +159,12 @@ export default function ChatDetailScreen() {
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [isSearchingLoading, setIsSearchingLoading] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipPermissionsFetchRef = useRef(false);
+
+  // ========== PERMISSIONS STATE ==========
+  const [conversationData, setConversationData] = useState<any>(null);
+  const [conversationPermissions, setConversationPermissions] = useState<ConversationPermissions | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<'ADMIN' | 'DEPUTY' | 'MEMBER' | null>(null);
 
   const handleSearchMessages = useCallback(async (q: string) => {
     if (!q.trim() || !conversationId) return;
@@ -230,7 +242,7 @@ export default function ChatDetailScreen() {
     hideVoters?: boolean;
   }) => {
     try {
-      await chatService.createPoll({
+      const resp = await chatService.createPoll({
         conversationId,
         question: data.question,
         options: data.options,
@@ -241,6 +253,17 @@ export default function ChatDetailScreen() {
         hideResultsBeforeVote: data.hideResultsBeforeVote,
         hideVoters: data.hideVoters,
       } as any);
+
+      // Try to map response to UI message and append locally (server may also push realtime event)
+      try {
+        const unwrapped = chatService.unwrapApiPayload<any>(resp);
+        const candidate = unwrapped?.message ?? unwrapped?.data ?? unwrapped;
+        const mapped = mapChatPayloadToUiMessage(candidate as any);
+        if (mapped) appendOrUpdateMessage(mapped as any);
+      } catch (err) {
+        // ignore mapping errors
+      }
+
       setIsPollModalVisible(false);
     } catch (err) {
       const axiosErr = err as AxiosError<{ message?: string }>;
@@ -422,12 +445,15 @@ export default function ChatDetailScreen() {
       const nextMsg = next[i];
 
       if (String(prevMsg.messageId) !== String(nextMsg.messageId)) return false;
+      if (prevMsg.messageType !== nextMsg.messageType) return false;
       if (prevMsg.content !== nextMsg.content) return false;
       if (prevMsg.createdAt !== nextMsg.createdAt) return false;
       if (prevMsg.updatedAt !== nextMsg.updatedAt) return false;
       if (prevMsg.isRecalled !== nextMsg.isRecalled) return false;
       if (prevMsg.isEdited !== nextMsg.isEdited) return false;
       if ((prevMsg.reactions?.length || 0) !== (nextMsg.reactions?.length || 0)) return false;
+      if (JSON.stringify(prevMsg.attachments || []) !== JSON.stringify(nextMsg.attachments || [])) return false;
+      if (JSON.stringify(prevMsg.poll || {}) !== JSON.stringify(nextMsg.poll || {})) return false;
     }
 
     return true;
@@ -800,15 +826,6 @@ export default function ChatDetailScreen() {
     }
   }, [generateVideoThumbnail]);
 
-  const openMessageActionMenu = useCallback((message: Message) => {
-    if (!canUseMessageInteractions) {
-      return;
-    }
-
-    setSelectedMessage(message);
-    setIsMessageActionVisible(true);
-  }, [canUseMessageInteractions]);
-
   const isSelectedMessageMine = selectedMessage
     ? (currentUserId !== null && String(selectedMessage.senderId) === String(currentUserId))
     : false;
@@ -865,6 +882,26 @@ export default function ChatDetailScreen() {
       setPinnedMessages([]);
     }
   }, [canUseMessageInteractions, conversationId]);
+
+  const openMessageActionMenu = useCallback(async (message: Message) => {
+    if (!canUseMessageInteractions) {
+      return;
+    }
+
+    // Ensure pinned messages are loaded so the UI shows correct Pin/Unpin label
+    try {
+      const alreadyHasPin = pinnedMessages.some((p) => String(p.messageId) === String(message.messageId));
+      if (!alreadyHasPin) {
+        await fetchPinnedMessages();
+      }
+    } catch (err) {
+      // Best-effort: ignore fetch errors and still open the menu
+      console.warn('Failed to refresh pinned messages before opening action menu', err);
+    }
+
+    setSelectedMessage(message);
+    setIsMessageActionVisible(true);
+  }, [canUseMessageInteractions, fetchPinnedMessages, pinnedMessages]);
 
   const { statuses } = usePresence();
   const { isConnected, sendTyping, sendReadReceipt, sendDelivered, sendCallSignal } = useChatSocket({
@@ -938,15 +975,48 @@ export default function ChatDetailScreen() {
       }
     },
     onConversationEvent: async (event) => {
-      if (event.type !== 'MESSAGE_LOCAL_DELETE') return;
-      const msgId = String(event.messageId);
-      const convId = String(event.conversationId);
-      // Persist to SecureStore via hook so it stays hidden after reload
-      await localDeleted.markDeleted(convId, currentUserId || 'anonymous', msgId);
-      locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
-      // Hide from current message list immediately
-      if (convId === conversationId) {
-        setMessages((prev) => prev.filter((m) => String(m.messageId) !== msgId));
+      // Handle local delete events and also merge any server-sent message updates
+      const eventType = String(event?.type ?? '').toUpperCase();
+
+      // MESSAGE_LOCAL_DELETE: mark as locally deleted and remove from list
+      if (eventType === 'MESSAGE_LOCAL_DELETE') {
+        const msgId = String(event.messageId);
+        const convId = String(event.conversationId);
+        await localDeleted.markDeleted(convId, currentUserId || 'anonymous', msgId);
+        locallyDeletedMessageIdsRef.current = localDeleted.getDeletedSet();
+        if (convId === conversationId) {
+          setMessages((prev) => prev.filter((m) => String(m.messageId) !== msgId));
+        }
+        return;
+      }
+
+      // Other conversation-level events may carry updated message/poll payloads
+      try {
+        // Try to map the event payload to a UI message (handles nested shapes)
+        const mapped = mapAnyPayloadToUiMessage(event as any) ?? mapAnyPayloadToUiMessage((event as any)?.data);
+        if (mapped) {
+          appendOrUpdateMessage(mapped as any);
+          return;
+        }
+
+        // If event directly contains a poll update with messageId and poll, merge it
+        const possibleMsgId = String((event as any)?.messageId ?? (event as any)?.data?.messageId ?? '');
+        const possiblePoll = (event as any)?.poll ?? (event as any)?.data?.poll ?? null;
+        if (possibleMsgId && possiblePoll) {
+          const candidate = {
+            messageId: possibleMsgId,
+            messageType: 'POLL',
+            poll: possiblePoll,
+            content: typeof possiblePoll === 'object' ? JSON.stringify(possiblePoll) : String(possiblePoll),
+            updatedAt: (event as any)?.updatedAt ?? new Date().toISOString(),
+            conversationId: String((event as any)?.conversationId ?? conversationId ?? ''),
+          };
+          const mappedCandidate = mapAnyPayloadToUiMessage(candidate as any);
+          if (mappedCandidate) appendOrUpdateMessage(mappedCandidate as any);
+        }
+      } catch (err) {
+        // best-effort: swallow errors here so we don't break socket handling
+        console.warn('Failed to handle conversation event', err);
       }
     },
     onGroupEvent: async (event) => {
@@ -1037,44 +1107,20 @@ export default function ChatDetailScreen() {
           ? (isPartnerTyping ? t('chat.typing', 'Đang nhập...') : t('chat.active', 'Đang hoạt động'))
           : t('chat.offline_recent', 'Truy cập gần đây');
 
-  const latestPinnedMessage = pinnedMessages.length > 0
-    ? pinnedMessages[pinnedMessages.length - 1]
-    : null;
-  const latestPinnedType = (latestPinnedMessage?.messageType || '').toUpperCase();
-  const latestPinnedIsImage = latestPinnedType === 'IMAGE' || latestPinnedType === 'IMAGE_GROUP';
-  const latestPinnedThumbUrl = latestPinnedMessage
-    ? (() => {
-      if (latestPinnedType === 'IMAGE') {
-        const candidate = String(latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
-        return isLikelyUrl(candidate) ? candidate : '';
-      }
+  const latestPinnedMessage = useMemo(() => {
+    if (pinnedMessages.length === 0) {
+      return null;
+    }
 
-      if (latestPinnedType === 'IMAGE_GROUP') {
-        const firstAttachment = latestPinnedMessage.attachments?.[0]?.url;
-        const candidate = String(firstAttachment || latestPinnedMessage.contentUrl || latestPinnedMessage.content || '').trim();
-        return isLikelyUrl(candidate) ? candidate : '';
-      }
-
-      return '';
-    })()
-    : '';
-  const latestPinnedLabel = latestPinnedMessage
-    ? (() => {
-      const text = (latestPinnedMessage.content || '').trim();
-      if (latestPinnedType === 'IMAGE') return '[Hình ảnh]';
-      if (latestPinnedType === 'IMAGE_GROUP') {
-        const imageCount = latestPinnedMessage.attachments?.length ?? 0;
-        return imageCount > 0 ? `[${imageCount} hình ảnh]` : '[Album ảnh]';
-      }
-      if (latestPinnedType === 'VIDEO') return '[Video]';
-      if (latestPinnedType === 'VOICE') return '[Tin nhắn thoại]';
-      if (latestPinnedType === 'FILE' || latestPinnedType === 'MEDIA') {
-        const fileName = latestPinnedMessage.fileName || getDisplayFileNameFromValue(latestPinnedMessage.contentUrl || latestPinnedMessage.content);
-        return fileName ? `[Tệp] ${fileName}` : '[Tệp đính kèm]';
-      }
-      return text || t('chat.empty_message', 'Tin nhắn trống');
-    })()
-    : '';
+    return pinnedMessages.reduce((latest, candidate) => {
+      const latestPinnedAt = Date.parse(String(latest.pinnedAt ?? '')) || 0;
+      const candidatePinnedAt = Date.parse(String(candidate.pinnedAt ?? '')) || 0;
+      return candidatePinnedAt >= latestPinnedAt ? candidate : latest;
+    }, pinnedMessages[0]);
+  }, [pinnedMessages]);
+  const latestPinnedLabel = latestPinnedMessage ? getPinnedMessagePreviewText(latestPinnedMessage) : '';
+  const latestPinnedThumbUrl = latestPinnedMessage ? getPinnedMessageThumbnailUrl(latestPinnedMessage) : '';
+  const latestPinnedIsImage = Boolean(latestPinnedThumbUrl);
 
   const getPinnedPreviewText = useCallback((item: PinnedMessageItem) => {
     const pinnedType = (item.messageType || '').toUpperCase();
@@ -1606,6 +1652,55 @@ export default function ChatDetailScreen() {
     };
   }, [currentUserId, loadInitialMessages]);
 
+  // ========== FETCH PERMISSIONS & USER ROLE ==========
+  useEffect(() => {
+    const fetchPermissionsData = async () => {
+      if (!conversationId || !currentUserId) return;
+
+      try {
+        // Fetch members to get current user's role (GROUP only)
+        if (String(type ?? '').toUpperCase() === 'GROUP') {
+          const members = await fetchConversationMembers(conversationId);
+          const currentMember = members.find((m: any) => m.userId === currentUserId);
+          setCurrentUserRole(currentMember?.role || 'MEMBER');
+
+          if (skipPermissionsFetchRef.current) {
+            setConversationPermissions(null);
+            return;
+          }
+
+          // Fetch permissions for GROUP chat
+          try {
+            const response = await chatService.getPermissions(conversationId);
+            const permsData = response?.data || response;
+            setConversationPermissions({
+              canEditInfo: permsData?.canEditInfo,
+              canPinMessages: permsData?.canPinMessages,
+              canSendMessages: permsData?.canSendMessages,
+              isMemberApprovalRequired: permsData?.isMemberApprovalRequired,
+            });
+          } catch (permErr: any) {
+            const status = Number(permErr?.response?.status ?? 0);
+            if (status === 404 || status === 405 || status >= 500) {
+              skipPermissionsFetchRef.current = true;
+              console.warn('Permissions endpoint unavailable, falling back to role-only checks');
+            } else {
+              console.warn('Unable to fetch conversation permissions', permErr?.message || permErr);
+            }
+            setConversationPermissions(null);
+          }
+        } else {
+          setCurrentUserRole(null);
+          setConversationPermissions(null);
+        }
+      } catch (err) {
+        console.warn('Error fetching permissions data:', err);
+      }
+    };
+
+    void fetchPermissionsData();
+  }, [conversationId, currentUserId, type]);
+
   const handleMessageListScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const offsetY = contentOffset.y;
@@ -1707,6 +1802,15 @@ export default function ChatDetailScreen() {
   const handleSendMessage = async () => {
     if (inputText.trim() === '' || !conversationId) return;
     if (isAiConversation && isSendingAi) return;
+
+    // ========== CHECK SEND MESSAGE PERMISSION (GROUP ONLY) ==========
+    if (String(type ?? '').toUpperCase() === 'GROUP') {
+      const permCheck = checkSendMessagePermission(type, currentUserRole as any, conversationPermissions as any);
+      if (!permCheck.allowed) {
+        Alert.alert('Không thể gửi tin nhắn', permCheck.reason || 'Bạn không có quyền gửi tin nhắn trong nhóm này');
+        return;
+      }
+    }
 
     if (editingMessageId) {
       const nextContent = inputText.trim();
@@ -2378,14 +2482,24 @@ export default function ChatDetailScreen() {
       return;
     }
 
+    // ========== CHECK PIN MESSAGE PERMISSION (GROUP ONLY) ==========
+    if (String(type ?? '').toUpperCase() === 'GROUP') {
+      const permCheck = checkPinMessagePermission(type, currentUserRole as any, conversationPermissions as any);
+      if (!permCheck.allowed) {
+        Alert.alert('Không thể ghim tin nhắn', permCheck.reason || 'Bạn không có quyền ghim tin nhắn');
+        closeMessageActionMenu();
+        return;
+      }
+    }
+
     try {
       if (isSelectedMessagePinned) {
         await chatService.unpinMessage(selectedMessage.messageId);
         closeMessageActionMenu();
         await fetchPinnedMessages();
       } else {
-        // Check pin limit before pinning
-        if (pinnedMessages.length >= 5) {
+        // Check pin limit before pinning -> mở modal thay thế tin ghim
+        if (pinnedMessages.length >= MAX_PINNED_MESSAGES) {
           closeMessageActionMenu();
           setPinReplaceMessageId(selectedMessage.messageId);
           setSelectedOldPinId(null);
@@ -2400,7 +2514,7 @@ export default function ChatDetailScreen() {
       console.error('Failed to toggle pin message:', error);
       closeMessageActionMenu();
     }
-  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, selectedMessage, pinnedMessages.length]);
+  }, [closeMessageActionMenu, fetchPinnedMessages, isSelectedMessagePinned, pinnedMessages.length, selectedMessage, type, currentUserRole, conversationPermissions]);
 
   const handlePinReplaceConfirm = useCallback(async () => {
     if (!selectedOldPinId || !pinReplaceMessageId) return;
@@ -2422,6 +2536,9 @@ export default function ChatDetailScreen() {
     setPinReplaceMessageId(null);
     setSelectedOldPinId(null);
   }, []);
+
+  const canShowPinSelectedMessageAction =
+    checkPinMessagePermission(type, currentUserRole as any, conversationPermissions as any).allowed;
 
   const handleOpenPinnedList = useCallback(async () => {
     await fetchPinnedMessages();
@@ -3025,18 +3142,12 @@ const renderOlderMessagesLoading = () => {
           <>
             {replyBlock}
             {forwardedBanner}
-            {pollData ? (
-              <PollCard
-                poll={pollData}
-                currentUserId={currentUserId ?? undefined}
-                conversationId={conversationId}
-              />
-            ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: colors.card, borderRadius: 12, marginVertical: 4 }}>
-                <Ionicons name="stats-chart-outline" size={18} color={colors.textSecondary} />
-                <Text style={{ color: colors.textSecondary, marginLeft: 6, fontSize: 13 }}>📊 Cuộc thăm dò ý kiến</Text>
-              </View>
-            )}
+              {pollData ? (
+                <PollCard
+                  {...({ poll: pollData, currentUserId: currentUserId || undefined, conversationId, messageId: String(item.messageId), readOnly: true } as any)}
+                />
+              ) : null}
+              
           </>
         );
       }
@@ -3167,6 +3278,34 @@ const renderOlderMessagesLoading = () => {
     };
 
     const mediaContent = renderMediaContent();
+
+    // POLL: render centered in its row instead of inside the normal message bubble
+    if (msgType === 'POLL') {
+      return (
+        <View style={[styles.messageContainer, { marginBottom: isLastInMessageBlock ? (showTimestamp ? 12 : 6) : 2 }]}> 
+          {dateSepLabel ? (
+            <View style={styles.dateSeparator}>
+              <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
+            </View>
+          ) : null}
+
+          <View style={{ alignItems: 'center', paddingHorizontal: 10 }}>
+            <TouchableOpacity
+              activeOpacity={1}
+              onLongPress={() => openMessageActionMenu(item)}
+              delayLongPress={220}
+              style={{ alignSelf: 'center', width: '100%', maxWidth: 360 }}
+            >
+              {mediaContent}
+            </TouchableOpacity>
+          </View>
+
+          {showTimestamp ? (
+            <Text style={[styles.timestamp, isCurrentUserMessage ? styles.timestampRight : styles.timestampLeft]}>{timeLabel}</Text>
+          ) : null}
+        </View>
+      );
+    }
 
     // STICKER: render without bubble wrapper
     if (isStickerMsg) {
@@ -3441,8 +3580,18 @@ const renderOlderMessagesLoading = () => {
         />
 
         {/* Input Area */}
-        <MessageInput>
-          <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
+        {conversationPermissions?.canSendMessages === false && !(currentUserRole === 'ADMIN' || currentUserRole === 'DEPUTY') ? (
+          <SafeAreaView
+            style={{ borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.card, paddingVertical: 14, alignItems: 'center' }}
+            edges={['left', 'right', 'bottom']}
+          >
+            <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
+              Chỉ trưởng nhóm và phó nhóm mới có quyền gửi tin nhắn.
+            </Text>
+          </SafeAreaView>
+        ) : (
+          <MessageInput>
+            <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
           {editingMessageId ? (
             <View style={styles.editingBanner}>
               <View style={styles.editingBannerTextWrap}>
@@ -3589,6 +3738,13 @@ const renderOlderMessagesLoading = () => {
                     color="#7B808A"
                   />
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bottomActionButton}
+                  onPress={() => setIsPollModalVisible(true)}
+                  disabled={isUploading}
+                >
+                  <Ionicons name="bar-chart" size={24} color={isUploading ? '#CCC' : '#7B808A'} />
+                </TouchableOpacity>
                 <TextInput
                   ref={textInputRef}
                   style={[styles.input, { color: colors.text, maxHeight: 100 }]}
@@ -3646,7 +3802,8 @@ const renderOlderMessagesLoading = () => {
             )}
           </View>
           </SafeAreaView>
-        </MessageInput>
+          </MessageInput>
+        )}
 
         {/* Mention Dropdown */}
         <MentionDropdown
@@ -3711,14 +3868,16 @@ const renderOlderMessagesLoading = () => {
                   </TouchableOpacity>
                 ) : null}
 
-                <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleTogglePinSelectedMessage(); }}>
-                  <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
-                    <Ionicons name={isSelectedMessagePinned ? 'pin-outline' : 'pin'} size={22} color="#F0853A" />
-                  </View>
-                  <Text style={[styles.actionGridLabel, { color: colors.text }]}>
-                    {isSelectedMessagePinned ? t('chat.menu.unpin', 'Bỏ ghim') : t('chat.menu.pin', 'Ghim')}
-                  </Text>
-                </TouchableOpacity>
+                {canShowPinSelectedMessageAction && (
+                  <TouchableOpacity style={styles.actionGridItem} onPress={() => { void handleTogglePinSelectedMessage(); }}>
+                    <View style={[styles.actionGridIcon, { backgroundColor: '#FFF3EB' }]}>
+                      <Ionicons name={isSelectedMessagePinned ? 'pin-outline' : 'pin'} size={22} color="#F0853A" />
+                    </View>
+                    <Text style={[styles.actionGridLabel, { color: colors.text }]}>
+                      {isSelectedMessagePinned ? t('chat.menu.unpin', 'Bỏ ghim') : t('chat.menu.pin', 'Ghim')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity style={styles.actionGridItem} onPress={closeMessageActionMenu}>
                   <View style={[styles.actionGridIcon, { backgroundColor: '#EBF0FF' }]}>

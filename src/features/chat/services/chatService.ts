@@ -315,6 +315,7 @@ export const chatService = {
 
   // ── Poll ───────────────────────────────────────────────────────────
   createPoll: async (data: {
+    conversationId: string;
     question: string;
     options: string[];
     deadline?: string;
@@ -324,10 +325,14 @@ export const chatService = {
     hideResultsBeforeVote?: boolean;
     hideVoters?: boolean;
   }) => {
-    return await api.post('/messages', {
-      content: JSON.stringify(data),
+    const { conversationId, ...pollPayload } = data as any;
+    const body: Record<string, unknown> = {
+      conversationId,
+      content: JSON.stringify(pollPayload),
       messageType: 'POLL',
-    });
+    };
+
+    return await api.post('/messages', body);
   },
 
   votePoll: async (pollId: string, optionIds: string[]) => {
@@ -336,6 +341,17 @@ export const chatService = {
 
   addPollOption: async (pollId: string, content: string) => {
     return await api.post(`/polls/${pollId}/options`, { content });
+  },
+
+  updatePollSettings: async (pollId: string, data: {
+    multipleChoices?: boolean;
+    allowAddOptions?: boolean;
+    hideResultsBeforeVote?: boolean;
+    hideVoters?: boolean;
+    isPinned?: boolean;
+    deadline?: string | null;
+  }) => {
+    return await api.patch(`/polls/${pollId}`, data);
   },
 
   // ── Group Permissions ──────────────────────────────────────────────
@@ -350,6 +366,10 @@ export const chatService = {
     canNewMembersReadRecentMessages?: boolean;
   }) => {
     return await api.patch(`/conversations/${conversationId}/permissions`, permissions);
+  },
+
+  getPermissions: async (conversationId: string) => {
+    return await api.get(`/conversations/${conversationId}/permissions`);
   },
 
   unwrapApiPayload,

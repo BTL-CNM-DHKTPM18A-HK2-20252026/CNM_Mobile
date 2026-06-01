@@ -16,6 +16,9 @@ export interface GroupMemberItem {
   role?: GroupMemberRole | string | null;
   addedByName?: string | null;
   addedBy?: string | null;
+  isFriend?: boolean | null;
+  friendshipStatus?: string | null;
+  friendship_status?: string | null;
 }
 
 export interface MemberListModalProps {
@@ -138,11 +141,14 @@ export const MemberListModal: React.FC<MemberListModalProps> = ({
                 const isCurrentUser = Boolean(currentUserId && String(member.userId ?? '') === String(currentUserId));
                 const roleLabel = getRoleLabel(member.role);
                 const isOwner = String(member.role ?? '').toUpperCase() === 'ADMIN';
+                const isFriend = Boolean(
+                  member.isFriend || String(member.friendshipStatus ?? member.friendship_status ?? '').toUpperCase() === 'FRIEND'
+                );
                 const subtitle = isOwner
                   ? roleLabel
                   : `Thêm bởi ${normalizeText(member.addedByName ?? member.addedBy, ownerName)}`;
                 const avatarUrl = String(member.avatarUrl ?? member.avatar ?? '').trim();
-                const showAddIcon = !isOwner;
+                const showAddIcon = !isOwner && !isCurrentUser && !isFriend;
 
                 return (
                   <View key={`${memberId}-${index}`} style={[styles.memberRow, index !== orderedMembers.length - 1 && styles.memberRowBorder]}>
