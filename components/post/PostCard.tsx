@@ -54,8 +54,8 @@ const REACTION_TO_EMOJI: Record<string, string> = {
 };
 
 function reactionTypeToEmoji(type?: string | null) {
-  if (!type) return '👍';
-  return REACTION_TO_EMOJI[type] || '👍';
+  if (!type) return '❤️';
+  return REACTION_TO_EMOJI[type] || '❤️';
 }
 
 function isVideoUri(uri?: string | null) {

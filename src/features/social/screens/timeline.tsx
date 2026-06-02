@@ -243,14 +243,14 @@ export default function TimelineScreen() {
         if (p.isLikedByMe) {
           return { ...p, isLikedByMe: false, myReactionType: null, likes: Math.max(0, (p.likes || 1) - 1) };
         }
-        return { ...p, isLikedByMe: true, myReactionType: 'LIKE', likes: (p.likes || 0) + 1 };
+        return { ...p, isLikedByMe: true, myReactionType: 'LOVE', likes: (p.likes || 0) + 1 };
       }));
 
       if (existing?.isLikedByMe) {
         const res = await api.delete(`/posts/${postId}/like`);
         updatePostFromResponse(postId, res);
       } else {
-        const res = await api.post(`/posts/${postId}/react/LIKE`);
+        const res = await api.post(`/posts/${postId}/react/LOVE`);
         updatePostFromResponse(postId, res);
       }
     } catch (err) {

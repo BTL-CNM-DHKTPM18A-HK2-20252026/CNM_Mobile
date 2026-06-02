@@ -180,14 +180,14 @@ export default function PersonalScreen() {
         if (post.isLikedByMe) {
           return { ...post, isLikedByMe: false, myReactionType: null, likes: Math.max(0, (post.likes || 1) - 1) };
         }
-        return { ...post, isLikedByMe: true, myReactionType: 'LIKE', likes: (post.likes || 0) + 1 };
+        return { ...post, isLikedByMe: true, myReactionType: 'LOVE', likes: (post.likes || 0) + 1 };
       }));
 
       if (existing?.isLikedByMe) {
         const res = await api.delete(`/posts/${postId}/like`);
         updatePostFromResponse(postId, res);
       } else {
-        const res = await api.post(`/posts/${postId}/react/LIKE`);
+        const res = await api.post(`/posts/${postId}/react/LOVE`);
         updatePostFromResponse(postId, res);
       }
     } catch (error) {
