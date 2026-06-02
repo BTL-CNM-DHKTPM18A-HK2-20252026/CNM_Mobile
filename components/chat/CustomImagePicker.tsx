@@ -4,7 +4,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View, type ImageStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const MAX_SELECTION = 30;
+const MAX_SELECTION = 10;
 const PAGE_SIZE = 50;
 
 type Asset = MediaLibrary.Asset;
@@ -253,7 +253,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
       if (prev.length >= maxSelection) {
         Alert.alert(
           'Chọn ảnh gửi đi',
-          'Bạn chỉ có thể gửi tối đa 30 hình ảnh trong một lần. Vui lòng bỏ bớt một vài ảnh nhé!'
+          'Bạn chỉ có thể gửi tối đa 10 hình ảnh trong một lần. Vui lòng bỏ bớt một vài ảnh nhé!'
         );
         console.log('[CustomImagePicker] toggleAsset: reached maxSelection');
         return prev;
@@ -269,7 +269,7 @@ export const CustomImagePicker = ({ isVisible, onClose, onConfirm, maxSelection 
     if (selectedAssets.length > maxSelection) {
       Alert.alert(
         'Chọn ảnh gửi đi',
-        'Bạn chỉ có thể gửi tối đa 30 hình ảnh trong một lần. Vui lòng bỏ bớt một vài ảnh nhé!'
+        'Bạn chỉ có thể gửi tối đa 10 hình ảnh trong một lần. Vui lòng bỏ bớt một vài ảnh nhé!'
       );
       return;
     }

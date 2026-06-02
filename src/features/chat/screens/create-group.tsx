@@ -42,6 +42,14 @@ type ApiResponse<T> = {
 
 type ListItem = SectionedListItem<FriendItem>;
 
+function getFriendListItemKey(item: ListItem | FriendItem): string {
+  if (typeof item === 'object' && item !== null && 'type' in item) {
+    return String(item.id);
+  }
+
+  return String((item as FriendItem).user_id);
+}
+
 const S3_BASE = process.env.EXPO_PUBLIC_S3_BASE_URL || 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public';
 const FRUVIA_GROUP_IMAGE_OPTIONS = [
   `${S3_BASE}/avatar_group/avtgr1.jpg`,
@@ -487,7 +495,7 @@ export default function CreateGroupScreen() {
       ) : (
         <FlatList
           data={activeTab === 'recent' ? recentFriends : listData}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => getFriendListItemKey(item)}
           renderItem={activeTab === 'recent' ? renderRecentItem : renderItem}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listContent}

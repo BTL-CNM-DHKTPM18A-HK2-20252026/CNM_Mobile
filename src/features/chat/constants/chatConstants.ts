@@ -40,7 +40,7 @@ export const PAGE_SIZE = 10;
 export const SCROLL_TOP_THRESHOLD = 48;
 export const AI_TYPING_USER_ID = 'FRUVIA_AI_ASSISTANT';
 export const BLOCK_GAP_MS = 5 * 60 * 1000;
-export const MAX_IMAGE_SELECTION = 30;
+export const MAX_IMAGE_SELECTION = 10;
 export const REACTION_EMOJIS = ['❤️', '👍', '😆', '😮', '😭', '😡'] as const;
 
 export const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
