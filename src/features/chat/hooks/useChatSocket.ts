@@ -286,8 +286,6 @@ export function useChatSocket(options: UseChatSocketOptions) {
       reconnectDelay: reconnectDelayMs,
       heartbeatIncoming: HEARTBEAT_MS,
       heartbeatOutgoing: HEARTBEAT_MS,
-      forceBinaryWSFrames: true,
-      appendMissingNULLonIncoming: true,
       debug: debug
         ? (message: string) => {
             console.log('[STOMP]', message);

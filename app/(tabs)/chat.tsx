@@ -1,7 +1,7 @@
-import { COLORS } from '@/constants/theme';
+﻿import { COLORS } from '@/constants/theme';
 import { usePresence } from '@/context/PresenceContext';
 import { chatService } from '@/services/chatService';
-import { getAvatarSource } from '@/services/mediaUtils';
+import { FRUVIA_CHATBOT_AVATAR_URL, getAvatarSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import { Client, type StompSubscription } from '@stomp/stompjs';
 import { router, useFocusEffect, useNavigation } from 'expo-router';
@@ -285,7 +285,7 @@ const DEFAULT_AI_ITEM: ChatItem = {
   id: 'default-ai',
   title: 'Fruvia Chatbot',
   lastMessage: 'Hỏi đáp với Fruvia Chatbot',
-  avatarUrl: null,
+  avatarUrl: FRUVIA_CHATBOT_AVATAR_URL,
   timeText: 'Mới',
   unreadCount: 0,
   pinned: true,
@@ -420,21 +420,24 @@ function normalizeConversations(rawData: any[], currentUserId?: string | null): 
 
     const lastMessage = buildConversationPreview(item, currentUserId);
 
+    const avatarUrl = isAiConversation
+      ? FRUVIA_CHATBOT_AVATAR_URL
+      : (conversationTypeRaw === 'PRIVATE'
+        ? otherMember?.avatarUrl ?? otherMember?.avatar_url
+        : undefined) ??
+      item.conversationAvatarUrl ??
+      item.conversation_avatar_url ??
+      item.avatarUrl ??
+      item.avatar_url ??
+      primaryMember?.avatarUrl ??
+      primaryMember?.avatar_url ??
+      (conversationType === 'GROUP' ? null : '/default/image1.jpg');
+
     return {
       id: String(item.conversationId ?? item.id ?? item.userId ?? `conversation-${index}`),
       title,
       lastMessage,
-      avatarUrl:
-        (conversationTypeRaw === 'PRIVATE'
-          ? otherMember?.avatarUrl ?? otherMember?.avatar_url
-          : undefined) ??
-        item.conversationAvatarUrl ??
-        item.conversation_avatar_url ??
-        item.avatarUrl ??
-        item.avatar_url ??
-        primaryMember?.avatarUrl ??
-        primaryMember?.avatar_url ??
-        (conversationType === 'GROUP' ? null : '/default/image1.jpg'),
+      avatarUrl,
       groupAvatarUrl:
         conversationType === 'GROUP'
           ? (item.conversationAvatarUrl ?? item.conversation_avatar_url ?? item.avatarUrl ?? item.avatar_url ?? null)
@@ -804,7 +807,7 @@ export default function ChatScreen() {
     if (item.type === 'AI') {
       return (
         <View style={[styles.singleAvatarWrap, styles.specialAvatarWrap, styles.aiAvatarWrap]}>
-          <Ionicons name="sparkles" size={28} color="#FFFFFF" />
+          <Image source={getAvatarSource(FRUVIA_CHATBOT_AVATAR_URL)} style={styles.aiAvatarImage} />
           {item.unreadCount > 0 ? (
             <View style={styles.unreadDotOnAvatar}>
               <Text style={styles.unreadDotText}>{item.unreadCount > 99 ? '99+' : item.unreadCount}</Text>
@@ -957,6 +960,24 @@ export default function ChatScreen() {
     router.push('/create-group');
   };
 
+  const handleOpenCloudConversation = async () => {
+    try {
+      closeQuickMenu();
+      const resolvedId = await chatService.ensureSelfConversationId();
+      router.push(
+        `/chat-detail?id=${encodeURIComponent(resolvedId ?? '')}&name=${encodeURIComponent('Cloud của tôi')}&type=${encodeURIComponent('CLOUD')}&avatar=`
+      );
+    } catch {
+      closeQuickMenu();
+      Alert.alert('Cloud của tôi', 'Không thể mở cuộc trò chuyện này.');
+    }
+  };
+
+  const handleQuickMenuStub = (title: string) => {
+    closeQuickMenu();
+    Alert.alert(title, 'Chức năng đang phát triển');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#2E7DE9" />
@@ -989,15 +1010,29 @@ export default function ChatScreen() {
         <Pressable style={styles.quickMenuOverlay} onPress={closeQuickMenu}>
           <View style={[styles.quickMenuCard, { top: insets.top + 50 }]}>
             <TouchableOpacity style={styles.quickMenuItem} activeOpacity={0.75} onPress={handleAddFriendPress}>
-              <Ionicons name="person-add-outline" size={18} color="#2E7DE9" />
+              <Ionicons name="person-add-outline" size={17} color="#2E7DE9" />
               <Text style={styles.quickMenuText}>Thêm bạn</Text>
             </TouchableOpacity>
 
             <View style={styles.quickMenuDivider} />
 
             <TouchableOpacity style={styles.quickMenuItem} activeOpacity={0.75} onPress={handleCreateGroupPress}>
-              <Ionicons name="people-outline" size={18} color="#2E7DE9" />
+              <Ionicons name="people-outline" size={17} color="#2E7DE9" />
               <Text style={styles.quickMenuText}>Tạo nhóm</Text>
+            </TouchableOpacity>
+
+            <View style={styles.quickMenuDivider} />
+
+            <TouchableOpacity style={styles.quickMenuItem} activeOpacity={0.75} onPress={handleOpenCloudConversation}>
+              <Ionicons name="folder-open-outline" size={18} color="#2E7DE9" />
+              <Text style={styles.quickMenuText}>Cloud của tôi</Text>
+            </TouchableOpacity>
+
+            <View style={styles.quickMenuDivider} />
+
+            <TouchableOpacity style={styles.quickMenuItem} activeOpacity={0.75} onPress={() => handleQuickMenuStub('Thiết bị đăng nhập')}>
+              <Ionicons name="desktop-outline" size={17} color="#2E7DE9" />
+              <Text style={styles.quickMenuText}>Thiết bị đăng nhập</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -1363,32 +1398,34 @@ const styles = StyleSheet.create({
   quickMenuCard: {
     position: 'absolute',
     right: 12,
-    width: 164,
-    borderRadius: 16,
+    width: 246,
+    borderRadius: 8,
     backgroundColor: '#FFFFFF',
     paddingVertical: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
+    elevation: 14,
   },
   quickMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    minHeight: 42,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   quickMenuText: {
-    marginLeft: 10,
+    marginLeft: 11,
     color: '#101317',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
   },
   quickMenuDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: '#E6EAF2',
-    marginHorizontal: 12,
+    marginLeft: 48,
+    marginRight: 12,
   },
   contextOverlay: {
     position: 'absolute',
@@ -1651,7 +1688,11 @@ const styles = StyleSheet.create({
     borderColor: '#E6EAF2',
   },
   aiAvatarWrap: {
-    backgroundColor: '#4F74E8',
+    backgroundColor: '#EAF3FF',
+  },
+  aiAvatarImage: {
+    width: 52,
+    height: 52,
   },
   cloudAvatarWrap: {
     backgroundColor: '#0068FF',

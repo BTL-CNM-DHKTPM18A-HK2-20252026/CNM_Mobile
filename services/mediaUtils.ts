@@ -1,6 +1,9 @@
 import { ImageSourcePropType } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const S3_BASE_URL = process.env.EXPO_PUBLIC_S3_BASE_URL || 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public';
+
+export const FRUVIA_CHATBOT_AVATAR_URL = `${S3_BASE_URL}/system/fruvia_chatbot.png`;
 
 const DEFAULT_AVATAR_KEY = '/default/image1.jpg';
 const DEFAULT_COVER_KEY = '/background/image1.jpg';
@@ -14,6 +17,7 @@ const DEFAULT_AVATARS: Record<string, ImageSourcePropType> = {
   '/default/image6.jpg': require('../public/default/image6.jpg'),
   '/default/image7.jpg': require('../public/default/image7.jpg'),
   '/default/image8.jpg': require('../public/default/image8.jpg'),
+  '/system/fruvia_chatbot.png': require('../public/system/fruvia_chatbot.png'),
 };
 
 const DEFAULT_BACKGROUNDS: Record<string, ImageSourcePropType> = {
@@ -72,6 +76,11 @@ export function resolveAvatarUri(avatarUrl: string | null | undefined): string {
 export function getAvatarSource(avatarUrl: string | null | undefined): ImageSourcePropType {
   if (!avatarUrl) {
     return DEFAULT_AVATARS[DEFAULT_AVATAR_KEY];
+  }
+
+  // Fruvia Chatbot avatar: always use local bundled image (avoid S3 dependency)
+  if (avatarUrl === FRUVIA_CHATBOT_AVATAR_URL || avatarUrl.includes('/system/fruvia_chatbot.png')) {
+    return DEFAULT_AVATARS['/system/fruvia_chatbot.png'];
   }
 
   const normalized = normalizePath(avatarUrl);

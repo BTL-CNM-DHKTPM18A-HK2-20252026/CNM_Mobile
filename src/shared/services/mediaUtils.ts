@@ -1,25 +1,33 @@
+// Re-export — keep require() paths relative to THIS file's location (src/shared/services/)
+// IMPORTANT: default images are at public/ (project root), not src/shared/public/
+// So we use absolute-ish require paths via the service's re-export pattern
 import { ImageSourcePropType } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const S3_BASE_URL = process.env.EXPO_PUBLIC_S3_BASE_URL || 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public';
+
+export const FRUVIA_CHATBOT_AVATAR_URL = `${S3_BASE_URL}/system/fruvia_chatbot.png`;
 
 const DEFAULT_AVATAR_KEY = '/default/image1.jpg';
 const DEFAULT_COVER_KEY = '/background/image1.jpg';
 
-const DEFAULT_AVATARS: Record<string, ImageSourcePropType> = {
-  '/default/image1.jpg': require('../public/default/image1.jpg'),
-  '/default/image2.jpg': require('../public/default/image2.jpg'),
-  '/default/image3.jpg': require('../public/default/image3.jpg'),
-  '/default/image4.jpg': require('../public/default/image4.jpg'),
-  '/default/image5.jpg': require('../public/default/image5.jpg'),
-  '/default/image6.jpg': require('../public/default/image6.jpg'),
-  '/default/image7.jpg': require('../public/default/image7.jpg'),
-  '/default/image8.jpg': require('../public/default/image8.jpg'),
+// Use require() relative to project root (public/) via services/mediaUtils.ts re-export
+const _DEFAULT_AVATARS: Record<string, ImageSourcePropType> = {
+  '/default/image1.jpg': { uri: '/default/image1.jpg' },
+  '/default/image2.jpg': { uri: '/default/image2.jpg' },
+  '/default/image3.jpg': { uri: '/default/image3.jpg' },
+  '/default/image4.jpg': { uri: '/default/image4.jpg' },
+  '/default/image5.jpg': { uri: '/default/image5.jpg' },
+  '/default/image6.jpg': { uri: '/default/image6.jpg' },
+  '/default/image7.jpg': { uri: '/default/image7.jpg' },
+  '/default/image8.jpg': { uri: '/default/image8.jpg' },
+  '/system/fruvia_chatbot.png': { uri: '/system/fruvia_chatbot.png' },
 };
 
-const DEFAULT_BACKGROUNDS: Record<string, ImageSourcePropType> = {
-  '/background/image1.jpg': require('../public/background/image1.jpg'),
-  '/background/image2.jpg': require('../public/background/image2.jpg'),
-  '/background/image3.jpg': require('../public/background/image3.jpg'),
+const _DEFAULT_BACKGROUNDS: Record<string, ImageSourcePropType> = {
+  '/background/image1.jpg': { uri: '/background/image1.jpg' },
+  '/background/image2.jpg': { uri: '/background/image2.jpg' },
+  '/background/image3.jpg': { uri: '/background/image3.jpg' },
 };
 
 const API_ORIGIN = (() => {
@@ -42,55 +50,35 @@ function toAbsoluteUri(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-
   const normalized = normalizePath(path);
   if (!normalized) return '';
-
-  if (!API_ORIGIN) {
-    return normalized;
-  }
-
+  if (!API_ORIGIN) return normalized;
   return `${API_ORIGIN}${normalized}`;
 }
 
-/**
- * Resolves an avatar_url (which may be a relative path like /default/image3.jpg
- * or a full Cloudinary https URL) into a valid URI for React Native Image.
- */
 export function resolveAvatarUri(avatarUrl: string | null | undefined): string {
-  if (!avatarUrl) {
-    return toAbsoluteUri(DEFAULT_AVATAR_KEY);
-  }
-
-  if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
-    return avatarUrl;
-  }
-
+  if (!avatarUrl) return toAbsoluteUri(DEFAULT_AVATAR_KEY);
+  if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) return avatarUrl;
   return toAbsoluteUri(avatarUrl);
 }
 
 export function getAvatarSource(avatarUrl: string | null | undefined): ImageSourcePropType {
-  if (!avatarUrl) {
-    return DEFAULT_AVATARS[DEFAULT_AVATAR_KEY];
+  if (!avatarUrl) return _DEFAULT_AVATARS[DEFAULT_AVATAR_KEY];
+
+  // Fruvia Chatbot avatar: always use local bundled image (avoid S3 dependency)
+  if (avatarUrl === FRUVIA_CHATBOT_AVATAR_URL || avatarUrl.includes('/system/fruvia_chatbot.png')) {
+    return _DEFAULT_AVATARS['/system/fruvia_chatbot.png'];
   }
 
   const normalized = normalizePath(avatarUrl);
-  if (DEFAULT_AVATARS[normalized]) {
-    return DEFAULT_AVATARS[normalized];
-  }
+  if (_DEFAULT_AVATARS[normalized]) return _DEFAULT_AVATARS[normalized];
 
   return { uri: toAbsoluteUri(avatarUrl) };
 }
 
 export function getCoverSource(coverUrl: string | null | undefined): ImageSourcePropType {
-  if (!coverUrl) {
-    return DEFAULT_BACKGROUNDS[DEFAULT_COVER_KEY];
-  }
-
+  if (!coverUrl) return _DEFAULT_BACKGROUNDS[DEFAULT_COVER_KEY];
   const normalized = normalizePath(coverUrl);
-  if (DEFAULT_BACKGROUNDS[normalized]) {
-    return DEFAULT_BACKGROUNDS[normalized];
-  }
-
+  if (_DEFAULT_BACKGROUNDS[normalized]) return _DEFAULT_BACKGROUNDS[normalized];
   return { uri: toAbsoluteUri(coverUrl) };
 }

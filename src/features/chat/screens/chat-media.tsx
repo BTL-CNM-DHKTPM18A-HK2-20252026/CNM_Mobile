@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Linking, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Linking, Pressable, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { chatService } from '@chat/services/chatService';
@@ -23,9 +23,9 @@ type FilterKey = 'ALL' | 'IMAGE' | 'VIDEO' | 'FILE' | 'LINK' | 'VOICE';
 
 export default function ChatMediaScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; name?: string }>();
+  const params = useLocalSearchParams<{ id?: string }>();
   const conversationId = String(params.id ?? '').trim();
-  const conversationName = String(params.name ?? 'Ảnh, file, link');
+  const conversationName = 'Ảnh File Link';
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -35,19 +35,28 @@ export default function ChatMediaScreen() {
     const list = Array.isArray(source) ? source : [];
     return list.flatMap((item: any, idx: number) => {
       const type = String(item?.messageType ?? '').toUpperCase();
-      const mediaUrl = String(item?.content ?? item?.mediaUrl ?? item?.url ?? '').trim();
+      const mediaUrl = String(item?.content ?? item?.contentUrl ?? item?.mediaUrl ?? item?.url ?? item?.fileUrl ?? item?.s3Url ?? '').trim();
       const fileName = String(item?.fileName ?? '').trim();
+      const createdAt = String(item?.createdAt ?? item?.updatedAt ?? '');
+      const senderName = String(item?.senderName ?? '');
+      const thumbnailUrl = String(item?.thumbnailUrl ?? '');
+
+      const makeItem = (url: string, extra?: Partial<MediaItem> & { messageType?: string }) => {
+        const cleanUrl = String(url ?? '').trim();
+        if (!cleanUrl) return null;
+        return {
+          id: String(extra?.id ?? item?.messageId ?? item?.id ?? `media-${idx}`),
+          mediaUrl: cleanUrl,
+          fileName: String(extra?.fileName ?? fileName ?? '').trim(),
+          messageType: String((extra?.messageType ?? type) || '').toUpperCase(),
+          createdAt: String(extra?.createdAt ?? createdAt),
+          senderName: String(extra?.senderName ?? senderName),
+          thumbnailUrl: String(extra?.thumbnailUrl ?? thumbnailUrl),
+        } as MediaItem;
+      };
 
       if ((type === 'IMAGE' || type === 'VIDEO' || type === 'FILE' || type === 'MEDIA' || type === 'LINK' || type === 'VOICE') && mediaUrl) {
-        return [{
-          id: String(item?.messageId ?? item?.id ?? `media-${idx}`),
-          mediaUrl,
-          fileName,
-          messageType: type,
-          createdAt: String(item?.createdAt ?? item?.updatedAt ?? ''),
-          senderName: String(item?.senderName ?? ''),
-          thumbnailUrl: String(item?.thumbnailUrl ?? ''),
-        }];
+        return [makeItem(mediaUrl)!];
       }
 
       if (type === 'IMAGE_GROUP' && Array.isArray(item?.attachments)) {
@@ -64,6 +73,44 @@ export default function ChatMediaScreen() {
             thumbnailUrl: String(attachment?.thumbnailUrl ?? item?.thumbnailUrl ?? '').trim(),
           } as MediaItem;
         }).filter(Boolean);
+      }
+
+      if (Array.isArray(item?.attachments)) {
+        return item.attachments
+          .map((attachment: any, ai: number) => {
+            const url = String(
+              attachment?.url ??
+              attachment?.content ??
+              attachment?.mediaUrl ??
+              attachment?.fileUrl ??
+              attachment?.path ??
+              attachment?.s3Url ??
+              ''
+            ).trim();
+            if (!url) return null;
+            const attachmentType = String(attachment?.messageType ?? attachment?.type ?? type ?? '').toUpperCase();
+            return makeItem(url, {
+              id: `${String(item?.messageId ?? item?.id ?? `media-group-${idx}`)}-${ai}`,
+              fileName: String(attachment?.fileName ?? attachment?.name ?? fileName ?? '').trim(),
+              messageType: attachmentType || 'FILE',
+              createdAt,
+              senderName,
+              thumbnailUrl: String(attachment?.thumbnailUrl ?? item?.thumbnailUrl ?? '').trim(),
+            });
+          })
+          .filter(Boolean);
+      }
+
+      if (Array.isArray(item?.mediaUrls)) {
+        return item.mediaUrls
+          .map((url: string, mi: number) => makeItem(url, {
+            id: `${String(item?.messageId ?? item?.id ?? `media-array-${idx}`)}-${mi}`,
+            messageType: type || 'FILE',
+            createdAt,
+            senderName,
+            thumbnailUrl,
+          }))
+          .filter(Boolean);
       }
 
       return [];
@@ -96,7 +143,11 @@ export default function ChatMediaScreen() {
   const filteredItems = useMemo(() => {
     const base = activeTab === 'ALL'
       ? items
-      : items.filter((item) => String(item.messageType).toUpperCase() === activeTab);
+      : items.filter((item) => {
+          const messageType = String(item.messageType).toUpperCase();
+          if (activeTab === 'FILE') return messageType === 'FILE' || messageType === 'MEDIA';
+          return messageType === activeTab;
+        });
 
     return [...base].sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
   }, [activeTab, items]);
@@ -151,7 +202,13 @@ export default function ChatMediaScreen() {
           {filterButtons.map((btn) => (
             <TouchableOpacity
               key={btn.key}
-              style={styles.tabItem}
+              style={[
+                styles.tabItem,
+                btn.key === 'IMAGE' && styles.tabItemImage,
+                btn.key === 'FILE' && styles.tabItemFile,
+                btn.key === 'LINK' && styles.tabItemLink,
+                btn.key === 'VOICE' && styles.tabItemVoice,
+              ]}
               onPress={() => setActiveTab(btn.key)}
             >
               <Text
@@ -187,22 +244,21 @@ export default function ChatMediaScreen() {
                   const isLink = type === 'LINK';
                   const isVoice = type === 'VOICE';
                   return (
-                    <TouchableOpacity
+                    <Pressable
                       key={item.id}
                       style={[styles.gridItem, isImage && styles.gridItemImage]}
-                      activeOpacity={0.85}
                       onPress={() => {
                         if (item.mediaUrl) {
                           void Linking.openURL(item.mediaUrl).catch(() => { });
                         }
                       }}
                     >
-                      <View style={styles.thumbWrap}>
+                      <View style={styles.thumbWrap} pointerEvents="none">
                         {isImage ? (
                           <Image source={{ uri: item.mediaUrl }} style={styles.thumb} contentFit="cover" />
                         ) : (
                           <Ionicons
-                            name={isVideo ? 'play-circle-outline' : isLink ? 'link-outline' : isVoice ? 'mic-outline' : 'document-text-outline'}
+                            name={isVideo ? 'play-circle-outline' : isLink ? 'link-outline' : isVoice ? 'mic-outline' : isFile ? 'document-text-outline' : 'document-text-outline'}
                             size={28}
                             color="#4A96F0"
                           />
@@ -210,15 +266,15 @@ export default function ChatMediaScreen() {
                       </View>
                       {!isImage && (
                         <>
-                          <Text style={styles.itemTitle} numberOfLines={1}>
+                          <Text style={styles.itemTitle} numberOfLines={1} pointerEvents="none">
                             {item.fileName || (isImage ? 'Ảnh' : isVideo ? 'Video' : isLink ? 'Link' : isVoice ? 'Tin nhắn thoại' : 'File')}
                           </Text>
-                          <Text style={styles.itemSub} numberOfLines={1}>
+                          <Text style={styles.itemSub} numberOfLines={1} pointerEvents="none">
                             {item.senderName || 'Hôm nay'}
                           </Text>
                         </>
                       )}
-                    </TouchableOpacity>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -264,17 +320,29 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'flex-start',
     paddingHorizontal: 12,
   },
   tabItem: {
-    flex: 1,
     alignItems: 'center',
     paddingTop: 8,
     minWidth: 0,
+    paddingHorizontal: 8,
+  },
+  tabItemImage: {
+    paddingHorizontal: 8,
+  },
+  tabItemFile: {
+    paddingHorizontal: 10,
+  },
+  tabItemLink: {
+    paddingHorizontal: 10,
+  },
+  tabItemVoice: {
+    paddingHorizontal: 12,
   },
   tabText: {
-    fontSize: 9,
+    fontSize: 11,
     color: '#717784',
     fontWeight: '700',
     textAlign: 'center',
@@ -285,7 +353,7 @@ const styles = StyleSheet.create({
   tabUnderline: {
     marginTop: 8,
     height: 1,
-    width: '100%',
+    width: '120%',
     backgroundColor: 'transparent',
   },
   tabUnderlineActive: {
@@ -303,7 +371,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   groupDate: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '500',
     color: '#7A808A',
     paddingHorizontal: 16,

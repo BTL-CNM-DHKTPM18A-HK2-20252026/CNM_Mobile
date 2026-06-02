@@ -124,8 +124,9 @@ export default function ChatOptionsScreen() {
         },
       });
     } },
-    { icon: 'person-outline', label: 'Trang cá nhân', labelLines: ['Trang', 'cá nhân'], onPress: () => openStub('Trang cá nhân') },
-    { icon: 'brush-outline', label: 'Đổi hình nền', labelLines: ['Đổi', 'hình nền'], onPress: () => openStub('Đổi hình nền') },
+    ...(isGroupConversation ? [
+      { icon: 'brush-outline', label: 'Đổi ảnh nhóm', labelLines: ['Đổi', 'ảnh nhóm'], onPress: () => openStub('Đổi ảnh nhóm') },
+    ] : []),
     { icon: 'notifications-outline', label: 'Tắt thông báo', labelLines: ['Tắt', 'thông báo'], onPress: () => openStub('Tắt thông báo') },
   ];
 

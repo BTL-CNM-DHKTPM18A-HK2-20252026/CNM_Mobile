@@ -1,5 +1,4 @@
-import { ChatHeader } from '@/components/chat/ChatHeader';
-import CustomImagePicker from '@/components/chat/CustomImagePicker';
+﻿import { ChatHeader } from '@/components/chat/ChatHeader';
 import ExpandableText from '@/components/chat/ExpandableText';
 import { ForwardModalContent } from '@/components/chat/ForwardModalContent';
 import { MediaViewer } from '@/components/chat/MediaViewer';
@@ -27,7 +26,7 @@ import api from '@/services/api';
 import { chatFileService, type PickedMedia } from '@/services/chatFileService';
 import { chatService } from '@/services/chatService';
 import { friendService } from '@/services/friendService';
-import { getAvatarSource } from '@/services/mediaUtils';
+import { FRUVIA_CHATBOT_AVATAR_URL, getAvatarSource } from '@/services/mediaUtils';
 import { loadCachedMessages, saveCachedMessages } from '@chat/services/messageCache';
 import GroupCallCard from '@/src/components/chat/GroupCallCard';
 import { serializePlainTextToTiptapJson } from '@/utils/chat/plainTextToTiptap';
@@ -158,7 +157,6 @@ export default function ChatDetailScreen() {
   // Read/Delivered receipts (1-1 chat parity with web): messageId the partner has seen/received
   const [seenMessageId, setSeenMessageId] = useState<string | null>(null);
   const [deliveredMessageId, setDeliveredMessageId] = useState<string | null>(null);
-  const [isCustomImagePickerVisible, setIsCustomImagePickerVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Message[]>([]);
@@ -574,9 +572,17 @@ export default function ChatDetailScreen() {
   const canUseMessageInteractions = isCloudConversation || isPrivateConversation || isGroupConversation;
 
   useEffect(() => {
+    const nextNormalizedName = String(name ?? '').trim().toLowerCase();
+    const nextNormalizedType = String(type ?? '').trim().toUpperCase();
+    const nextIsAiConversation =
+      nextNormalizedType === 'AI' ||
+      nextNormalizedName === 'fruvia chat ai' ||
+      nextNormalizedName === 'fruvia ai' ||
+      nextNormalizedName === 'fruvia chatbot';
+
     setConversationId(String(id ?? ''));
     setConversationDisplayName(String(name ?? ''));
-    setConversationAvatarUrl(String(avatar ?? ''));
+    setConversationAvatarUrl(nextIsAiConversation ? FRUVIA_CHATBOT_AVATAR_URL : String(avatar ?? ''));
     setEditingMessageId(null);
     setInputText('');
     setIsPinnedListVisible(false);
@@ -585,7 +591,7 @@ export default function ChatDetailScreen() {
     setReplyingTo(null);
     setForwardingMsg(null);
     setIsMemberListVisible(false);
-  }, [avatar, id, name]);
+  }, [avatar, id, name, type]);
 
   useEffect(() => {
     const keyboardHideSub = Keyboard.addListener('keyboardDidHide', closeAccessoryPanels);
@@ -1130,12 +1136,7 @@ export default function ChatDetailScreen() {
     setIsMessageActionVisible(true);
   }, [canUseMessageInteractions, fetchPinnedMessages, pinnedMessages]);
 
-  const { statuses } = usePresence();
-  const { isConnected, sendTyping, sendReadReceipt, sendDelivered, sendCallSignal } = useChatSocket({
-    conversationId,
-    brokerURL: BROKER_URL,
-    userId: currentUserId,
-    onMessage: (event) => {
+  const handleIncomingMessage = useCallback((event: any) => {
       const wrapped = chatService.unwrapApiPayload<any>(event);
       if (String(wrapped?.type ?? '').toUpperCase() === 'REACTION_UPDATE') {
         applyReactionUpdate(wrapped as Record<string, unknown>);
@@ -1145,13 +1146,8 @@ export default function ChatDetailScreen() {
       const mappedMessage = mapAnyPayloadToUiMessage(wrapped);
       
       if (mappedMessage) {
-        // Nếu là tin nhắn hệ thống (thêm người, rời nhóm...), ta xử lý hiển thị
-        if (mappedMessage.messageType === 'SYSTEM') {
-          // Logic hiển thị thông báo hệ thống nếu cần xử lý riêng
-        }
         appendOrUpdateMessage(mappedMessage);
 
-        // Gửi xác nhận "đã nhận" (delivered) cho tin nhắn đến từ người khác — parity với web
         const incomingSenderId = String(mappedMessage.senderId ?? '');
         if (
           canUseRealtimeIndicators &&
@@ -1166,7 +1162,14 @@ export default function ChatDetailScreen() {
       } else {
         void loadInitialMessages(currentUserId, true);
       }
-    },
+    }, [applyReactionUpdate, mapAnyPayloadToUiMessage, appendOrUpdateMessage, canUseRealtimeIndicators, currentUserId, sendDelivered, conversationId, loadInitialMessages]);
+
+  const { statuses } = usePresence();
+  const { isConnected, sendTyping, sendReadReceipt, sendDelivered, sendCallSignal } = useChatSocket({
+    conversationId,
+    brokerURL: BROKER_URL,
+    userId: currentUserId,
+    onMessage: handleIncomingMessage,
     onCallSignal: (event) => {
       webrtcService.handleIncomingSignal(event as any);
     },
@@ -2224,86 +2227,7 @@ export default function ChatDetailScreen() {
     setMentionSearchText('');
   };
 
-  const buildPickedMediaFromUris = useCallback((selectedUris: string[]): PickedMedia[] => {
-    return selectedUris.map((uri, index) => {
-      const cleanUri = uri.split('?')[0];
-      const decodedUri = (() => {
-        try {
-          return decodeURIComponent(cleanUri);
-        } catch {
-          return cleanUri;
-        }
-      })();
-      const fileExtensionMatch = decodedUri.match(/\.([a-zA-Z0-9]+)$/);
-      const extension = (fileExtensionMatch?.[1] || 'jpg').toLowerCase();
-      const mimeType = extension === 'png'
-        ? 'image/png'
-        : extension === 'webp'
-          ? 'image/webp'
-          : extension === 'heic'
-            ? 'image/heic'
-            : 'image/jpeg';
-
-      return {
-        uri,
-        fileName: `image_${Date.now()}_${index + 1}.${extension}`,
-        fileSize: 0,
-        mimeType,
-        mediaType: 'IMAGE',
-      };
-    });
-  }, []);
-
-  // getFileExtensionFromMimeType moved to utils/chatHelpers.ts
-
-  const handleConfirmCustomImages = useCallback((selectedUris: string[]) => {
-    const picked = buildPickedMediaFromUris(selectedUris);
-    if (picked.length === 0) {
-      return;
-    }
-
-    setPendingMediaList(picked);
-    setIsCustomImagePickerVisible(false);
-  }, [buildPickedMediaFromUris]);
-
-  // ── Media Picker Functions ──────────────────────────────
-
-  const handlePickImage = useCallback(async () => {
-    if (isExpoGo) {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true,
-        selectionLimit: MAX_IMAGE_SELECTION,
-        allowsEditing: false,
-        quality: 0.8,
-      });
-
-      if (result.canceled || !result.assets?.length) {
-        return;
-      }
-
-      const picked = result.assets.slice(0, MAX_IMAGE_SELECTION).map((asset, index) => ({
-        uri: asset.uri,
-        fileName: asset.fileName || `image_${Date.now()}_${index + 1}.${getFileExtensionFromMimeType(asset.mimeType)}`,
-        fileSize: asset.fileSize || 0,
-        mimeType: asset.mimeType || 'image/jpeg',
-        mediaType: 'IMAGE' as const,
-        width: asset.width,
-        height: asset.height,
-      }));
-
-      setPendingMediaList(picked);
-      return;
-    }
-
-    setIsCustomImagePickerVisible(true);
-  }, [getFileExtensionFromMimeType, isExpoGo]);
+  // ── Media Picker Functions ─────────────────────────────────────────────────────
 
   const handlePickVideo = useCallback(async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -2466,11 +2390,10 @@ export default function ChatDetailScreen() {
     setUploadProgress(0);
   }, []);
 
-  const handleSendMedia = useCallback(async () => {
-    if (pendingMediaList.length === 0 || !conversationId || isUploading) return;
+  const sendMediaBatch = useCallback(async (mediaItems: PickedMedia[], captionText = '') => {
+    if (mediaItems.length === 0 || !conversationId || isUploading) return;
 
-    const mediaItems = [...pendingMediaList];
-    const caption = inputText.trim();
+    const caption = captionText.trim();
     const serializedCaption = caption ? serializePlainTextToTiptapJson(caption) : undefined;
 
     setPendingMediaList([]);
@@ -2616,7 +2539,42 @@ export default function ChatDetailScreen() {
     setUploadProgress(0);
     setUploadCurrentIndex(0);
     requestScrollToLatest(true);
-  }, [pendingMediaList, conversationId, isUploading, inputText, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage, ensureVideoThumbnailForMessage, generateVideoThumbnail, videoThumbnailsByMessageId]);
+  }, [conversationId, isUploading, currentUserId, mergeUniqueMessages, requestScrollToLatest, mapAnyPayloadToUiMessage, ensureVideoThumbnailForMessage, generateVideoThumbnail, videoThumbnailsByMessageId]);
+  const handleSendMedia = useCallback(async () => {
+    await sendMediaBatch(pendingMediaList, inputText.trim());
+  }, [pendingMediaList, inputText, sendMediaBatch]);
+
+  const handlePickImage = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_IMAGE_SELECTION,
+      allowsEditing: false,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets?.length) {
+      return;
+    }
+
+    const picked = result.assets.slice(0, MAX_IMAGE_SELECTION).map((asset, index) => ({
+      uri: asset.uri,
+      fileName: asset.fileName || `image_${Date.now()}_${index + 1}.${getFileExtensionFromMimeType(asset.mimeType)}`,
+      fileSize: asset.fileSize || 0,
+      mimeType: asset.mimeType || 'image/jpeg',
+      mediaType: 'IMAGE' as const,
+      width: asset.width,
+      height: asset.height,
+    }));
+
+    await sendMediaBatch(picked, '');
+  }, [getFileExtensionFromMimeType, sendMediaBatch]);
 
   const handleReactWithEmoji = useCallback(async (emoji: string) => {
     if (!selectedMessage) {
@@ -2997,7 +2955,11 @@ const renderOlderMessagesLoading = () => {
     const showSenderName = isGroupConversation && isFirstInBlock;
     const senderDisplayName = (item.senderName || '').trim() || t('chat.unknown_user', 'Người dùng');
     const senderAvatarSource = showAvatar
-      ? getAvatarSource(item.senderAvatarUrl || (isGroupConversation ? undefined : conversationAvatarUrl))
+      ? getAvatarSource(
+        isAiConversation
+          ? FRUVIA_CHATBOT_AVATAR_URL
+          : (item.senderAvatarUrl || (isGroupConversation ? undefined : conversationAvatarUrl))
+      )
       : null;
     const showTimestamp = shouldShowMessageTimestamp(item, newerMessage);
     const timeLabel = formatMessageTime(item.createdAt);
@@ -3710,19 +3672,21 @@ const renderOlderMessagesLoading = () => {
                       </TouchableOpacity>
                     </>
                   ) : null}
-                  <TouchableOpacity style={styles.headerIcon} onPress={() => {
-                    router.push({
-                      pathname: '/chat-options',
-                      params: {
-                        id: conversationId,
-                        name: conversationDisplayName,
-                        avatar: conversationAvatarUrl,
-                        type: isGroupConversation ? 'group' : 'direct',
-                      },
-                    });
-                  }}>
-                    <Ionicons name="list-outline" size={24} color="#FFFFFF" />
-                  </TouchableOpacity>
+                  {!isAiConversation ? (
+                    <TouchableOpacity style={styles.headerIcon} onPress={() => {
+                      router.push({
+                        pathname: '/chat-options',
+                        params: {
+                          id: conversationId,
+                          name: conversationDisplayName,
+                          avatar: conversationAvatarUrl,
+                          type: isGroupConversation ? 'group' : 'direct',
+                        },
+                      });
+                    }}>
+                      <Ionicons name="list-outline" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </>
             ) : (
@@ -4059,17 +4023,19 @@ r                    {pendingMediaList[0].fileName}
                 >
                   <Ionicons name="ellipsis-horizontal" size={26} color={isQuickActionPanelVisible ? '#2F87F2' : '#7B808A'} />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.bottomActionButton}
-                  onPress={isRecording ? () => stopVoiceRecording(false) : startVoiceRecording}
-                  disabled={isUploading}
-                >
-                  <Ionicons
-                    name={isRecording ? 'stop-circle' : 'mic-outline'}
-                    size={26}
-                    color={isRecording ? '#FF3B30' : '#7B808A'}
-                  />
-                </TouchableOpacity>
+                {!isAiConversation ? (
+                  <TouchableOpacity
+                    style={styles.bottomActionButton}
+                    onPress={isRecording ? () => stopVoiceRecording(false) : startVoiceRecording}
+                    disabled={isUploading}
+                  >
+                    <Ionicons
+                      name={isRecording ? 'stop-circle' : 'mic-outline'}
+                      size={26}
+                      color={isRecording ? '#FF3B30' : '#7B808A'}
+                    />
+                  </TouchableOpacity>
+                ) : null}
                 {pendingMediaList.length > 0 ? (
                   <TouchableOpacity
                     style={styles.bottomActionButton}
@@ -4450,13 +4416,6 @@ r                    {pendingMediaList[0].fileName}
           visible={isPollModalVisible}
           onClose={() => setIsPollModalVisible(false)}
           onSubmit={handlePollSubmit}
-        />
-
-        <CustomImagePicker
-          isVisible={isCustomImagePickerVisible}
-          onClose={() => setIsCustomImagePickerVisible(false)}
-          onConfirm={handleConfirmCustomImages}
-          maxSelection={MAX_IMAGE_SELECTION}
         />
 
         {/* Forward Message Modal */}
