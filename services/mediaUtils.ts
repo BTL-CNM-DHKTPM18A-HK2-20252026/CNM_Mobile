@@ -17,7 +17,7 @@ const DEFAULT_AVATARS: Record<string, ImageSourcePropType> = {
   '/default/image6.jpg': require('../public/default/image6.jpg'),
   '/default/image7.jpg': require('../public/default/image7.jpg'),
   '/default/image8.jpg': require('../public/default/image8.jpg'),
-  '/system/fruvia_chatbot.png': require('../public/system/fruvia_chatbot.png'),
+  '/system/fruvia_chatbot.png': {uri: 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public/system/fruvia_logo.png'},
 };
 
 const DEFAULT_BACKGROUNDS: Record<string, ImageSourcePropType> = {
