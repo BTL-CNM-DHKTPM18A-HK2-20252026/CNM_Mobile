@@ -7,7 +7,7 @@ import { getAvatarSource, getCoverSource } from '@/services/mediaUtils';
 import { Ionicons, Feather  } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, FlatList, Image, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -15,9 +15,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function PersonalScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ userId?: string; name?: string; avatar?: string }>();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const viewedUserId = String(params.userId ?? '').trim();
+  const viewedUserName = String(params.name ?? '').trim();
+  const viewedUserAvatar = String(params.avatar ?? '').trim();
 
   // Profile data state
   const [loading, setLoading] = useState(true);
@@ -94,14 +98,26 @@ export default function PersonalScreen() {
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
-      const data = await authService.getProfile();
-
-      if (data && (data.full_name || data.id)) {
-        setProfile(data);
-        await fetchUserPosts(String(data.id || data.userId || data.user_id));
+      if (viewedUserId) {
+        setProfile({
+          id: viewedUserId,
+          userId: viewedUserId,
+          full_name: viewedUserName || t('profile.guest_user'),
+          displayName: viewedUserName || t('profile.guest_user'),
+          avatar_url: viewedUserAvatar || null,
+          bio: '',
+        });
+        await fetchUserPosts(viewedUserId);
       } else {
-        Alert.alert(t('profile.error_title'), t('profile.error_loading'));
-        setPosts([]);
+        const data = await authService.getProfile();
+
+        if (data && (data.full_name || data.id)) {
+          setProfile(data);
+          await fetchUserPosts(String(data.id || data.userId || data.user_id));
+        } else {
+          Alert.alert(t('profile.error_title'), t('profile.error_loading'));
+          setPosts([]);
+        }
       }
     } catch (error) {
       console.error('Error loading profile:', error);

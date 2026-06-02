@@ -21,11 +21,23 @@ export const chatDetailStyles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 14
+    marginLeft: 14,
+  },
+  headerAvatarButton: {
+    marginRight: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    overflow: 'hidden',
+    backgroundColor: '#E9EEF5',
+  },
+  headerAvatarImage: {
+    width: '100%',
+    height: '100%',
   },
   headerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 1,
   },
@@ -173,8 +185,8 @@ export const chatDetailStyles = StyleSheet.create({
     gap: 2,
   },
   headerIcon: {
-    width: 42,
-    height: 42,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -280,31 +292,57 @@ export const chatDetailStyles = StyleSheet.create({
     backgroundColor: '#E8EDF3',
   },
   messageBubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 10,
-    maxWidth: '85%',
-    minWidth: 56,
+    paddingHorizontal: 13,
+    paddingTop: 8,
+    paddingBottom: 7,
+    borderRadius: 8,
+    maxWidth: '86%',
+    minWidth: 92,
     minHeight: 0,
-    justifyContent: 'center' as const,
+    justifyContent: 'flex-start' as const,
   },
   messageBubbleCompact: {
-    paddingVertical: 2,
+    paddingTop: 6,
+    paddingBottom: 5,
     minHeight: 0,
+  },
+  messageBubbleStackedTop: {
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
+  },
+  messageBubbleStackedBottom: {
+    borderBottomLeftRadius: 5,
+    borderBottomRightRadius: 5,
+  },
+  mediaBubble: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    minWidth: 0,
+    minHeight: 0,
+    justifyContent: 'flex-start' as const,
+    overflow: 'visible' as const,
+  },
+  mediaBubbleLeft: {
+    alignSelf: 'flex-start',
+  },
+  mediaBubbleRight: {
+    alignSelf: 'flex-end',
   },
   bubbleWrapper: {
     position: 'relative' as const,
-    paddingTop: 1,
-    paddingBottom: 4,
+    paddingTop: 0,
+    paddingBottom: 1,
   },
   userBubble: {
     backgroundColor: '#D8F1FF',
-    borderTopRightRadius: 8,
+    borderTopRightRadius: 6,
     borderWidth: 0.25,
     borderColor: '#7CC8F2',
   },
   otherBubble: {
-    borderTopLeftRadius: 8,
+    borderTopLeftRadius: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 0.25,
     borderColor: '#7CC8F2',
@@ -350,7 +388,7 @@ export const chatDetailStyles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 9,
-    marginTop: 4,
+    marginTop: 3,
     color: '#8D929C',
     fontWeight: '400',
   },
@@ -360,6 +398,14 @@ export const chatDetailStyles = StyleSheet.create({
   },
   timestampRight: {
     marginRight: 4,
+    alignSelf: 'flex-end',
+  },
+  timestampInlineLeft: {
+    marginTop: 3,
+    alignSelf: 'flex-start',
+  },
+  timestampInlineRight: {
+    marginTop: 3,
     alignSelf: 'flex-end',
   },
   recalledText: {
@@ -594,10 +640,13 @@ export const chatDetailStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   attachButton: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 46,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 1,
+  },
+  attachButtonActive: {
   },
   input: {
     flex: 1,
@@ -615,6 +664,37 @@ export const chatDetailStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  quickActionPanel: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    paddingBottom: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  quickActionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 2,
+  },
+  quickActionItem: {
+    width: '25%',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  quickActionIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  quickActionLabel: {
+    width: '100%',
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
+    fontWeight: '400',
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -626,6 +706,12 @@ export const chatDetailStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 16,
     paddingBottom: 20,
+  },
+  attachPanel: {
+    height: 320,
+    borderTopWidth: 1,
+    paddingHorizontal: 10,
+    paddingTop: 12,
   },
   emojiRow: {
     flexDirection: 'row',
@@ -1291,13 +1377,37 @@ export const chatDetailStyles = StyleSheet.create({
   // ── Fullscreen image preview ──────
   fullscreenImageBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
-    justifyContent: 'center',
+    backgroundColor: '#000',
+    justifyContent: 'space-between',
+  },
+  fullscreenHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingTop: 4,
+    paddingHorizontal: 4,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  fullscreenHeaderBtn: {
+    padding: 10,
+  },
+  fullscreenHeaderCenter: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  fullscreenHeaderName: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  fullscreenHeaderDate: {
+    color: '#AAAAAA',
+    fontSize: 12,
+    marginTop: 1,
   },
   fullscreenImage: {
+    flex: 1,
     width: '100%',
-    height: '80%',
   },
   fullscreenImageClose: {
     position: 'absolute',
@@ -1312,6 +1422,55 @@ export const chatDetailStyles = StyleSheet.create({
     padding: 12,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 24,
+  },
+  fullscreenFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingBottom: 28,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  fullscreenHdBadge: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 10,
+  },
+  fullscreenHdText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  fullscreenThumbStrip: {
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 4,
+  },
+  fullscreenThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 4,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  fullscreenThumbActive: {
+    borderColor: '#FFFFFF',
+  },
+  fullscreenThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  fullscreenShareBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
   },
   fullscreenVideo: {
     width: '100%',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,9 @@ import {
   Image,
   ActivityIndicator,
   FlatList,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import emojiPack from '../constants/emoji-pack.json';
-import api from '@shared/services/api';
 
 const S3_BASE_URL = process.env.EXPO_PUBLIC_S3_BASE_URL || 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public';
 
@@ -40,55 +38,41 @@ export default function EmojiStickerPicker({
   onSelectSticker,
   onClose,
 }: EmojiStickerPickerProps) {
-  const [activeTab, setActiveTab] = useState<'sticker' | 'emoji'>('sticker');
+  const [activeTab, setActiveTab] = useState<'sticker' | 'emoji'>('emoji');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeEmojiCategory, setActiveEmojiCategory] = useState('symbols');
+  const [activeEmojiCategory] = useState('symbols');
   const [stickerPacks, setStickerPacks] = useState<StickerPackData[]>([]);
   const [activeStickerPackId, setActiveStickerPackId] = useState('');
   const [stickerLoading, setStickerLoading] = useState(false);
 
   // Normalize URLs matching the web implementation
   const normalizeStickerSrc = (src: string) => {
-    return `${S3_BASE_URL}${src.replace(/\\/g, '/').replace(/\.webp$/i, '.png')}`;
+    if (src.startsWith('http://') || src.startsWith('https://')) return src;
+    return `${S3_BASE_URL}${src}`;
   };
 
   const normalizeEmojiSrc = (src: string) => {
+    if (src.startsWith('http://') || src.startsWith('https://')) return src;
     return `${S3_BASE_URL}${src.replace('/fruvia_emoji', '')}`;
   };
 
-  // Load stickers from API, fallback to S3 JSON
+  // Load sticker packs from S3 JSON (same as web)
   useEffect(() => {
-    if (activeTab !== 'sticker' || stickerPacks.length > 0) return;
+    if (stickerPacks.length > 0) return;
     setStickerLoading(true);
 
-    const loadFromS3 = () => {
-      fetch(`${S3_BASE_URL}/stickers/sticker-pack.json`)
-        .then((r) => r.json())
-        .then((data: { packs: StickerPackData[] }) => {
-          const packs = data.packs.filter((p) => p.id !== 'pack_0');
-          setStickerPacks(packs);
-          if (packs.length > 0) setActiveStickerPackId(packs[0].id);
-        })
-        .catch((e) => console.error('Failed to load sticker packs:', e))
-        .finally(() => setStickerLoading(false));
-    };
-
-    // Try API first
-    api.get('/stickers/packs')
-      .then((res: any) => {
-        const packs = res?.data ?? res;
-        if (Array.isArray(packs) && packs.length > 0) {
-          setStickerPacks(packs);
-          if (packs.length > 0) setActiveStickerPackId(packs[0].id);
-          setStickerLoading(false);
-        } else {
-          loadFromS3();
-        }
+    fetch(`${S3_BASE_URL}/stickers/sticker-pack.json`)
+      .then((r) => r.json())
+      .then((data: { packs: StickerPackData[] }) => {
+        const packs = data.packs.filter((p) => p.id !== 'pack_0');
+        setStickerPacks(packs);
+        if (packs.length > 0) setActiveStickerPackId(packs[0].id);
       })
-      .catch(() => loadFromS3());
-  }, [activeTab, stickerPacks.length]);
+      .catch((e) => console.error('Failed to load sticker packs:', e))
+      .finally(() => setStickerLoading(false));
+  }, [stickerPacks.length]);
 
-  // Active sticker pack stickers filtered by search query
+  // Show stickers from active pack, filtered by search query
   const activePack = useMemo(() => {
     return stickerPacks.find((p) => p.id === activeStickerPackId);
   }, [stickerPacks, activeStickerPackId]);
@@ -121,54 +105,43 @@ export default function EmojiStickerPicker({
 
   return (
     <View style={styles.container}>
-      {/* Header Tabs */}
+      {/* Header Tabs: emoji icon + sticker pack icons */}
       <View style={styles.tabHeader}>
-        <View style={styles.tabButtons}>
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'sticker' && styles.activeTabButton]}
-            onPress={() => {
-              setActiveTab('sticker');
-              setSearchQuery('');
-            }}
-          >
-            <Text style={[styles.tabText, activeTab === 'sticker' && styles.activeTabText]}>STICKER</Text>
-            {activeTab === 'sticker' && <View style={styles.activeTabIndicator} />}
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'emoji' && styles.activeTabButton]}
+          onPress={() => {
+            setActiveTab('emoji');
+            setSearchQuery('');
+          }}
+        >
+          <Ionicons
+            name="happy-outline"
+            size={24}
+            color={activeTab === 'emoji' ? '#0068FF' : '#7B808A'}
+          />
+          {activeTab === 'emoji' && <View style={styles.activeTabIndicator} />}
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'emoji' && styles.activeTabButton]}
-            onPress={() => {
-              setActiveTab('emoji');
-              setSearchQuery('');
-            }}
-          >
-            <Text style={[styles.tabText, activeTab === 'emoji' && styles.activeTabText]}>EMOJI</Text>
-            {activeTab === 'emoji' && <View style={styles.activeTabIndicator} />}
-          </TouchableOpacity>
-        </View>
-        
-        {onClose && (
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Ionicons name="chevron-down" size={24} color="#7B808A" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={16} color="#7B808A" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={activeTab === 'sticker' ? 'Tìm kiếm sticker...' : 'Tìm kiếm emoji...'}
-          placeholderTextColor="#7B808A"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={16} color="#7B808A" />
-          </TouchableOpacity>
-        )}
+        {/* Sticker pack icons */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.packTabsScroll}>
+          {stickerPacks.map((pack) => (
+            <TouchableOpacity
+              key={pack.id}
+              style={[styles.packTabItem, activeStickerPackId === pack.id && activeTab === 'sticker' && styles.packTabItemActive]}
+              onPress={() => {
+                setActiveTab('sticker');
+                setActiveStickerPackId(pack.id);
+                setSearchQuery('');
+              }}
+            >
+              <Image
+                source={{ uri: normalizeStickerSrc(pack.stickers[0]?.src || '') }}
+                style={styles.packTabIcon}
+              />
+              {activeStickerPackId === pack.id && activeTab === 'sticker' && <View style={styles.activeTabIndicator} />}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Grid Content */}
@@ -236,63 +209,6 @@ export default function EmojiStickerPicker({
           </ScrollView>
         )}
       </View>
-
-      {/* Bottom Category Selector */}
-      <View style={styles.bottomNav}>
-        {activeTab === 'emoji' ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bottomScroll}>
-            {emojiPack.categories.map((cat) => {
-              const representativeIcon = cat.icons[0];
-              const isSelected = activeEmojiCategory === cat.id && !searchQuery;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.bottomNavItem, isSelected && styles.bottomNavItemActive]}
-                  onPress={() => {
-                    setActiveEmojiCategory(cat.id);
-                    setSearchQuery('');
-                  }}
-                >
-                  {representativeIcon ? (
-                    <Image
-                      source={{ uri: normalizeEmojiSrc(representativeIcon.src) }}
-                      style={styles.bottomNavIcon}
-                    />
-                  ) : (
-                    <Text style={styles.bottomNavText}>{cat.name.substring(0, 2)}</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bottomScroll}>
-            {stickerPacks.map((pack) => {
-              const representativeIcon = pack.stickers[0];
-              const isSelected = activeStickerPackId === pack.id && !searchQuery;
-              return (
-                <TouchableOpacity
-                  key={pack.id}
-                  style={[styles.bottomNavItem, isSelected && styles.bottomNavItemActive]}
-                  onPress={() => {
-                    setActiveStickerPackId(pack.id);
-                    setSearchQuery('');
-                  }}
-                >
-                  {representativeIcon ? (
-                    <Image
-                      source={{ uri: normalizeStickerSrc(representativeIcon.src) }}
-                      style={styles.bottomNavIcon}
-                    />
-                  ) : (
-                    <Text style={styles.bottomNavText}>{pack.name.substring(0, 2)}</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
     </View>
   );
 }
@@ -307,10 +223,10 @@ const styles = StyleSheet.create({
   tabHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    height: 40,
     borderBottomWidth: 1,
     borderBottomColor: '#EFF1F5',
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   tabButtons: {
     flexDirection: 'row',
@@ -318,9 +234,10 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    width: 40,
     position: 'relative',
-    height: '100%',
+    height: 40,
   },
   activeTabButton: {},
   tabText: {
@@ -334,11 +251,29 @@ const styles = StyleSheet.create({
   activeTabIndicator: {
     position: 'absolute',
     bottom: 0,
-    left: 16,
-    right: 16,
+    left: 8,
+    right: 8,
     height: 3,
     backgroundColor: '#0068FF',
     borderRadius: 2,
+  },
+  packTabsScroll: {
+    flex: 1,
+    marginLeft: -2,
+  },
+  packTabItem: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    height: 40,
+    position: 'relative',
+    marginHorizontal: 1,
+  },
+  packTabItemActive: {},
+  packTabIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
   },
   closeButton: {
     padding: 8,
@@ -374,31 +309,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   listContent: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     paddingBottom: 8,
   },
   stickerItem: {
     width: `${100 / 4}%`,
     aspectRatio: 1,
-    padding: 6,
+    padding: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stickerImage: {
-    width: '100%',
-    height: '100%',
+    width: '80%',
+    height: '80%',
   },
   emojiScrollContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     paddingBottom: 8,
   },
   emojiCategoryBlock: {
     marginVertical: 6,
   },
   categoryTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7B808A',
+    fontSize: 9,
+    fontWeight: '400',
+    color: '#000000',
     marginBottom: 6,
     textTransform: 'uppercase',
   },
@@ -407,15 +342,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   emojiItem: {
-    width: `${100 / 7}%`,
+    width: `${100 / 9}%`,
     aspectRatio: 1,
-    padding: 4,
+    padding: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emojiImage: {
-    width: '100%',
-    height: '100%',
+    width: '70%',
+    height: '70%',
   },
   bottomNav: {
     height: 48,

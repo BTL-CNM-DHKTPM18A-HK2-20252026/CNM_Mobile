@@ -4,32 +4,39 @@ import { authService } from '@/services/authService';
 import { getAvatarSource, getCoverSource } from '@/services/mediaUtils';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Image, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePresence } from '@/context/PresenceContext';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ userId?: string; name?: string; avatar?: string }>();
   const { t } = useTranslation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const viewedUserId = String(params.userId ?? '').trim();
+  const viewedUserName = String(params.name ?? '').trim();
+  const viewedUserAvatar = String(params.avatar ?? '').trim();
 
   // Profile data state
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchUserProfile();
-    }, [])
-  );
-
-  const fetchUserProfile = async () => {
+  const fetchUserProfile = useCallback(async () => {
     try {
       setLoading(true);
+      if (viewedUserId) {
+        setProfile({
+          id: viewedUserId,
+          userId: viewedUserId,
+          full_name: viewedUserName || t('profile.guest_user'),
+          avatar_url: viewedUserAvatar || null,
+          bio: '',
+        });
+        return;
+      }
       const data = await authService.getProfile();
 
       if (data && (data.full_name || data.id)) {
@@ -43,7 +50,13 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t, viewedUserAvatar, viewedUserId, viewedUserName]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchUserProfile();
+    }, [fetchUserProfile])
+  );
 
   const handleChangeAvatar = async () => {
     // 1. Xin quyền và chọn ảnh
@@ -144,13 +157,15 @@ export default function ProfileScreen() {
 
         <View style={[styles.body, { backgroundColor: colors.background }]}> 
           {/* Edit Button */}
-          <TouchableOpacity 
-            style={[styles.editButton, { backgroundColor: COLORS.primary }]} 
-            onPress={() => router.push('/edit-profile')}
-          >
-            <Ionicons name="pencil" size={16} color="#fff" />
-            <Text style={styles.editButtonText}>{t('profile.edit_profile_button')}</Text>
-          </TouchableOpacity>
+          {!viewedUserId ? (
+            <TouchableOpacity 
+              style={[styles.editButton, { backgroundColor: COLORS.primary }]} 
+              onPress={() => router.push('/edit-profile')}
+            >
+              <Ionicons name="pencil" size={16} color="#fff" />
+              <Text style={styles.editButtonText}>{t('profile.edit_profile_button')}</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {/* Basic Info Card */}
           <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}> 

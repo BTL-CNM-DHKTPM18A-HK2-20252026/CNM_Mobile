@@ -65,6 +65,7 @@ function RootLayoutContent() {
         <Stack.Screen name="create-group" />
         <Stack.Screen name="personal-wall" />
         <Stack.Screen name="personal-menu" />
+        <Stack.Screen name="chat-options" />
       </Stack>
       <StatusBar style={isDark ? "light" : "dark"} />
     </NavigationProvider>

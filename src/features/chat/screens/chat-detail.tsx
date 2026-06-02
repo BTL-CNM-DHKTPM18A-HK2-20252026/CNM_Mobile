@@ -1,4 +1,3 @@
-import { AttachMenuContent } from '@/components/chat/AttachMenuContent';
 import { ChatHeader } from '@/components/chat/ChatHeader';
 import CustomImagePicker from '@/components/chat/CustomImagePicker';
 import ExpandableText from '@/components/chat/ExpandableText';
@@ -35,6 +34,7 @@ import { serializePlainTextToTiptapJson } from '@/utils/chat/plainTextToTiptap';
 import { DEFAULT_SPLIT_MESSAGE_MAX_WORDS, splitMessage } from '@/utils/chat/splitMessage';
 import { getSystemMessageContent, isSystemMessage } from '@/utils/chat/systemMessage';
 import { CallOverlay } from '@chat/components/CallOverlay';
+import EmojiStickerPicker from '@chat/components/input/EmojiStickerPicker';
 import MentionDropdown from '@chat/components/input/MentionDropdown';
 import CallHistoryCard from '@chat/components/message/CallHistoryCard';
 import LinkPreviewCard from '@chat/components/message/LinkPreviewCard';
@@ -56,6 +56,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -70,7 +71,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   checkPinMessagePermission,
   checkSendMessagePermission,
@@ -85,7 +86,6 @@ import {
 import { webrtcService } from '../services/webrtcService';
 
 
-import ChatInfoPanel from '../components/ChatInfoPanel';
 import {
   AI_TYPING_USER_ID, BLOCK_GAP_MS,
   BROKER_URL,
@@ -113,6 +113,7 @@ import {
 } from '../utils/chatHelpers';
 
 export default function ChatDetailScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id, name, avatar, type } = useLocalSearchParams<{ id: string; name: string; avatar?: string; type?: string }>();
   const { t, i18n } = useTranslation();
@@ -152,7 +153,6 @@ export default function ChatDetailScreen() {
   // Read/Delivered receipts (1-1 chat parity with web): messageId the partner has seen/received
   const [seenMessageId, setSeenMessageId] = useState<string | null>(null);
   const [deliveredMessageId, setDeliveredMessageId] = useState<string | null>(null);
-  const [isAttachMenuVisible, setIsAttachMenuVisible] = useState(false);
   const [isCustomImagePickerVisible, setIsCustomImagePickerVisible] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -292,6 +292,136 @@ export default function ChatDetailScreen() {
     setIsSearchingLoading(false);
   }, []);
 
+  const [isQuickActionPanelVisible, setIsQuickActionPanelVisible] = useState(false);
+
+  const closeQuickActionPanel = useCallback(() => {
+    setIsQuickActionPanelVisible(false);
+  }, []);
+
+  const quickActionItems = useMemo(() => ([
+    {
+      key: 'location',
+      label: 'Vị trí',
+      icon: 'location-outline' as const,
+      color: '#E56B63',
+      backgroundColor: '#FBE5E2',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('Vị trí', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'file',
+      label: 'Tài liệu',
+      icon: 'document-outline' as const,
+      color: '#4657D8',
+      backgroundColor: '#E4EBFF',
+      onPress: () => {
+        closeQuickActionPanel();
+        void handlePickFile();
+      },
+    },
+    {
+      key: 'remind',
+      label: 'Nhắc hẹn',
+      icon: 'alarm-outline' as const,
+      color: '#D45862',
+      backgroundColor: '#F8E1E4',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('Nhắc hẹn', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'quick-message',
+      label: 'Tin nhắn nhanh',
+      icon: 'chatbubble-ellipses-outline' as const,
+      color: '#2868E8',
+      backgroundColor: '#DDEBFF',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('Tin nhắn nhanh', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'transfer',
+      label: 'Chuyển khoản',
+      icon: 'swap-horizontal-outline' as const,
+      color: '#43B97F',
+      backgroundColor: '#DFF6E9',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('Chuyển khoản', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'contact',
+      label: 'Danh thiếp',
+      icon: 'person-circle-outline' as const,
+      color: '#5CA8E8',
+      backgroundColor: '#DDEFFF',
+      onPress: () => {
+        closeQuickActionPanel();
+        setIsShareContactVisible(true);
+      },
+    },
+    {
+      key: 'my-documents',
+      label: 'My Documents',
+      icon: 'folder-outline' as const,
+      color: '#4675E8',
+      backgroundColor: '#E3EAFE',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('My Documents', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'bank',
+      label: 'Gửi số tài khoản',
+      icon: 'card-outline' as const,
+      color: '#8A56E8',
+      backgroundColor: '#EBDDFF',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('Gửi số tài khoản', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'gif',
+      label: '@GIF',
+      icon: 'film-outline' as const,
+      color: '#2C6BE8',
+      backgroundColor: '#D8E5FF',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('@GIF', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'draw',
+      label: 'Vẽ hình',
+      icon: 'brush-outline' as const,
+      color: '#D05AB5',
+      backgroundColor: '#F3D9F0',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('Vẽ hình', 'Chức năng đang phát triển');
+      },
+    },
+    {
+      key: 'text-style',
+      label: 'Kiểu chữ',
+      icon: 'text-outline' as const,
+      color: '#D6AE2F',
+      backgroundColor: '#F6E7BB',
+      onPress: () => {
+        closeQuickActionPanel();
+        Alert.alert('Kiểu chữ', 'Chức năng đang phát triển');
+      },
+    },
+  ]), [closeQuickActionPanel, handlePickFile]);
+
   const [pendingMediaList, setPendingMediaList] = useState<PickedMedia[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -304,11 +434,27 @@ export default function ChatDetailScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCurrentIndex, setUploadCurrentIndex] = useState(0);
   const [videoThumbnailsByMessageId, setVideoThumbnailsByMessageId] = useState<Record<string, string>>({});
-  const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
+  const [fullscreenImgState, setFullscreenImgState] = useState<{
+    allUrls: string[];
+    currentIdx: number;
+    senderName: string;
+    createdAt: string;
+  } | null>(null);
+  const fullscreenImageUrl = fullscreenImgState
+    ? (fullscreenImgState.allUrls[fullscreenImgState.currentIdx] ?? null)
+    : null;
+  const formatMediaDate = (createdAt?: string): string => {
+    const d = parseMessageDate(createdAt);
+    if (!d) return '';
+    const diffDay = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if (diffDay === 0) return 'Hôm nay';
+    if (diffDay === 1) return 'Hôm qua';
+    if (diffDay < 30) return `${diffDay} ngày trước`;
+    const diffMonth = Math.floor(diffDay / 30);
+    return diffMonth < 12 ? `${diffMonth} tháng trước` : `${Math.floor(diffMonth / 12)} năm trước`;
+  };
   const [fullscreenVideoUrl, setFullscreenVideoUrl] = useState<string | null>(null);
 
-  // Info panel state — managed inside ChatInfoPanel
-  const [isInfoPanelVisible, setIsInfoPanelVisible] = useState(false);
   const [infoMembers, setInfoMembers] = useState<any[]>([]);
   const [isMemberListVisible, setIsMemberListVisible] = useState(false);
   const [isJumpingToMessage, setIsJumpingToMessage] = useState(false);
@@ -1039,7 +1185,7 @@ export default function ChatDetailScreen() {
       }
 
       if (isGroupConversation) {
-        // Info panel state managed inside ChatInfoPanel
+  // Options screen state is handled by route navigation
       }
     },
   });
@@ -2007,7 +2153,6 @@ export default function ChatDetailScreen() {
   // ── Media Picker Functions ──────────────────────────────
 
   const handlePickImage = useCallback(async () => {
-    setIsAttachMenuVisible(false);
     if (isExpoGo) {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
@@ -2045,7 +2190,6 @@ export default function ChatDetailScreen() {
   }, [getFileExtensionFromMimeType, isExpoGo]);
 
   const handlePickVideo = useCallback(async () => {
-    setIsAttachMenuVisible(false);
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
       Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập thư viện ảnh');
@@ -2148,7 +2292,6 @@ export default function ChatDetailScreen() {
   }, [hookTogglePlayVoice]);
 
   const handlePickFile = useCallback(async () => {
-    setIsAttachMenuVisible(false);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
@@ -2176,7 +2319,6 @@ export default function ChatDetailScreen() {
   }, []);
 
   const handleTakePhoto = useCallback(async () => {
-    setIsAttachMenuVisible(false);
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     if (!permissionResult.granted) {
       Alert.alert('Quyền truy cập', 'Bạn cần cho phép truy cập camera');
@@ -2734,8 +2876,9 @@ const renderOlderMessagesLoading = () => {
     const newerMessage = index > 0 ? messages[index - 1] : undefined;
     const olderMessage = index < messages.length - 1 ? messages[index + 1] : undefined;
     const isLastInMessageBlock = shouldShowMessageTimestamp(item, newerMessage);
-    const showAvatar = !isCurrentUserMessage && isLastInMessageBlock;
-    const showSenderName = isGroupConversation && isFirstInMessageBlock(item, olderMessage);
+    const isFirstInBlock = isFirstInMessageBlock(item, olderMessage);
+    const showAvatar = !isCurrentUserMessage && isFirstInBlock;
+    const showSenderName = isGroupConversation && isFirstInBlock;
     const senderDisplayName = (item.senderName || '').trim() || t('chat.unknown_user', 'Người dùng');
     const senderAvatarSource = showAvatar
       ? getAvatarSource(item.senderAvatarUrl || (isGroupConversation ? undefined : conversationAvatarUrl))
@@ -2836,7 +2979,7 @@ const renderOlderMessagesLoading = () => {
               activeOpacity={0.85}
               onPress={() => {
                 if (!isLocalUri) {
-                  setFullscreenImageUrl(item.content);
+                  setFullscreenImgState({ allUrls: [item.content], currentIdx: 0, senderName: item.senderName || '', createdAt: item.createdAt || '' });
                 }
               }}
               onLongPress={handleMediaLongPress}
@@ -2880,7 +3023,7 @@ const renderOlderMessagesLoading = () => {
             return (
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => setFullscreenImageUrl(imgs[0].url)}
+                onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: 0, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
                 onLongPress={handleMediaLongPress}
                 delayLongPress={220}
               >
@@ -2895,7 +3038,7 @@ const renderOlderMessagesLoading = () => {
                   <TouchableOpacity
                     key={i}
                     activeOpacity={0.85}
-                    onPress={() => setFullscreenImageUrl(att.url)}
+                    onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: i, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
                     onLongPress={handleMediaLongPress}
                     delayLongPress={220}
                   >
@@ -2910,7 +3053,7 @@ const renderOlderMessagesLoading = () => {
               <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => setFullscreenImageUrl(imgs[0].url)}
+                  onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: 0, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
                   onLongPress={handleMediaLongPress}
                   delayLongPress={220}
                 >
@@ -2921,7 +3064,7 @@ const renderOlderMessagesLoading = () => {
                     <TouchableOpacity
                       key={i}
                       activeOpacity={0.85}
-                      onPress={() => setFullscreenImageUrl(att.url)}
+                      onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: i + 1, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
                       onLongPress={handleMediaLongPress}
                       delayLongPress={220}
                     >
@@ -2954,7 +3097,7 @@ const renderOlderMessagesLoading = () => {
                       <TouchableOpacity
                         key={ci}
                         activeOpacity={0.85}
-                        onPress={() => setFullscreenImageUrl(att.url)}
+                        onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: imgs.findIndex(a => a.url === att.url), senderName: item.senderName || '', createdAt: item.createdAt || '' })}
                         onLongPress={handleMediaLongPress}
                         delayLongPress={220}
                       >
@@ -3310,23 +3453,29 @@ const renderOlderMessagesLoading = () => {
     // STICKER: render without bubble wrapper
     if (isStickerMsg) {
       return (
-        <View style={{ alignItems: 'center', marginVertical: 6, paddingHorizontal: 40 }}>
+        <View style={[styles.messageContainer, { marginBottom: isLastInMessageBlock ? (showTimestamp ? 12 : 6) : 2 }]}>
           {dateSepLabel ? (
             <View style={styles.dateSeparator}>
               <Text style={styles.dateSeparatorText}>{dateSepLabel}</Text>
             </View>
           ) : null}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onLongPress={() => openMessageActionMenu(item)}
-            delayLongPress={220}
-          >
-            <Image
-              source={{ uri: item.content }}
-              style={{ width: 120, height: 120 }}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
+          <View style={{ width: '100%', flexDirection: 'row', justifyContent: isCurrentUserMessage ? 'flex-end' : 'flex-start', paddingHorizontal: 10 }}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onLongPress={() => openMessageActionMenu(item)}
+              delayLongPress={220}
+              style={{ width: 120, height: 120, alignSelf: isCurrentUserMessage ? 'flex-end' : 'flex-start' }}
+            >
+              <Image
+                source={{ uri: item.content }}
+                style={{ width: 120, height: 120 }}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          </View>
+          {showTimestamp ? (
+            <Text style={[styles.timestamp, isCurrentUserMessage ? styles.timestampRight : styles.timestampLeft]}>{timeLabel}</Text>
+          ) : null}
         </View>
       );
     }
@@ -3349,6 +3498,22 @@ const renderOlderMessagesLoading = () => {
         highlighted={highlightedMessageId === String(item.messageId)}
         onLongPress={() => openMessageActionMenu(item)}
         isCompactBubble={isCompactBubble}
+        isMediaMessage={isMediaMsg}
+        isFirstInBlock={isFirstInBlock}
+        onAvatarPress={
+          !isCurrentUserMessage && item.senderId && senderAvatarSource
+            ? () => {
+                router.push({
+                  pathname: '/profile',
+                  params: {
+                    userId: String(item.senderId),
+                    name: senderDisplayName,
+                    avatar: String(item.senderAvatarUrl || conversationAvatarUrl || ''),
+                  },
+                });
+              }
+            : undefined
+        }
         colors={colors}
         styles={styles as any}
         playingVoiceId={playingVoiceId}
@@ -3374,62 +3539,57 @@ const renderOlderMessagesLoading = () => {
             {!isSearching ? (
               <>
                 <TouchableOpacity onPress={() => router.back()}>
-                  <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
+                  <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
                 <View style={styles.headerInfo}>
-                  <Text style={styles.headerTitle} numberOfLines={1}>
-                    {conversationDisplayName}
-                  </Text>
+                  {!isGroupConversation ? (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        if (!partnerId) return;
+                        router.push({
+                          pathname: '/personal-wall',
+                          params: {
+                            userId: partnerId,
+                            name: conversationDisplayName,
+                            avatar: conversationAvatarUrl,
+                          },
+                        });
+                      }}
+                    >
+                      <Text style={styles.headerTitle} numberOfLines={1}>
+                        {conversationDisplayName}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.headerTitle} numberOfLines={1}>
+                      {conversationDisplayName}
+                    </Text>
+                  )}
                   <Text style={styles.headerSubtitle}>
                     {headerSubtitleText}
                   </Text>
                 </View>
                 <View style={styles.headerActions}>
-                  <TouchableOpacity style={styles.headerIcon} onPress={toggleSearchMode}>
-                    <Ionicons name="search-outline" size={26} color="#FFFFFF" />
-                  </TouchableOpacity>
                   {showCallActions ? (
                     <>
                       <TouchableOpacity style={styles.headerIcon}>
-                        <Ionicons name="call-outline" size={27} color="#FFFFFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.headerIcon}
-                        onPress={() => {
-                          if (isGroupConversation) {
-                            // Start group call
-                            const callId = String(Date.now());
-                            if (sendCallSignal) {
-                              sendCallSignal({
-                                type: 'CALL_GROUP_START',
-                                receiverId: conversationId,
-                                callId,
-                                callerName: 'Bạn',
-                                conversationId,
-                              });
-                              Alert.alert('Đã bắt đầu', 'Cuộc gọi video nhóm đã được bắt đầu!');
-                            }
-                          } else {
-                            const peerName = conversationDisplayName;
-                            const peerAvatar = conversationAvatarUrl;
-                            webrtcService.startCall(
-                              currentUserId!,
-                              partnerId || '',
-                              peerName || 'Unknown',
-                              peerAvatar,
-                              conversationId,
-                              'Bạn',
-                              undefined
-                            );
-                          }
-                        }}
-                      >
-                        <Ionicons name={isGroupConversation ? 'people' : 'videocam-outline'} size={27} color="#FFFFFF" />
+                        <Ionicons name="call-outline" size={22} color="#FFFFFF" />
                       </TouchableOpacity>
                     </>
                   ) : null}
-                  <TouchableOpacity style={styles.headerIcon} onPress={() => { setIsInfoPanelVisible(true); }}>
-                    <Ionicons name="list-outline" size={30} color="#FFFFFF" />
+                  <TouchableOpacity style={styles.headerIcon} onPress={() => {
+                    router.push({
+                      pathname: '/chat-options',
+                      params: {
+                        id: conversationId,
+                        name: conversationDisplayName,
+                        avatar: conversationAvatarUrl,
+                        type: isGroupConversation ? 'group' : 'direct',
+                      },
+                    });
+                  }}>
+                    <Ionicons name="list-outline" size={24} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
               </>
@@ -3591,7 +3751,10 @@ const renderOlderMessagesLoading = () => {
           </SafeAreaView>
         ) : (
           <MessageInput>
-            <SafeAreaView style={[styles.inputArea, { borderTopColor: colors.border }]} edges={['left', 'right', 'bottom']}>
+            <SafeAreaView
+              style={[styles.inputArea, { borderTopColor: colors.border }]}
+              edges={isEmojiPickerVisible || isQuickActionPanelVisible ? ['left', 'right'] : ['left', 'right', 'bottom']}
+            >
           {editingMessageId ? (
             <View style={styles.editingBanner}>
               <View style={styles.editingBannerTextWrap}>
@@ -3624,7 +3787,7 @@ const renderOlderMessagesLoading = () => {
                 )}
                 <View style={styles.mediaPreviewInfo}>
                   <Text style={styles.mediaPreviewName} numberOfLines={1}>
-                    {pendingMediaList[0].fileName}
+r                    {pendingMediaList[0].fileName}
                   </Text>
                   <Text style={styles.mediaPreviewSize}>
                     {chatFileService.formatFileSize(pendingMediaList[0].fileSize)} • {pendingMediaList[0].mediaType}
@@ -3730,33 +3893,39 @@ const renderOlderMessagesLoading = () => {
               <>
                 <TouchableOpacity
                   style={styles.attachButton}
-                  onPress={() => textInputRef.current?.focus()}
+                  onPress={() => {
+                    setIsEmojiPickerVisible((prev) => !prev);
+                    setIsQuickActionPanelVisible(false);
+                    Keyboard.dismiss();
+                  }}
                 >
                   <Ionicons
                     name="happy-outline"
-                    size={30}
-                    color="#7B808A"
+                    size={26}
+                    color={isEmojiPickerVisible ? '#2F87F2' : '#7B808A'}
                   />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.bottomActionButton}
-                  onPress={() => setIsPollModalVisible(true)}
-                  disabled={isUploading}
-                >
-                  <Ionicons name="bar-chart" size={24} color={isUploading ? '#CCC' : '#7B808A'} />
                 </TouchableOpacity>
                 <TextInput
                   ref={textInputRef}
                   style={[styles.input, { color: colors.text, maxHeight: 100 }]}
                   placeholder={pendingMediaList.length > 0 ? t('chat.add_caption', 'Thêm mô tả...') : t('chat.send_message', 'Tin nhắn')}
-                  placeholderTextColor="#5BA8D9"
+                  placeholderTextColor="#000000"
                   value={inputText}
                   onChangeText={handleInputChange}
                   editable={!isUploading && (!isAiConversation || !isSendingAi)}
                   multiline
+                  onFocus={() => setIsEmojiPickerVisible(false)}
                 />
-                <TouchableOpacity style={styles.bottomActionButton} onPress={() => setIsAttachMenuVisible(true)} disabled={isUploading}>
-                  <Ionicons name="attach" size={26} color={isUploading ? '#CCC' : '#7B808A'} />
+                <TouchableOpacity
+                  style={[styles.bottomActionButton, isQuickActionPanelVisible && styles.attachButtonActive]}
+                  onPress={() => {
+                    setIsQuickActionPanelVisible((prev) => !prev);
+                    setIsEmojiPickerVisible(false);
+                    Keyboard.dismiss();
+                  }}
+                  disabled={isUploading}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={26} color={isQuickActionPanelVisible ? '#2F87F2' : '#7B808A'} />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.bottomActionButton}
@@ -3788,7 +3957,7 @@ const renderOlderMessagesLoading = () => {
                 ) : (
                   <TouchableOpacity
                     style={styles.bottomActionButton}
-                    onPress={inputText.trim() ? handleSendMessage : () => setIsAttachMenuVisible(true)}
+                    onPress={inputText.trim() ? handleSendMessage : handlePickImage}
                     disabled={isAiConversation && isSendingAi}
                   >
                     <Ionicons
@@ -3801,6 +3970,41 @@ const renderOlderMessagesLoading = () => {
               </>
             )}
           </View>
+          {isQuickActionPanelVisible ? (
+            <View style={[styles.quickActionPanel, { borderTopColor: colors.border }]}> 
+              <View style={styles.quickActionGrid}>
+                {quickActionItems.map((item) => (
+                  <TouchableOpacity key={item.key} style={styles.quickActionItem} onPress={item.onPress} activeOpacity={0.82}>
+                    <View style={[styles.quickActionIconWrap, { backgroundColor: item.backgroundColor }]}>
+                      <Ionicons name={item.icon} size={24} color={item.color} />
+                    </View>
+                    <Text style={[styles.quickActionLabel, { color: colors.text }]} numberOfLines={2}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : null}
+          {isEmojiPickerVisible ? (
+            <EmojiStickerPicker
+              onSelectEmoji={(shortcode) => {
+                setInputText((prev) => prev + shortcode);
+              }}
+              onSelectSticker={async (stickerUrl) => {
+                setIsEmojiPickerVisible(false);
+                try {
+                  await chatService.sendMessage(conversationId, {
+                    content: stickerUrl,
+                    messageType: 'STICKER',
+                  });
+                } catch (err) {
+                  console.error('Failed to send sticker:', err);
+                }
+              }}
+              onClose={() => setIsEmojiPickerVisible(false)}
+            />
+          ) : null}
           </SafeAreaView>
           </MessageInput>
         )}
@@ -4109,29 +4313,6 @@ const renderOlderMessagesLoading = () => {
           </Pressable>
         </Modal>
 
-        {/* Attachment Picker Modal */}
-        <Modal
-          visible={isAttachMenuVisible}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setIsAttachMenuVisible(false)}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsAttachMenuVisible(false)}>
-            <Pressable style={[styles.actionSheet, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
-              <AttachMenuContent
-                onPickImage={handlePickImage}
-                onPickVideo={handlePickVideo}
-                onPickFile={handlePickFile}
-                onTakePhoto={handleTakePhoto}
-                onShareContact={() => { setIsAttachMenuVisible(false); setIsShareContactVisible(true); }}
-                onCreatePoll={() => { setIsAttachMenuVisible(false); setIsPollModalVisible(true); }}
-                colors={colors}
-                styles={styles}
-              />
-            </Pressable>
-          </Pressable>
-        </Modal>
-
         {/* Poll Create Modal */}
         <PollCreateModal
           visible={isPollModalVisible}
@@ -4259,7 +4440,15 @@ const renderOlderMessagesLoading = () => {
           onClose={() => setIsMemberListVisible(false)}
           onAddMemberPress={() => {
             setIsMemberListVisible(false);
-            setIsInfoPanelVisible(true);
+            router.push({
+              pathname: '/chat-options',
+              params: {
+                id: conversationId,
+                name: conversationDisplayName,
+                avatar: conversationAvatarUrl,
+                type: isGroupConversation ? 'group' : 'direct',
+              },
+            });
           }}
           onSearchPress={() => Alert.alert('Tìm thành viên', 'Chức năng đang phát triển')}
           onMemberMenuPress={(member) => {
@@ -4269,14 +4458,35 @@ const renderOlderMessagesLoading = () => {
         />
 
         {/* Fullscreen Image Preview */}
-        <MediaViewer visible={!!fullscreenImageUrl} onClose={() => setFullscreenImageUrl(null)}>
+        <MediaViewer visible={!!fullscreenImageUrl} onClose={() => { StatusBar.setBackgroundColor('transparent'); setFullscreenImgState(null); }}>
+          <StatusBar backgroundColor="#000000" barStyle="light-content" />
           <View style={styles.fullscreenImageBackdrop}>
-            <TouchableOpacity
-              style={styles.fullscreenImageClose}
-              onPress={() => setFullscreenImageUrl(null)}
-            >
-              <Ionicons name="close" size={30} color="#FFFFFF" />
-            </TouchableOpacity>
+            {/* Header */}
+            <SafeAreaView edges={['top']} style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}>
+              <View style={styles.fullscreenHeader}>
+              <TouchableOpacity onPress={() => { StatusBar.setBackgroundColor('transparent'); setFullscreenImgState(null); }} style={styles.fullscreenHeaderBtn}>
+                <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <View style={styles.fullscreenHeaderCenter}>
+                <Text style={styles.fullscreenHeaderName} numberOfLines={1}>
+                  {fullscreenImgState?.senderName || ''}
+                </Text>
+                <Text style={styles.fullscreenHeaderDate}>
+                  {fullscreenImgState ? formatMediaDate(fullscreenImgState.createdAt) : ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.fullscreenHeaderBtn}
+                onPress={() => { if (fullscreenImageUrl) Linking.openURL(fullscreenImageUrl); }}
+              >
+                <Ionicons name="download-outline" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.fullscreenHeaderBtn}>
+                <Ionicons name="ellipsis-vertical" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            </SafeAreaView>
+            {/* Image */}
             {fullscreenImageUrl ? (
               <Image
                 source={{ uri: fullscreenImageUrl }}
@@ -4284,16 +4494,37 @@ const renderOlderMessagesLoading = () => {
                 resizeMode="contain"
               />
             ) : null}
-            <TouchableOpacity
-              style={styles.fullscreenImageDownload}
-              onPress={() => {
-                if (fullscreenImageUrl) {
-                  Linking.openURL(fullscreenImageUrl);
-                }
-              }}
-            >
-              <Ionicons name="download-outline" size={26} color="#FFFFFF" />
-            </TouchableOpacity>
+            {/* Footer */}
+            <View style={styles.fullscreenFooter}>
+              <View style={styles.fullscreenHdBadge}>
+                <Text style={styles.fullscreenHdText}>HD</Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.fullscreenThumbStrip}
+                style={{ flex: 1 }}
+              >
+                {(fullscreenImgState?.allUrls ?? []).map((url, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => setFullscreenImgState(prev => prev ? { ...prev, currentIdx: idx } : prev)}
+                    style={[
+                      styles.fullscreenThumb,
+                      idx === (fullscreenImgState?.currentIdx ?? 0) && styles.fullscreenThumbActive,
+                    ]}
+                  >
+                    <Image source={{ uri: url }} style={styles.fullscreenThumbImg} resizeMode="cover" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.fullscreenShareBtn}
+                onPress={() => { if (fullscreenImageUrl) Linking.openURL(fullscreenImageUrl); }}
+              >
+                <Ionicons name="share-outline" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
           </View>
         </MediaViewer>
 
@@ -4321,43 +4552,9 @@ const renderOlderMessagesLoading = () => {
         
         {/* ── Chat Info Panel ──────────────────────────────────────────────── */}
 
-        <ChatInfoPanel
-
-          visible={isInfoPanelVisible}
-
-          onClose={() => setIsInfoPanelVisible(false)}
-
-          conversationId={conversationId}
-
-          currentUserId={currentUserId}
-
-          conversationDisplayName={conversationDisplayName}
-
-          conversationAvatarUrl={conversationAvatarUrl}
-
-          isAiConversation={isAiConversation}
-
-          isCloudConversation={isCloudConversation}
-
-          isGroupConversation={isGroupConversation}
-
-          messages={messages}
-
-          onNameUpdated={(name) => setConversationDisplayName(name)}
-
-          onAvatarUpdated={(url) => setConversationAvatarUrl(url)}
-
-          onChatCleared={() => setMessages([])}
-
-          onGroupLeft={() => router.back()}
-
-          onJumpToPinnedMessage={handleJumpToPinnedMessage}
-
-        />
-
-
         <CallOverlay currentUserId={currentUserId || ''} />
       </KeyboardAvoidingView>
+
     </SafeAreaView>
   );
 }
