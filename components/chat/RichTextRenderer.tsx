@@ -59,16 +59,57 @@ const DEFAULT_TEXT_COLOR = '#111827';
 const DEFAULT_LINK_COLOR = '#2563eb';
 const DEFAULT_LINE_HEIGHT = 22;
 const S3_BASE_URL = process.env.EXPO_PUBLIC_S3_BASE_URL || 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public';
-const ZALO_EMOJI_REGEX = /(:zalo_\d+_\d+:)/g;
+const ZALO_EMOJI_REGEX = /(:zalo(?:_?\d+_\d+|\d+):)/g;
 
 const emojiMap: Record<string, string> = {};
 (emojiPack.categories as { icons: { shortcode: string; src: string }[] }[]).forEach((category) => {
   category.icons.forEach((icon) => {
-    emojiMap[icon.shortcode] = icon.src.startsWith('http://') || icon.src.startsWith('https://')
+    const src = icon.src.startsWith('http://') || icon.src.startsWith('https://')
       ? icon.src
       : `${S3_BASE_URL}${icon.src.replace('/fruvia_emoji', '')}`;
+    emojiMap[icon.shortcode] = src;
+
+    const gridShortcodeMatch = icon.shortcode.match(/^:zalo_(\d+)_(\d+):$/);
+    if (gridShortcodeMatch) {
+      const row = Number(gridShortcodeMatch[1]);
+      const col = Number(gridShortcodeMatch[2]);
+      emojiMap[`:zalo${row}_${col}:`] = src;
+      emojiMap[`:zalo_${row}_${col}:`] = src;
+    }
   });
 });
+(emojiPack.categories as { icons: { shortcode: string; src: string }[] }[])
+  .flatMap((category) => category.icons)
+  .forEach((icon, index) => {
+    const legacyShortcode = `:zalo${index + 1}:`;
+    if (!emojiMap[legacyShortcode]) {
+      emojiMap[legacyShortcode] = emojiMap[icon.shortcode];
+    }
+  });
+
+const getEmojiSrc = (shortcode: string): string | undefined => {
+  const exact = emojiMap[shortcode];
+  if (exact) return exact;
+
+  const legacyMatch = shortcode.match(/^:zalo0*(\d+):$/);
+  if (legacyMatch) {
+    return emojiMap[`:zalo${Number(legacyMatch[1])}:`];
+  }
+
+  const compactGridMatch = shortcode.match(/^:zalo0*(\d+)_0*(\d+):$/);
+  if (compactGridMatch) {
+    return emojiMap[`:zalo${Number(compactGridMatch[1])}_${Number(compactGridMatch[2])}:`]
+      ?? emojiMap[`:zalo_${Number(compactGridMatch[1])}_${Number(compactGridMatch[2])}:`];
+  }
+
+  const gridMatch = shortcode.match(/^:zalo_0*(\d+)_0*(\d+):$/);
+  if (gridMatch) {
+    return emojiMap[`:zalo_${Number(gridMatch[1])}_${Number(gridMatch[2])}:`]
+      ?? emojiMap[`:zalo${Number(gridMatch[1])}_${Number(gridMatch[2])}:`];
+  }
+
+  return undefined;
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -239,7 +280,7 @@ const renderTextWithZaloEmoji = (content: string, keyPrefix = 'text'): React.Rea
   }
 
   return parts.map((part, index) => {
-    const src = emojiMap[part];
+    const src = getEmojiSrc(part);
     if (!src) {
       return part;
     }
@@ -258,7 +299,7 @@ const renderTextWithZaloEmoji = (content: string, keyPrefix = 'text'): React.Rea
 
 const renderZaloEmojiNode = (node: TiptapZaloEmojiNode, key: string): React.ReactNode => {
   const shortcode = String(node.attrs?.shortcode ?? '');
-  const src = emojiMap[shortcode];
+  const src = getEmojiSrc(shortcode);
 
   if (!src) {
     return shortcode;

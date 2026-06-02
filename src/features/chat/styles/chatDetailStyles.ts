@@ -648,6 +648,30 @@ export const chatDetailStyles = StyleSheet.create({
   },
   attachButtonActive: {
   },
+  richInputWrap: {
+    flex: 1,
+    minHeight: 40,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  richInputPreview: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+    paddingVertical: 6,
+    zIndex: 2,
+  },
+  richInputPreviewContainer: {
+    alignSelf: 'stretch',
+  },
+  richInputPreviewParagraph: {
+    marginBottom: 0,
+  },
+  richInputPreviewText: {
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
   input: {
     flex: 1,
     borderWidth: 0,
@@ -657,6 +681,14 @@ export const chatDetailStyles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     backgroundColor: 'transparent',
+  },
+  richInputHiddenInput: {
+    position: 'absolute',
+    left: -1000,
+    top: -1000,
+    width: 1,
+    height: 1,
+    opacity: 0,
   },
   bottomActionButton: {
     width: 32,

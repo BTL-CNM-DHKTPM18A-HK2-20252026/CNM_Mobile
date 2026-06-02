@@ -123,6 +123,11 @@ export default function ChatDetailScreen() {
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const [inputText, setInputText] = useState('');
+  const inputHasZaloEmoji = useMemo(() => /:zalo(?:_?\d+_\d+|\d+):/.test(inputText), [inputText]);
+  const inputRichPreviewContent = useMemo(
+    () => (inputHasZaloEmoji ? serializePlainTextToTiptapJson(inputText) : ''),
+    [inputHasZaloEmoji, inputText]
+  );
   const locallyDeletedMessageIdsRef = useRef<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState(String(id ?? ''));
@@ -2008,10 +2013,11 @@ export default function ChatDetailScreen() {
     const baseTimestamp = Date.now();
     const optimisticMessages: Message[] = segments.map((segment, index) => ({
       messageId: `temp-${baseTimestamp}-${index}`,
-      content: segment,
+      content: serializePlainTextToTiptapJson(segment),
       senderId: currentUserId ?? 'local-user',
       senderName: 'Me',
       createdAt: toLocalIsoString(new Date(baseTimestamp + index)),
+      messageType: 'TEXT',
     }));
 
     setMessages((prev) => mergeUniqueMessages(prev, optimisticMessages));
@@ -4001,17 +4007,43 @@ r                    {pendingMediaList[0].fileName}
                     color={isEmojiPickerVisible ? '#2F87F2' : '#7B808A'}
                   />
                 </TouchableOpacity>
-                <TextInput
-                  ref={textInputRef}
-                  style={[styles.input, { color: colors.text, maxHeight: 100 }]}
-                  placeholder={pendingMediaList.length > 0 ? t('chat.add_caption', 'Thêm mô tả...') : t('chat.send_message', 'Tin nhắn')}
-                  placeholderTextColor="#000000"
-                  value={inputText}
-                  onChangeText={handleInputChange}
-                  editable={!isUploading && (!isAiConversation || !isSendingAi)}
-                  multiline
-                  onFocus={() => setIsEmojiPickerVisible(false)}
-                />
+                <View style={styles.richInputWrap}>
+                  {inputHasZaloEmoji && inputText.length > 0 ? (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.richInputPreview}
+                      onPress={() => textInputRef.current?.focus()}
+                    >
+                      <RichTextRenderer
+                        value={inputRichPreviewContent}
+                        paragraphSpacing={0}
+                        customStyles={{
+                          container: styles.richInputPreviewContainer,
+                          paragraph: styles.richInputPreviewParagraph,
+                          text: [styles.richInputPreviewText, { color: colors.text }],
+                        }}
+                      />
+                    </TouchableOpacity>
+                  ) : null}
+                  <TextInput
+                    ref={textInputRef}
+                    style={[
+                      styles.input,
+                      inputHasZaloEmoji ? styles.richInputHiddenInput : null,
+                      {
+                        color: colors.text,
+                        maxHeight: 100,
+                      },
+                    ]}
+                    placeholder={pendingMediaList.length > 0 ? t('chat.add_caption', 'Thêm mô tả...') : t('chat.send_message', 'Tin nhắn')}
+                    placeholderTextColor="#000000"
+                    value={inputText}
+                    onChangeText={handleInputChange}
+                    editable={!isUploading && (!isAiConversation || !isSendingAi)}
+                    multiline
+                    onFocus={() => setIsEmojiPickerVisible(false)}
+                  />
+                </View>
                 <TouchableOpacity
                   style={[styles.bottomActionButton, isQuickActionPanelVisible && styles.attachButtonActive]}
                   onPress={() => {
