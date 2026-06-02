@@ -36,13 +36,13 @@ export const chatDetailStyles = StyleSheet.create({
     height: '100%',
   },
   headerTitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 1,
   },
   headerSubtitle: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#CFE4FF',
     fontWeight: '500',
   },
@@ -357,8 +357,8 @@ export const chatDetailStyles = StyleSheet.create({
     marginBottom: 2,
   },
   messageText: {
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '400',
   },
   userMessageText: {
@@ -367,8 +367,8 @@ export const chatDetailStyles = StyleSheet.create({
   dateSeparator: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 10,
-    gap: 6,
+    marginVertical: 12,
+    gap: 2,
   },
   pinnedBannerMain: {
     flex: 1,
@@ -377,13 +377,13 @@ export const chatDetailStyles = StyleSheet.create({
     gap: 8,
   },
   dateSeparatorText: {
-    fontSize: 10,
+    fontSize: 7,
     fontWeight: '500',
     color: '#FFFFFF',
-    backgroundColor: '#4A4E57',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
+    backgroundColor: '#C7CBD1',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
     overflow: 'hidden',
   },
   timestamp: {
@@ -401,11 +401,11 @@ export const chatDetailStyles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   timestampInlineLeft: {
-    marginTop: 3,
+    marginTop: 4,
     alignSelf: 'flex-start',
   },
   timestampInlineRight: {
-    marginTop: 3,
+    marginTop: 4,
     alignSelf: 'flex-end',
   },
   recalledText: {
@@ -598,15 +598,15 @@ export const chatDetailStyles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'stretch',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderTopWidth: 1,
-    gap: 6,
+    gap: 4,
     backgroundColor: '#FFFFFF',
   },
   composerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   editingBanner: {
     flexDirection: 'row',
@@ -641,10 +641,10 @@ export const chatDetailStyles = StyleSheet.create({
   },
   attachButton: {
     width: 38,
-    height: 46,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 1,
+    paddingTop: 0,
   },
   attachButtonActive: {
   },
@@ -653,14 +653,14 @@ export const chatDetailStyles = StyleSheet.create({
     borderWidth: 0,
     borderRadius: 0,
     paddingHorizontal: 2,
-    paddingVertical: 8,
+    paddingVertical: 6,
     fontSize: 13,
     fontWeight: '500',
     backgroundColor: 'transparent',
   },
   bottomActionButton: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -882,22 +882,37 @@ export const chatDetailStyles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  fileBubble: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 0.25,
+    minWidth: 230,
+    maxWidth: '88%',
+  },
+  fileBubbleUser: {
+    backgroundColor: '#D8F1FF',
+    borderColor: '#7CC8F2',
+  },
+  fileBubbleOther: {
+    backgroundColor: '#D8F1FF',
+    borderColor: '#7CC8F2',
+  },
   fileBubbleContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    minWidth: 200,
+    gap: 8,
   },
   fileIconWrap: {
-    width: 44,
-    height: 56,
+    width: 38,
+    height: 50,
     borderRadius: 8,
     backgroundColor: '#EBF0FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   fileExtLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.3,
@@ -908,11 +923,11 @@ export const chatDetailStyles = StyleSheet.create({
     gap: 2,
   },
   fileNameMainText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   fileSizeText: {
-    fontSize: 11,
+    fontSize: 10,
   },
   // ── Media preview banner ──────────────────
   mediaPreviewBanner: {
@@ -1544,8 +1559,8 @@ export const chatDetailStyles = StyleSheet.create({
     backgroundColor: '#FF3B30',
   },
   recordingTimeText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     color: '#FF3B30',
   },
   recordingLabel: {

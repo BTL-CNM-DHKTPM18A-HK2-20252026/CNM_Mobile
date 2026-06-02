@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, ScrollView, StatusBar, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Linking, Modal, ScrollView, StatusBar, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAvatarSource } from '@/services/mediaUtils';
+import { chatService } from '@chat/services/chatService';
 
 type OptionItem = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -35,15 +36,81 @@ export default function ChatOptionsScreen() {
   const [pinConversation, setPinConversation] = useState(false);
   const [hideConversation, setHideConversation] = useState(false);
   const [incomingCallNotify, setIncomingCallNotify] = useState(true);
+  const [isMediaBrowserVisible, setIsMediaBrowserVisible] = useState(false);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaItems, setMediaItems] = useState<any[]>([]);
 
   const conversationName = String(params.name ?? 'Tùy chọn');
   const conversationAvatar = String(params.avatar ?? '');
   const isGroupConversation = String(params.type ?? '').toLowerCase() === 'group';
   const avatarSource = getAvatarSource(conversationAvatar);
+  const conversationId = String(params.id ?? '').trim();
 
   const openStub = (title: string) => {
     Alert.alert(title, 'Chức năng đang phát triển');
   };
+
+  const normalizeMediaItems = useCallback((items: any[]) => {
+    const list = Array.isArray(items) ? items : [];
+    return list.flatMap((item: any, idx: number) => {
+      const type = String(item?.messageType ?? '').toUpperCase();
+      const mediaUrl = String(item?.content ?? item?.mediaUrl ?? item?.url ?? '').trim();
+      const fileName = String(item?.fileName ?? '').trim();
+
+      if ((type === 'IMAGE' || type === 'VIDEO' || type === 'FILE' || type === 'MEDIA' || type === 'LINK') && mediaUrl) {
+        return [{
+          ...item,
+          id: String(item?.messageId ?? item?.id ?? `media-${idx}`),
+          mediaUrl,
+          fileName,
+          messageType: type,
+        }];
+      }
+
+      if (type === 'IMAGE_GROUP' && Array.isArray(item?.attachments)) {
+        return item.attachments.map((attachment: any, ai: number) => {
+          const url = String(attachment?.url ?? attachment?.content ?? attachment?.mediaUrl ?? attachment?.fileUrl ?? attachment?.path ?? '').trim();
+          if (!url) return null;
+          return {
+            ...item,
+            id: `${String(item?.messageId ?? item?.id ?? `media-group-${idx}`)}-${ai}`,
+            mediaUrl: url,
+            fileName: String(attachment?.fileName ?? fileName ?? '').trim(),
+            thumbnailUrl: String(attachment?.thumbnailUrl ?? item?.thumbnailUrl ?? '').trim(),
+            messageType: 'IMAGE',
+          };
+        }).filter(Boolean);
+      }
+
+      return [];
+    });
+  }, []);
+
+  const mediaBrowserItems = useMemo(() => normalizeMediaItems(mediaItems), [mediaItems, normalizeMediaItems]);
+  const mediaPreviewItems = useMemo(() => mediaBrowserItems.slice(0, 4), [mediaBrowserItems]);
+
+  const fetchMediaItems = useCallback(async () => {
+    if (!conversationId) {
+      setMediaItems([]);
+      return;
+    }
+
+    try {
+      setMediaLoading(true);
+      const response = await chatService.getConversationMedia(conversationId);
+      const payload = (response as any)?.data ?? response;
+      setMediaItems(Array.isArray(payload) ? payload : []);
+    } catch (error) {
+      console.error('Failed to load conversation media:', error);
+      setMediaItems([]);
+    } finally {
+      setMediaLoading(false);
+    }
+  }, [conversationId]);
+
+  useEffect(() => {
+    void fetchMediaItems();
+  }, [fetchMediaItems]);
 
   const quickActions: QuickItem[] = [
     { icon: 'search-outline', label: 'Tìm tin nhắn', labelLines: ['Tìm', 'tin nhắn'], onPress: () => openStub('Tìm tin nhắn') },
@@ -109,7 +176,7 @@ export default function ChatOptionsScreen() {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.mediaCard} onPress={() => openStub('Ảnh, file, link')} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.mediaCard} onPress={() => setIsMediaBrowserVisible(true)} activeOpacity={0.8}>
           <View style={styles.mediaCardHeader}>
             <View style={styles.mediaCardIconWrap}>
               <Ionicons name="images-outline" size={20} color="#5D6B7E" />
@@ -121,10 +188,37 @@ export default function ChatOptionsScreen() {
             <Ionicons name="chevron-forward" size={18} color="#B5BCC6" />
           </View>
           <View style={styles.mediaCardPreviewRow}>
-            <View style={styles.mediaPreviewThumb} />
-            <View style={styles.mediaPreviewThumb} />
-            <View style={styles.mediaPreviewThumb} />
-            <View style={styles.mediaPreviewThumb} />
+            {mediaLoading ? (
+              <>
+                <View style={styles.mediaPreviewThumb} />
+                <View style={styles.mediaPreviewThumb} />
+                <View style={styles.mediaPreviewThumb} />
+                <View style={styles.mediaPreviewThumb} />
+              </>
+            ) : mediaPreviewItems.length > 0 ? (
+              mediaPreviewItems.map((item: any) => (
+                <View key={item.id} style={styles.mediaPreviewThumb}>
+                  {String(item.messageType).toUpperCase() === 'IMAGE' ? (
+                    <Image source={{ uri: item.mediaUrl }} style={styles.mediaPreviewThumbImage} contentFit="cover" />
+                  ) : (
+                    <View style={styles.mediaPreviewFileThumb}>
+                      <Ionicons
+                        name={String(item.messageType).toUpperCase() === 'LINK' ? 'link-outline' : 'document-text-outline'}
+                        size={16}
+                        color="#5D6B7E"
+                      />
+                    </View>
+                  )}
+                </View>
+              ))
+            ) : (
+              <>
+                <View style={styles.mediaPreviewThumb} />
+                <View style={styles.mediaPreviewThumb} />
+                <View style={styles.mediaPreviewThumb} />
+                <View style={styles.mediaPreviewThumb} />
+              </>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -211,6 +305,67 @@ export default function ChatOptionsScreen() {
           ))}
         </View>
       </ScrollView>
+
+      <Modal visible={isMediaBrowserVisible} animationType="slide" onRequestClose={() => setIsMediaBrowserVisible(false)}>
+        <SafeAreaView style={styles.mediaBrowserContainer} edges={['top', 'left', 'right', 'bottom']}>
+          <View style={styles.mediaBrowserHeader}>
+            <TouchableOpacity onPress={() => setIsMediaBrowserVisible(false)} style={styles.mediaBrowserBackBtn}>
+              <Ionicons name="arrow-back" size={24} color="#202124" />
+            </TouchableOpacity>
+            <View style={styles.mediaBrowserHeaderTextWrap}>
+              <Text style={styles.mediaBrowserTitle}>Ảnh, file, link</Text>
+              <Text style={styles.mediaBrowserSubtitle} numberOfLines={1}>
+                {mediaBrowserItems.length > 0 ? `${mediaBrowserItems.length} mục` : 'Chưa có media'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={fetchMediaItems} style={styles.mediaBrowserRefreshBtn}>
+              <Ionicons name="refresh-outline" size={22} color="#4A96F0" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.mediaBrowserContent} showsVerticalScrollIndicator={false}>
+            {mediaBrowserItems.length === 0 ? (
+              <View style={styles.mediaBrowserEmpty}>
+                <Ionicons name="images-outline" size={42} color="#B5BCC6" />
+                <Text style={styles.mediaBrowserEmptyText}>Chưa có ảnh, file hoặc link</Text>
+              </View>
+            ) : mediaBrowserItems.map((item: any) => {
+              const type = String(item.messageType).toUpperCase();
+              const isImage = type === 'IMAGE';
+              const isLink = type === 'LINK';
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.mediaBrowserRow}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (item.mediaUrl) {
+                      void Linking.openURL(item.mediaUrl).catch(() => { });
+                    }
+                  }}
+                >
+                  <View style={styles.mediaBrowserRowThumb}>
+                    {isImage ? (
+                      <Image source={{ uri: item.mediaUrl }} style={styles.mediaBrowserRowThumbImage} contentFit="cover" />
+                    ) : (
+                      <Ionicons name={isLink ? 'link-outline' : 'document-text-outline'} size={22} color="#4A96F0" />
+                    )}
+                  </View>
+                  <View style={styles.mediaBrowserRowTextWrap}>
+                    <Text style={styles.mediaBrowserRowTitle} numberOfLines={1}>
+                      {item.fileName || item.mediaUrl || 'Media'}
+                    </Text>
+                    <Text style={styles.mediaBrowserRowSubtitle} numberOfLines={1}>
+                      {isImage ? 'Ảnh' : isLink ? 'Liên kết' : 'Tệp'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#B5BCC6" />
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -419,5 +574,104 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 11,
     color: '#8A8F99',
+  },
+  mediaPreviewThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaPreviewFileThumb: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaBrowserContainer: {
+    flex: 1,
+    backgroundColor: '#F4F6FA',
+  },
+  mediaBrowserHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8EDF3',
+  },
+  mediaBrowserBackBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  mediaBrowserHeaderTextWrap: {
+    flex: 1,
+  },
+  mediaBrowserTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  mediaBrowserSubtitle: {
+    marginTop: 1,
+    fontSize: 10,
+    color: '#7A808A',
+  },
+  mediaBrowserRefreshBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaBrowserContent: {
+    padding: 12,
+    paddingBottom: 24,
+  },
+  mediaBrowserEmpty: {
+    minHeight: 240,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  mediaBrowserEmptyText: {
+    fontSize: 12,
+    color: '#7A808A',
+  },
+  mediaBrowserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  mediaBrowserRowThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: '#EDF1F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+  mediaBrowserRowThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaBrowserRowTextWrap: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  mediaBrowserRowTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#202124',
+  },
+  mediaBrowserRowSubtitle: {
+    marginTop: 2,
+    fontSize: 10,
+    color: '#7A808A',
   },
 });

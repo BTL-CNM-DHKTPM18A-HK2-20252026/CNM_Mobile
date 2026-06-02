@@ -49,7 +49,7 @@ export interface RichTextRendererProps {
 const DEFAULT_PARAGRAPH_SPACING = 8;
 const DEFAULT_TEXT_COLOR = '#111827';
 const DEFAULT_LINK_COLOR = '#2563eb';
-const DEFAULT_LINE_HEIGHT = 22;
+const DEFAULT_LINE_HEIGHT = 18;
 
 const styles = StyleSheet.create({
   container: {
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     marginBottom: DEFAULT_PARAGRAPH_SPACING,
   },
   text: {
-    fontSize: 15,
+    fontSize: 13,
     lineHeight: DEFAULT_LINE_HEIGHT,
     color: DEFAULT_TEXT_COLOR,
   },

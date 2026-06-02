@@ -44,7 +44,10 @@ import type { AxiosError } from 'axios';
 import { ResizeMode, Video } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
+import { File, Paths } from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import * as VideoThumbnails from 'expo-video-thumbnails';
@@ -54,6 +57,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  Dimensions,
   FlatList,
   Image,
   Keyboard,
@@ -114,6 +118,7 @@ import {
 
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
+  const screenWidth = Dimensions.get('window').width;
   const router = useRouter();
   const { id, name, avatar, type } = useLocalSearchParams<{ id: string; name: string; avatar?: string; type?: string }>();
   const { t, i18n } = useTranslation();
@@ -443,6 +448,21 @@ export default function ChatDetailScreen() {
   const fullscreenImageUrl = fullscreenImgState
     ? (fullscreenImgState.allUrls[fullscreenImgState.currentIdx] ?? null)
     : null;
+  // Tất cả ảnh trong conversation (IMAGE + IMAGE_GROUP), mới nhất lên đầu
+  const allConvImgs = useMemo(() => {
+    const result: { url: string; senderName: string; createdAt: string }[] = [];
+    for (const msg of messages) {
+      const t = (msg.messageType || '').toUpperCase();
+      if (t === 'IMAGE' && msg.content) {
+        result.push({ url: msg.content, senderName: msg.senderName || '', createdAt: msg.createdAt || '' });
+      } else if (t === 'IMAGE_GROUP' && msg.attachments?.length) {
+        for (const att of msg.attachments) {
+          result.push({ url: att.url, senderName: msg.senderName || '', createdAt: msg.createdAt || '' });
+        }
+      }
+    }
+    return result;
+  }, [messages]);
   const formatMediaDate = (createdAt?: string): string => {
     const d = parseMessageDate(createdAt);
     if (!d) return '';
@@ -454,6 +474,60 @@ export default function ChatDetailScreen() {
     return diffMonth < 12 ? `${diffMonth} tháng trước` : `${Math.floor(diffMonth / 12)} năm trước`;
   };
   const [fullscreenVideoUrl, setFullscreenVideoUrl] = useState<string | null>(null);
+  const requestImageSavePermission = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      const existing = await MediaLibrary.getPermissionsAsync(false, ['photo']);
+      if (existing.granted) return true;
+      const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+      return status === 'granted';
+    }
+
+    const existing = await MediaLibrary.getPermissionsAsync();
+    if (existing.granted) return true;
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    return status === 'granted';
+  }, []);
+
+  const handleSaveFullscreenImage = useCallback(async () => {
+    if (!fullscreenImageUrl) return;
+
+    try {
+      const hasPermission = await requestImageSavePermission();
+      if (!hasPermission) {
+        Alert.alert('Quyền truy cập', 'Bạn cần cho phép quyền thư viện để lưu ảnh');
+        return;
+      }
+
+      let localUri = fullscreenImageUrl;
+      if (/^https?:\/\//i.test(fullscreenImageUrl)) {
+        const cleanUrl = fullscreenImageUrl.split('?')[0];
+        const ext = cleanUrl.includes('.')
+          ? `.${cleanUrl.split('.').pop()?.slice(0, 6) || 'jpg'}`
+          : '.jpg';
+        const destinationFile = new File(Paths.cache, `fruvia_image_${Date.now()}${ext}`);
+        const resumable = FileSystemLegacy.createDownloadResumable(
+          fullscreenImageUrl,
+          destinationFile.uri,
+          {},
+        );
+        const downloaded = await resumable.downloadAsync();
+        localUri = downloaded?.uri || destinationFile.uri;
+      }
+
+      const asset = await MediaLibrary.createAssetAsync(localUri);
+      const albumName = 'Fruvia';
+      const album = await MediaLibrary.getAlbumAsync(albumName);
+      if (album) {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      } else {
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      }
+
+      Alert.alert('Thành công', 'Đã lưu ảnh vào thiết bị');
+    } catch (error: any) {
+      Alert.alert('Lỗi', error?.message || 'Không thể lưu ảnh');
+    }
+  }, [fullscreenImageUrl, requestImageSavePermission]);
 
   const [infoMembers, setInfoMembers] = useState<any[]>([]);
   const [isMemberListVisible, setIsMemberListVisible] = useState(false);
@@ -479,7 +553,12 @@ export default function ChatDetailScreen() {
 
   // Voice recording moved into hook (useVoiceRecording)
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
+  const closeAccessoryPanels = useCallback(() => {
+    setIsEmojiPickerVisible(false);
+    setIsQuickActionPanelVisible(false);
+  }, []);
   const flatListRef = useRef<FlatList>(null);
+  const fullscreenFlatListRef = useRef<FlatList>(null);
   const textInputRef = useRef<TextInput>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appStateRef = useRef(AppState.currentState);
@@ -513,6 +592,14 @@ export default function ChatDetailScreen() {
     setForwardingMsg(null);
     setIsMemberListVisible(false);
   }, [avatar, id, name]);
+
+  useEffect(() => {
+    const keyboardHideSub = Keyboard.addListener('keyboardDidHide', closeAccessoryPanels);
+
+    return () => {
+      keyboardHideSub.remove();
+    };
+  }, [closeAccessoryPanels]);
 
   // Initialize local-deleted IDs into the existing ref so legacy usages keep working
   useEffect(() => {
@@ -1200,6 +1287,41 @@ export default function ChatDetailScreen() {
   const partnerId = isPrivateConversation && type !== 'CLOUD' ? conversationId.split('_').find(id => id !== currentUserId) : null;
   const isPartnerOnline = partnerId ? statuses.get(partnerId)?.online : false;
   const isPartnerTyping = isPartnerOnline && isTyping;
+
+  // Tên người dùng hiện tại (lấy từ messages đã gửi, dùng cho caller info)
+  const myCallerName = useMemo(() => {
+    if (!currentUserId) return 'Bạn';
+    for (const m of messages) {
+      if (String(m.senderId) === String(currentUserId) && m.senderName) return m.senderName;
+    }
+    return 'Bạn';
+  }, [messages, currentUserId]);
+
+  const handleStartCall = useCallback((callType: 'VIDEO' | 'VOICE') => {
+    if (!webrtcService.isAvailable()) {
+      Alert.alert(
+        'Tính năng chưa khả dụng',
+        'Cuộc gọi yêu cầu Development Build. Vui lòng cài đặt app từ APK thay vì Expo Go.',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+    if (!currentUserId) return;
+    if (isPrivateConversation && partnerId) {
+      webrtcService.startCall(
+        currentUserId,
+        partnerId,
+        conversationDisplayName,
+        conversationAvatarUrl || undefined,
+        conversationId,
+        myCallerName,
+        undefined,
+        callType,
+      );
+    } else if (isGroupConversation) {
+      Alert.alert('Gọi nhóm', 'Tính năng gọi nhóm đang được phát triển.', [{ text: 'OK' }]);
+    }
+  }, [webrtcService, currentUserId, isPrivateConversation, partnerId, conversationDisplayName, conversationAvatarUrl, conversationId, myCallerName, isGroupConversation]);
 
   // ID tin nhắn cuối cùng do chính mình gửi (messages sắp xếp mới nhất ở đầu)
   const lastOwnMessageId = useMemo(() => {
@@ -2979,7 +3101,8 @@ const renderOlderMessagesLoading = () => {
               activeOpacity={0.85}
               onPress={() => {
                 if (!isLocalUri) {
-                  setFullscreenImgState({ allUrls: [item.content], currentIdx: 0, senderName: item.senderName || '', createdAt: item.createdAt || '' });
+                  const convIdx = allConvImgs.findIndex(a => a.url === item.content);
+                  setFullscreenImgState({ allUrls: allConvImgs.map(a => a.url), currentIdx: convIdx >= 0 ? convIdx : 0, senderName: item.senderName || '', createdAt: item.createdAt || '' });
                 }
               }}
               onLongPress={handleMediaLongPress}
@@ -3023,7 +3146,7 @@ const renderOlderMessagesLoading = () => {
             return (
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: 0, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
+                onPress={() => { const ci = allConvImgs.findIndex(a => a.url === imgs[0].url); setFullscreenImgState({ allUrls: allConvImgs.map(a => a.url), currentIdx: ci >= 0 ? ci : 0, senderName: item.senderName || '', createdAt: item.createdAt || '' }); }}
                 onLongPress={handleMediaLongPress}
                 delayLongPress={220}
               >
@@ -3038,7 +3161,7 @@ const renderOlderMessagesLoading = () => {
                   <TouchableOpacity
                     key={i}
                     activeOpacity={0.85}
-                    onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: i, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
+                    onPress={() => { const ci = allConvImgs.findIndex(a => a.url === att.url); setFullscreenImgState({ allUrls: allConvImgs.map(a => a.url), currentIdx: ci >= 0 ? ci : 0, senderName: item.senderName || '', createdAt: item.createdAt || '' }); }}
                     onLongPress={handleMediaLongPress}
                     delayLongPress={220}
                   >
@@ -3053,7 +3176,7 @@ const renderOlderMessagesLoading = () => {
               <View style={{ flexDirection: 'row', gap, width: gridWidth, borderRadius: 8, overflow: 'hidden' }}>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: 0, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
+                  onPress={() => { const ci = allConvImgs.findIndex(a => a.url === imgs[0].url); setFullscreenImgState({ allUrls: allConvImgs.map(a => a.url), currentIdx: ci >= 0 ? ci : 0, senderName: item.senderName || '', createdAt: item.createdAt || '' }); }}
                   onLongPress={handleMediaLongPress}
                   delayLongPress={220}
                 >
@@ -3064,7 +3187,7 @@ const renderOlderMessagesLoading = () => {
                     <TouchableOpacity
                       key={i}
                       activeOpacity={0.85}
-                      onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: i + 1, senderName: item.senderName || '', createdAt: item.createdAt || '' })}
+                      onPress={() => { const ci = allConvImgs.findIndex(a => a.url === att.url); setFullscreenImgState({ allUrls: allConvImgs.map(a => a.url), currentIdx: ci >= 0 ? ci : 0, senderName: item.senderName || '', createdAt: item.createdAt || '' }); }}
                       onLongPress={handleMediaLongPress}
                       delayLongPress={220}
                     >
@@ -3097,7 +3220,7 @@ const renderOlderMessagesLoading = () => {
                       <TouchableOpacity
                         key={ci}
                         activeOpacity={0.85}
-                        onPress={() => setFullscreenImgState({ allUrls: imgs.map(a => a.url), currentIdx: imgs.findIndex(a => a.url === att.url), senderName: item.senderName || '', createdAt: item.createdAt || '' })}
+                        onPress={() => { const ci = allConvImgs.findIndex(a => a.url === att.url); setFullscreenImgState({ allUrls: allConvImgs.map(a => a.url), currentIdx: ci >= 0 ? ci : 0, senderName: item.senderName || '', createdAt: item.createdAt || '' }); }}
                         onLongPress={handleMediaLongPress}
                         delayLongPress={220}
                       >
@@ -3240,6 +3363,10 @@ const renderOlderMessagesLoading = () => {
             {replyBlock}
             {forwardedBanner}
             <TouchableOpacity
+              style={[
+                styles.fileBubble,
+                isCurrentUserMessage ? styles.fileBubbleUser : styles.fileBubbleOther,
+              ]}
               activeOpacity={0.8}
               onPress={() => {
                 if (!isUploading && fileUrl) {
@@ -3258,7 +3385,7 @@ const renderOlderMessagesLoading = () => {
                 <View style={styles.fileInfoWrap}>
                   <Text
                     style={[styles.fileNameMainText, { color: isCurrentUserMessage ? '#1A2A3B' : colors.text }]}
-                    numberOfLines={2}
+                    numberOfLines={1}
                   >
                     {displayName}
                   </Text>
@@ -3480,45 +3607,53 @@ const renderOlderMessagesLoading = () => {
       );
     }
 
+    const shouldShowOwnStatus = isCurrentUserMessage && String(item.messageId) === lastOwnMessageId && Boolean(ownMessageStatusLabel);
+
     return (
-      <MessageItem
-        item={item}
-        index={index}
-        dateSepLabel={dateSepLabel}
-        isCurrentUserMessage={isCurrentUserMessage}
-        showAvatar={showAvatar}
-        showSenderName={showSenderName}
-        isLastInBlock={isLastInMessageBlock}
-        senderDisplayName={senderDisplayName}
-        senderAvatarSource={senderAvatarSource}
-        mediaContent={mediaContent}
-        reactionSummary={reactionSummary}
-        showTimestamp={showTimestamp}
-        timeLabel={timeLabel}
-        highlighted={highlightedMessageId === String(item.messageId)}
-        onLongPress={() => openMessageActionMenu(item)}
-        isCompactBubble={isCompactBubble}
-        isMediaMessage={isMediaMsg}
-        isFirstInBlock={isFirstInBlock}
-        onAvatarPress={
-          !isCurrentUserMessage && item.senderId && senderAvatarSource
-            ? () => {
-                router.push({
-                  pathname: '/profile',
-                  params: {
-                    userId: String(item.senderId),
-                    name: senderDisplayName,
-                    avatar: String(item.senderAvatarUrl || conversationAvatarUrl || ''),
-                  },
-                });
-              }
-            : undefined
-        }
-        colors={colors}
-        styles={styles as any}
-        playingVoiceId={playingVoiceId}
-        statusLabel={isCurrentUserMessage && String(item.messageId) === lastOwnMessageId ? ownMessageStatusLabel : null}
-      />
+      <>
+        <MessageItem
+          item={item}
+          index={index}
+          dateSepLabel={dateSepLabel}
+          isCurrentUserMessage={isCurrentUserMessage}
+          showAvatar={showAvatar}
+          showSenderName={showSenderName}
+          isLastInBlock={isLastInMessageBlock}
+          senderDisplayName={senderDisplayName}
+          senderAvatarSource={senderAvatarSource}
+          mediaContent={mediaContent}
+          reactionSummary={reactionSummary}
+          showTimestamp={showTimestamp}
+          timeLabel={timeLabel}
+          highlighted={highlightedMessageId === String(item.messageId)}
+          onLongPress={() => openMessageActionMenu(item)}
+          isCompactBubble={isCompactBubble}
+          isMediaMessage={isMediaMsg}
+          isFirstInBlock={isFirstInBlock}
+          onAvatarPress={
+            !isCurrentUserMessage && item.senderId && senderAvatarSource
+              ? () => {
+                  router.push({
+                    pathname: '/profile',
+                    params: {
+                      userId: String(item.senderId),
+                      name: senderDisplayName,
+                      avatar: String(item.senderAvatarUrl || conversationAvatarUrl || ''),
+                    },
+                  });
+                }
+              : undefined
+          }
+          colors={colors}
+          styles={styles as any}
+          playingVoiceId={playingVoiceId}
+        />
+        {shouldShowOwnStatus ? (
+          <View style={{ alignItems: 'flex-end', paddingRight: 4, marginTop: 1 }}>
+            <Text style={[styles.timestamp, styles.timestampRight, { opacity: 0.85 }]}>{ownMessageStatusLabel}</Text>
+          </View>
+        ) : null}
+      </>
     );
   };
 
@@ -3573,8 +3708,11 @@ const renderOlderMessagesLoading = () => {
                 <View style={styles.headerActions}>
                   {showCallActions ? (
                     <>
-                      <TouchableOpacity style={styles.headerIcon}>
+                      <TouchableOpacity style={styles.headerIcon} onPress={() => handleStartCall('VOICE')}>
                         <Ionicons name="call-outline" size={22} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.headerIcon} onPress={() => handleStartCall('VIDEO')}>
+                        <Ionicons name="videocam-outline" size={22} color="#FFFFFF" />
                       </TouchableOpacity>
                     </>
                   ) : null}
@@ -4477,7 +4615,7 @@ r                    {pendingMediaList[0].fileName}
               </View>
               <TouchableOpacity
                 style={styles.fullscreenHeaderBtn}
-                onPress={() => { if (fullscreenImageUrl) Linking.openURL(fullscreenImageUrl); }}
+                onPress={() => { void handleSaveFullscreenImage(); }}
               >
                 <Ionicons name="download-outline" size={24} color="#FFFFFF" />
               </TouchableOpacity>
@@ -4486,14 +4624,37 @@ r                    {pendingMediaList[0].fileName}
               </TouchableOpacity>
             </View>
             </SafeAreaView>
-            {/* Image */}
-            {fullscreenImageUrl ? (
-              <Image
-                source={{ uri: fullscreenImageUrl }}
-                style={styles.fullscreenImage}
-                resizeMode="contain"
-              />
-            ) : null}
+            {/* Image - swipeable paging */}
+            <FlatList
+              ref={fullscreenFlatListRef}
+              data={fullscreenImgState?.allUrls ?? []}
+              keyExtractor={(_, idx) => String(idx)}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={fullscreenImgState?.currentIdx ?? 0}
+              getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+              onMomentumScrollEnd={(e) => {
+                const newIdx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                if (fullscreenImgState && newIdx !== fullscreenImgState.currentIdx) {
+                  const imgMeta = allConvImgs[newIdx];
+                  setFullscreenImgState(prev => prev ? {
+                    ...prev,
+                    currentIdx: newIdx,
+                    senderName: imgMeta?.senderName ?? prev.senderName,
+                    createdAt: imgMeta?.createdAt ?? prev.createdAt,
+                  } : prev);
+                }
+              }}
+              renderItem={({ item: url }) => (
+                <Image
+                  source={{ uri: url }}
+                  style={[styles.fullscreenImage, { width: screenWidth }]}
+                  resizeMode="contain"
+                />
+              )}
+              style={{ flex: 1 }}
+            />
             {/* Footer */}
             <View style={styles.fullscreenFooter}>
               <View style={styles.fullscreenHdBadge}>
@@ -4508,7 +4669,16 @@ r                    {pendingMediaList[0].fileName}
                 {(fullscreenImgState?.allUrls ?? []).map((url, idx) => (
                   <TouchableOpacity
                     key={idx}
-                    onPress={() => setFullscreenImgState(prev => prev ? { ...prev, currentIdx: idx } : prev)}
+                    onPress={() => {
+                      const imgMeta = allConvImgs[idx];
+                      setFullscreenImgState(prev => prev ? {
+                        ...prev,
+                        currentIdx: idx,
+                        senderName: imgMeta?.senderName ?? prev.senderName,
+                        createdAt: imgMeta?.createdAt ?? prev.createdAt,
+                      } : prev);
+                      fullscreenFlatListRef.current?.scrollToIndex({ index: idx, animated: true });
+                    }}
                     style={[
                       styles.fullscreenThumb,
                       idx === (fullscreenImgState?.currentIdx ?? 0) && styles.fullscreenThumbActive,

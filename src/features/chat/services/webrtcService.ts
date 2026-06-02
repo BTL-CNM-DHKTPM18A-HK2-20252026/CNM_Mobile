@@ -46,6 +46,7 @@ export interface CallSignal {
   conversationId?: string;
   callerName?: string;
   callerAvatar?: string;
+  callType?: 'VIDEO' | 'VOICE';
   payload?: any;
 }
 
@@ -56,6 +57,7 @@ export interface CallInfo {
   peerAvatar?: string;
   conversationId: string;
   isCaller: boolean;
+  callType: 'VIDEO' | 'VOICE';
 }
 
 type CallStateListener = (state: CallState, info: CallInfo | null) => void;
@@ -198,6 +200,7 @@ class WebRTCService {
     conversationId?: string,
     callerName?: string,
     callerAvatar?: string,
+    callType: 'VIDEO' | 'VOICE' = 'VIDEO',
   ) {
     if (!WEBRTC_AVAILABLE) {
       console.warn('[WebRTC] startCall skipped because native WebRTC is unavailable.');
@@ -217,6 +220,7 @@ class WebRTCService {
       peerAvatar,
       conversationId: conversationId || '',
       isCaller: true,
+      callType,
     };
 
     console.log('[WebRTC] Starting call →', peerName, callId);
@@ -236,6 +240,7 @@ class WebRTCService {
       callId,
       callerName: callerName || 'Bạn',
       callerAvatar,
+      callType,
       conversationId: conversationId || '',
     });
   }
@@ -265,6 +270,7 @@ class WebRTCService {
       peerAvatar: signal.callerAvatar,
       conversationId: signal.conversationId || '',
       isCaller: false,
+      callType: signal.callType ?? 'VIDEO',
     };
 
     console.log('[WebRTC] Incoming from', this.callInfo.peerName);
@@ -433,19 +439,21 @@ class WebRTCService {
       return;
     }
 
+    const isVideoCall = this.callInfo?.callType !== 'VOICE';
+
     // Set audio to speakerphone for video calls
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const InCallManager = require('react-native-incall-manager').default;
-      InCallManager.setSpeakerphoneOn(true);
+      InCallManager.setSpeakerphoneOn(isVideoCall);
       InCallManager.setKeepScreenOn(true);
-      InCallManager.setForceSpeakerphoneOn(true);
+      InCallManager.setForceSpeakerphoneOn(isVideoCall);
     } catch {}
 
     try {
       console.log('[WebRTC] Getting media...');
       const stream = await mediaDevicesImpl.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } },
+        video: isVideoCall ? { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } } : false,
         audio: true,
       });
 

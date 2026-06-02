@@ -53,7 +53,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   isFirstInBlock = false,
   onReactionPress,
   isCompactBubble = false,
-  statusLabel = null,
   onAvatarPress,
   isMediaMessage = false,
 }) => {
@@ -90,13 +89,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             <TouchableOpacity activeOpacity={1} onLongPress={onLongPress} delayLongPress={220} style={bubbleStyle}>
               {mediaContent}
               {!isMediaMessage && showTimestamp ? <Text style={[styles.timestamp, styles.timestampInlineRight]}>{timeLabel}</Text> : null}
-              {!isMediaMessage && statusLabel ? <Text style={[styles.timestamp, styles.timestampInlineRight, { marginTop: 1, opacity: 0.85 }]}>{statusLabel}</Text> : null}
             </TouchableOpacity>
 
             <ReactionChips reactions={reactionSummary as any} messageId={item.messageId} styles={styles} align="right" onPress={onReactionPress} />
           </View>
           {isMediaMessage && showTimestamp ? <Text style={[styles.timestamp, styles.timestampRight]}>{timeLabel}</Text> : null}
-          {isMediaMessage && statusLabel ? <Text style={[styles.timestamp, styles.timestampRight, { marginTop: 1, opacity: 0.85 }]}>{statusLabel}</Text> : null}
         </View>
       ) : (
         <View style={styles.otherMessageBlock}>
