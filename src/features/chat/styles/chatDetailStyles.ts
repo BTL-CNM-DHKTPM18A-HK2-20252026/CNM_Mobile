@@ -887,8 +887,8 @@ export const chatDetailStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 0.25,
-    minWidth: 230,
-    maxWidth: '88%',
+    minWidth: 320,
+    maxWidth: '96%',
   },
   fileBubbleUser: {
     backgroundColor: '#D8F1FF',
@@ -904,15 +904,15 @@ export const chatDetailStyles = StyleSheet.create({
     gap: 8,
   },
   fileIconWrap: {
-    width: 38,
-    height: 50,
+    width: 34,
+    height: 46,
     borderRadius: 8,
     backgroundColor: '#EBF0FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   fileExtLabel: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.3,
@@ -923,11 +923,11 @@ export const chatDetailStyles = StyleSheet.create({
     gap: 2,
   },
   fileNameMainText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   fileSizeText: {
-    fontSize: 10,
+    fontSize: 9,
   },
   // ── Media preview banner ──────────────────
   mediaPreviewBanner: {
@@ -1412,12 +1412,12 @@ export const chatDetailStyles = StyleSheet.create({
   },
   fullscreenHeaderName: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '700',
   },
   fullscreenHeaderDate: {
     color: '#AAAAAA',
-    fontSize: 12,
+    fontSize: 9,
     marginTop: 1,
   },
   fullscreenImage: {

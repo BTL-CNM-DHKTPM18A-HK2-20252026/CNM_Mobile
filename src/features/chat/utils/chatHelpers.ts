@@ -271,3 +271,69 @@ export const getFileExtensionFromMimeType = (mimeType?: string) => {
       return 'jpg';
   }
 };
+
+/**
+ * Chuyển đổi S3 URL / sticker path trong lastMessageContent
+ * thành text thân thiện như "[Hình ảnh]", "[Video]", "[Tệp tin]"
+ */
+const S3_URL_REGEX = /https?:\/\/(?:[a-zA-Z0-9.-]+\.)?(?:s3[.-][a-zA-Z0-9.-]+\.amazonaws\.com|fruvia-asset[a-zA-Z0-9.-]*\.[a-zA-Z0-9.-]+)\/[^\s]+/gi;
+
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'heic'];
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'flv', 'wmv', 'webm', '3gp'];
+const AUDIO_EXTENSIONS = ['mp3', 'wav', 'm4a', 'ogg', 'aac', 'flac'];
+const FILE_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', '7z', 'txt', 'csv', 'json', 'xml'];
+
+export const getConversationPreview = (content?: string | null): string => {
+  if (!content) return 'No messages';
+
+  const trimmed = content.trim();
+
+  // Sticker path
+  if (trimmed.startsWith('/stickers/')) return 'Đã gửi 1 nhãn dán';
+
+  // JSON content (TipTap / POLL / etc.)
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const json = JSON.parse(trimmed);
+      if (Array.isArray(json)) {
+        return '📷 Hình ảnh';
+      }
+      if (json && typeof json === 'object') {
+        if (json.question !== undefined || json.type === 'poll') {
+          const q = json.question || '';
+          return q ? `📊 ${q}` : '📊 Bình chọn';
+        }
+        // TipTap extraction
+        const extract = (node: any): string => {
+          if (!node) return '';
+          if (node.type === 'text') return node.text ?? '';
+          if (node.type === 'zaloEmoji') return node.attrs?.shortcode ?? '';
+          if (Array.isArray(node.content)) return node.content.map(extract).join(' ').trim();
+          return '';
+        };
+        const extracted = extract(json).trim();
+        if (extracted) return extracted;
+      }
+    } catch { /* not JSON */ }
+  }
+
+  // S3 URL detection
+  if (!S3_URL_REGEX.test(trimmed)) return content;
+  S3_URL_REGEX.lastIndex = 0;
+
+  return trimmed.replace(S3_URL_REGEX, (url) => {
+    const cleanUrl = url.split('?')[0];
+    const ext = cleanUrl.split('.').pop()?.toLowerCase() || '';
+    const fileName = decodeURIComponent(cleanUrl.split('/').pop() || '');
+
+    if (IMAGE_EXTENSIONS.includes(ext)) return '📷 Hình ảnh';
+    if (VIDEO_EXTENSIONS.includes(ext)) return '🎬 Video';
+    if (AUDIO_EXTENSIONS.includes(ext)) return '🎤 Tin nhắn thoại';
+    // File: hiển thị tên file nếu là pdf/doc/etc
+    if (FILE_EXTENSIONS.includes(ext)) {
+      const displayName = fileName.includes('_') ? fileName.split('_').slice(1).join('_') : fileName;
+      return `📎 ${displayName || 'Tệp tin'}`;
+    }
+    return '📎 Tệp tin';
+  });
+};

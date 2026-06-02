@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, Modal, ScrollView, StatusBar, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StatusBar, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAvatarSource } from '@/services/mediaUtils';
@@ -36,7 +36,6 @@ export default function ChatOptionsScreen() {
   const [pinConversation, setPinConversation] = useState(false);
   const [hideConversation, setHideConversation] = useState(false);
   const [incomingCallNotify, setIncomingCallNotify] = useState(true);
-  const [isMediaBrowserVisible, setIsMediaBrowserVisible] = useState(false);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaItems, setMediaItems] = useState<any[]>([]);
 
@@ -113,7 +112,18 @@ export default function ChatOptionsScreen() {
   }, [fetchMediaItems]);
 
   const quickActions: QuickItem[] = [
-    { icon: 'search-outline', label: 'Tìm tin nhắn', labelLines: ['Tìm', 'tin nhắn'], onPress: () => openStub('Tìm tin nhắn') },
+    { icon: 'search-outline', label: 'Tìm tin nhắn', labelLines: ['Tìm', 'tin nhắn'], onPress: () => {
+      router.replace({
+        pathname: '/chat-detail',
+        params: {
+          id: conversationId,
+          name: conversationName,
+          avatar: conversationAvatar,
+          type: params.type,
+          search: '1',
+        },
+      });
+    } },
     { icon: 'person-outline', label: 'Trang cá nhân', labelLines: ['Trang', 'cá nhân'], onPress: () => openStub('Trang cá nhân') },
     { icon: 'brush-outline', label: 'Đổi hình nền', labelLines: ['Đổi', 'hình nền'], onPress: () => openStub('Đổi hình nền') },
     { icon: 'notifications-outline', label: 'Tắt thông báo', labelLines: ['Tắt', 'thông báo'], onPress: () => openStub('Tắt thông báo') },
@@ -176,7 +186,19 @@ export default function ChatOptionsScreen() {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.mediaCard} onPress={() => setIsMediaBrowserVisible(true)} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.mediaCard}
+          onPress={() => {
+            router.push({
+              pathname: '/chat-media',
+              params: {
+                id: conversationId,
+                name: conversationName,
+              },
+            });
+          }}
+          activeOpacity={0.8}
+        >
           <View style={styles.mediaCardHeader}>
             <View style={styles.mediaCardIconWrap}>
               <Ionicons name="images-outline" size={20} color="#5D6B7E" />
@@ -306,66 +328,6 @@ export default function ChatOptionsScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={isMediaBrowserVisible} animationType="slide" onRequestClose={() => setIsMediaBrowserVisible(false)}>
-        <SafeAreaView style={styles.mediaBrowserContainer} edges={['top', 'left', 'right', 'bottom']}>
-          <View style={styles.mediaBrowserHeader}>
-            <TouchableOpacity onPress={() => setIsMediaBrowserVisible(false)} style={styles.mediaBrowserBackBtn}>
-              <Ionicons name="arrow-back" size={24} color="#202124" />
-            </TouchableOpacity>
-            <View style={styles.mediaBrowserHeaderTextWrap}>
-              <Text style={styles.mediaBrowserTitle}>Ảnh, file, link</Text>
-              <Text style={styles.mediaBrowserSubtitle} numberOfLines={1}>
-                {mediaBrowserItems.length > 0 ? `${mediaBrowserItems.length} mục` : 'Chưa có media'}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={fetchMediaItems} style={styles.mediaBrowserRefreshBtn}>
-              <Ionicons name="refresh-outline" size={22} color="#4A96F0" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView contentContainerStyle={styles.mediaBrowserContent} showsVerticalScrollIndicator={false}>
-            {mediaBrowserItems.length === 0 ? (
-              <View style={styles.mediaBrowserEmpty}>
-                <Ionicons name="images-outline" size={42} color="#B5BCC6" />
-                <Text style={styles.mediaBrowserEmptyText}>Chưa có ảnh, file hoặc link</Text>
-              </View>
-            ) : mediaBrowserItems.map((item: any) => {
-              const type = String(item.messageType).toUpperCase();
-              const isImage = type === 'IMAGE';
-              const isLink = type === 'LINK';
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.mediaBrowserRow}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    if (item.mediaUrl) {
-                      void Linking.openURL(item.mediaUrl).catch(() => { });
-                    }
-                  }}
-                >
-                  <View style={styles.mediaBrowserRowThumb}>
-                    {isImage ? (
-                      <Image source={{ uri: item.mediaUrl }} style={styles.mediaBrowserRowThumbImage} contentFit="cover" />
-                    ) : (
-                      <Ionicons name={isLink ? 'link-outline' : 'document-text-outline'} size={22} color="#4A96F0" />
-                    )}
-                  </View>
-                  <View style={styles.mediaBrowserRowTextWrap}>
-                    <Text style={styles.mediaBrowserRowTitle} numberOfLines={1}>
-                      {item.fileName || item.mediaUrl || 'Media'}
-                    </Text>
-                    <Text style={styles.mediaBrowserRowSubtitle} numberOfLines={1}>
-                      {isImage ? 'Ảnh' : isLink ? 'Liên kết' : 'Tệp'}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#B5BCC6" />
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -583,95 +545,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  mediaBrowserContainer: {
-    flex: 1,
-    backgroundColor: '#F4F6FA',
-  },
-  mediaBrowserHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8EDF3',
-  },
-  mediaBrowserBackBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  mediaBrowserHeaderTextWrap: {
-    flex: 1,
-  },
-  mediaBrowserTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#202124',
-  },
-  mediaBrowserSubtitle: {
-    marginTop: 1,
-    fontSize: 10,
-    color: '#7A808A',
-  },
-  mediaBrowserRefreshBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mediaBrowserContent: {
-    padding: 12,
-    paddingBottom: 24,
-  },
-  mediaBrowserEmpty: {
-    minHeight: 240,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  mediaBrowserEmptyText: {
-    fontSize: 12,
-    color: '#7A808A',
-  },
-  mediaBrowserRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
-  mediaBrowserRowThumb: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: '#EDF1F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    marginRight: 12,
-  },
-  mediaBrowserRowThumbImage: {
-    width: '100%',
-    height: '100%',
-  },
-  mediaBrowserRowTextWrap: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  mediaBrowserRowTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#202124',
-  },
-  mediaBrowserRowSubtitle: {
-    marginTop: 2,
-    fontSize: 10,
-    color: '#7A808A',
   },
 });

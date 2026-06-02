@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getConversationPreview } from '../utils/chatHelpers';
 import {
     ActivityIndicator,
     FlatList,
@@ -87,7 +88,7 @@ function normalizeToChatItems(data: any[]): ChatItem[] {
     return {
       id: item.conversationId,
       title: item.conversationName || (item.members && item.members.length > 0 ? item.members[0].displayName : 'Unknown'),
-      lastMessage: item.lastMessageContent || 'No messages',
+      lastMessage: getConversationPreview(item.lastMessageContent),
       avatar: item.conversationAvatarUrl || (item.members && item.members.length > 0 ? item.members[0].avatarUrl : DEFAULT_USER_AVATAR),
       time: item.lastMessageTime ? formatTimestamp(item.lastMessageTime) : 'New',
       unreadCount: item.unreadCount || 0,

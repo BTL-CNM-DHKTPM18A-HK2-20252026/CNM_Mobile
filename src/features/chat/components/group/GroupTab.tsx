@@ -14,6 +14,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { COLORS } from '@/constants/theme';
 import { chatService } from '@/services/chatService';
 import { getAvatarSource } from '@/services/mediaUtils';
+import { getConversationPreview } from '../../utils/chatHelpers';
 import { router, useFocusEffect } from 'expo-router';
 
 type GroupItem = {
@@ -124,7 +125,7 @@ function normalizeGroupConversations(rawData: ConversationRaw[]): GroupItem[] {
 			const rawName = String(item.conversationName ?? item.name ?? '').trim();
 			const lastContent = String(item.lastMessageContent ?? item.lastMessage ?? item.preview ?? item.snippet ?? '').trim().replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
 			const senderPrefix = item.lastMessageSenderName ? `${item.lastMessageSenderName}: ` : '';
-			const preview = lastContent ? `${senderPrefix}${lastContent}` : 'Chưa có tin nhắn';
+			const preview = lastContent ? `${senderPrefix}${getConversationPreview(lastContent)}` : 'Chưa có tin nhắn';
 
 			const timeSource = item.lastMessageTime ?? item.updatedAt ?? item.lastUpdated ?? item.time;
 			const updatedTimestamp = Date.parse(String(timeSource ?? ''));

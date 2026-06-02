@@ -33,6 +33,22 @@ function stripHtml(html: string): string {
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'svg']);
 const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', '3gp', 'wmv']);
 const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac']);
+const FILE_EXTENSIONS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'txt',
+  'rtf',
+  'xls',
+  'xlsx',
+  'ppt',
+  'pptx',
+  'csv',
+  'zip',
+  'rar',
+  '7z',
+  'apk',
+]);
 
 function getStringValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : String(value ?? '').trim();
@@ -53,6 +69,7 @@ function inferMediaTypeFromValue(value: string): 'IMAGE' | 'VIDEO' | 'VOICE' | '
   if (IMAGE_EXTENSIONS.has(extension)) return 'IMAGE';
   if (VIDEO_EXTENSIONS.has(extension)) return 'VIDEO';
   if (AUDIO_EXTENSIONS.has(extension)) return 'VOICE';
+  if (FILE_EXTENSIONS.has(extension)) return 'FILE';
 
   return null;
 }
@@ -69,7 +86,7 @@ function formatMediaLabel(messageType: string, fileName?: string, attachmentCoun
       return 'Tin nhắn thoại';
     case 'FILE':
     case 'MEDIA':
-      return fileName ? `Tệp: ${fileName}` : 'Tệp đính kèm';
+      return 'Đã gửi 1 file';
     case 'SHARE_CONTACT':
       return 'Danh thiếp';
     default:

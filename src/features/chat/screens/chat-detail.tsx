@@ -120,7 +120,7 @@ export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get('window').width;
   const router = useRouter();
-  const { id, name, avatar, type } = useLocalSearchParams<{ id: string; name: string; avatar?: string; type?: string }>();
+  const { id, name, avatar, type, search: searchParam } = useLocalSearchParams<{ id: string; name: string; avatar?: string; type?: string; search?: string }>();
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const [inputText, setInputText] = useState('');
@@ -235,6 +235,13 @@ export default function ChatDetailScreen() {
       }
     };
   }, [handleSearchMessages, isSearching, searchQuery]);
+
+  // Auto-activate search mode when navigated from chat-options
+  useEffect(() => {
+    if (searchParam === '1') {
+      setIsSearching(true);
+    }
+  }, [searchParam]);
 
   const handlePollSubmit = useCallback(async (data: {
     question: string;
@@ -474,30 +481,10 @@ export default function ChatDetailScreen() {
     return diffMonth < 12 ? `${diffMonth} tháng trước` : `${Math.floor(diffMonth / 12)} năm trước`;
   };
   const [fullscreenVideoUrl, setFullscreenVideoUrl] = useState<string | null>(null);
-  const requestImageSavePermission = useCallback(async () => {
-    if (Platform.OS === 'android') {
-      const existing = await MediaLibrary.getPermissionsAsync(false, ['photo']);
-      if (existing.granted) return true;
-      const { status } = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
-      return status === 'granted';
-    }
-
-    const existing = await MediaLibrary.getPermissionsAsync();
-    if (existing.granted) return true;
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    return status === 'granted';
-  }, []);
-
   const handleSaveFullscreenImage = useCallback(async () => {
     if (!fullscreenImageUrl) return;
 
     try {
-      const hasPermission = await requestImageSavePermission();
-      if (!hasPermission) {
-        Alert.alert('Quyền truy cập', 'Bạn cần cho phép quyền thư viện để lưu ảnh');
-        return;
-      }
-
       let localUri = fullscreenImageUrl;
       if (/^https?:\/\//i.test(fullscreenImageUrl)) {
         const cleanUrl = fullscreenImageUrl.split('?')[0];
@@ -514,20 +501,27 @@ export default function ChatDetailScreen() {
         localUri = downloaded?.uri || destinationFile.uri;
       }
 
-      const asset = await MediaLibrary.createAssetAsync(localUri);
-      const albumName = 'Fruvia';
-      const album = await MediaLibrary.getAlbumAsync(albumName);
-      if (album) {
-        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-      } else {
-        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      if (!localUri.startsWith('file://')) {
+        localUri = localUri.startsWith('/') ? `file://${localUri}` : localUri;
       }
 
-      Alert.alert('Thành công', 'Đã lưu ảnh vào thiết bị');
+      if (MediaLibrary.saveToLibraryAsync) {
+        await MediaLibrary.saveToLibraryAsync(localUri);
+        Alert.alert('Thành công', 'Đã lưu ảnh vào thiết bị');
+        return;
+      }
+
+      throw new Error('Media library is not available on this device');
     } catch (error: any) {
-      Alert.alert('Lỗi', error?.message || 'Không thể lưu ảnh');
+      console.error('Failed to save image:', error);
+      Alert.alert(
+        'Lỗi',
+        isExpoGo
+          ? 'Expo Go không hỗ trợ lưu trực tiếp vào thư viện ảnh trên Android. Hãy dùng development build.'
+          : (error?.message || 'Không thể lưu ảnh')
+      );
     }
-  }, [fullscreenImageUrl, requestImageSavePermission]);
+  }, [fullscreenImageUrl]);
 
   const [infoMembers, setInfoMembers] = useState<any[]>([]);
   const [isMemberListVisible, setIsMemberListVisible] = useState(false);
@@ -3758,7 +3752,7 @@ const renderOlderMessagesLoading = () => {
         </ChatHeader>
 
         {/* Search Results Overlay */}
-        {isSearching && searchQuery.length > 0 && (
+        {isSearching && (
           <View style={[styles.searchResultsOverlay, { backgroundColor: colors.background }]}>
             <View style={[styles.searchResultsShell, { backgroundColor: colors.card }]}>
               <View style={[styles.searchResultsHeader, { borderBottomColor: colors.border }]}>
