@@ -1,5 +1,6 @@
 ﻿import React, { useMemo } from 'react';
-import { Linking, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Image, Linking, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import emojiPack from '../../constants/emoji-pack.json';
 
 export interface TiptapMark {
   type: 'bold' | 'italic' | 'link';
@@ -15,9 +16,16 @@ export interface TiptapTextNode {
   marks?: TiptapMark[];
 }
 
+export interface TiptapZaloEmojiNode {
+  type: 'zaloEmoji';
+  attrs?: {
+    shortcode?: string;
+  };
+}
+
 export interface TiptapParagraphNode {
   type: 'paragraph';
-  content?: TiptapTextNode[];
+  content?: (TiptapTextNode | TiptapZaloEmojiNode)[];
 }
 
 export interface TiptapDocNode {
@@ -50,6 +58,17 @@ const DEFAULT_PARAGRAPH_SPACING = 8;
 const DEFAULT_TEXT_COLOR = '#111827';
 const DEFAULT_LINK_COLOR = '#2563eb';
 const DEFAULT_LINE_HEIGHT = 22;
+const S3_BASE_URL = process.env.EXPO_PUBLIC_S3_BASE_URL || 'https://fruvia-asset.s3.ap-southeast-2.amazonaws.com/public';
+const ZALO_EMOJI_REGEX = /(:zalo_\d+_\d+:)/g;
+
+const emojiMap: Record<string, string> = {};
+(emojiPack.categories as { icons: { shortcode: string; src: string }[] }[]).forEach((category) => {
+  category.icons.forEach((icon) => {
+    emojiMap[icon.shortcode] = icon.src.startsWith('http://') || icon.src.startsWith('https://')
+      ? icon.src
+      : `${S3_BASE_URL}${icon.src.replace('/fruvia_emoji', '')}`;
+  });
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -80,10 +99,20 @@ const styles = StyleSheet.create({
     color: DEFAULT_LINK_COLOR,
     textDecorationLine: 'underline',
   },
+  emojiImage: {
+    width: 22,
+    height: 22,
+    marginHorizontal: 1,
+    transform: [{ translateY: 4 }],
+  },
 });
 
 const isTiptapTextNode = (value: unknown): value is TiptapTextNode => {
   return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>).type === 'text');
+};
+
+const isTiptapZaloEmojiNode = (value: unknown): value is TiptapZaloEmojiNode => {
+  return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>).type === 'zaloEmoji');
 };
 
 const isTiptapParagraphNode = (value: unknown): value is TiptapParagraphNode => {
@@ -134,7 +163,19 @@ const collectPlainTextFromDoc = (doc: TiptapDocNode): string => {
         return '';
       }
 
-      return paragraph.content.map((node) => (isTiptapTextNode(node) ? node.text : '')).join('');
+      return paragraph.content
+        .map((node) => {
+          if (isTiptapTextNode(node)) {
+            return node.text;
+          }
+
+          if (isTiptapZaloEmojiNode(node)) {
+            return String(node.attrs?.shortcode ?? '');
+          }
+
+          return '';
+        })
+        .join('');
     })
     .join('\n');
 };
@@ -191,6 +232,49 @@ const openLink = async (href: string): Promise<void> => {
   }
 };
 
+const renderTextWithZaloEmoji = (content: string, keyPrefix = 'text'): React.ReactNode[] | string => {
+  const parts = content.split(ZALO_EMOJI_REGEX);
+  if (parts.length === 1) {
+    return content;
+  }
+
+  return parts.map((part, index) => {
+    const src = emojiMap[part];
+    if (!src) {
+      return part;
+    }
+
+    return (
+      <Image
+        key={`${keyPrefix}-emoji-${index}`}
+        source={{ uri: src }}
+        style={styles.emojiImage}
+        resizeMode="contain"
+        accessibilityLabel={part}
+      />
+    );
+  });
+};
+
+const renderZaloEmojiNode = (node: TiptapZaloEmojiNode, key: string): React.ReactNode => {
+  const shortcode = String(node.attrs?.shortcode ?? '');
+  const src = emojiMap[shortcode];
+
+  if (!src) {
+    return shortcode;
+  }
+
+  return (
+    <Image
+      key={key}
+      source={{ uri: src }}
+      style={styles.emojiImage}
+      resizeMode="contain"
+      accessibilityLabel={shortcode}
+    />
+  );
+};
+
 const renderTextNode = (
   node: TiptapTextNode,
   textStyle?: StyleProp<TextStyle>,
@@ -199,6 +283,7 @@ const renderTextNode = (
 ): React.ReactNode => {
   const content = String(node.text ?? '');
   const marks = Array.isArray(node.marks) ? node.marks.filter(Boolean) : [];
+  const renderedContent = renderTextWithZaloEmoji(content, key);
 
   const baseTextStyle = [styles.text, customStyles?.text, textStyle] as StyleProp<TextStyle>;
   const inner = marks.reduceRight<React.ReactNode>((children, mark, index) => {
@@ -227,7 +312,7 @@ const renderTextNode = (
     }
 
     return children;
-  }, content || '\u00A0');
+  }, content ? renderedContent : '\u00A0');
 
   return (
     <Text key={key} style={baseTextStyle}>
@@ -252,11 +337,15 @@ const renderParagraphNode = (
   return (
     <Text key={`paragraph-${index}`} style={[styles.paragraph, paragraphStyle, customStyles?.text, textStyle]}>
       {paragraph.content.map((child, childIndex) => {
-        if (!isTiptapTextNode(child)) {
-          return null;
+        if (isTiptapTextNode(child)) {
+          return renderTextNode(child, [styles.text, customStyles?.text, textStyle], customStyles, `paragraph-${index}-text-${childIndex}`);
         }
 
-        return renderTextNode(child, [styles.text, customStyles?.text, textStyle], customStyles, `paragraph-${index}-text-${childIndex}`);
+        if (isTiptapZaloEmojiNode(child)) {
+          return renderZaloEmojiNode(child, `paragraph-${index}-emoji-${childIndex}`);
+        }
+
+        return null;
       })}
     </Text>
   );
@@ -297,7 +386,7 @@ export const RichTextRenderer: React.FC<RichTextRendererProps> = React.memo(({ c
   if (typeof resolvedContent === 'string') {
     return (
       <View style={style}>
-        <Text style={[styles.text, textStyle]}>{resolvedContent}</Text>
+        <Text style={[styles.text, textStyle]}>{renderTextWithZaloEmoji(resolvedContent, 'plain')}</Text>
       </View>
     );
   }
